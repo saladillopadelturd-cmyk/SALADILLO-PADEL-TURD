@@ -1,44 +1,53 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useCallback, useTransition } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Modal from "@/components/ui/Modal";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import { createClient } from "@/lib/supabase/client";
 import type { Player } from "@/types/tournament";
-
-const INITIAL_PLAYERS: Player[] = [
-  {
-    id: "1",
-    user_id: null,
-    first_name: "Juan",
-    last_name: "Pérez",
-    email: "juan@email.com",
-    phone: "123456789",
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: "2",
-    user_id: null,
-    first_name: "Carlos",
-    last_name: "López",
-    email: "carlos@email.com",
-    phone: "987654321",
-    created_at: new Date().toISOString(),
-  },
-];
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 
 export default function AdminJugadoresPage() {
-  const [players, setPlayers] = useState<Player[]>(INITIAL_PLAYERS);
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<Player | null>(null);
   const [deleting, setDeleting] = useState<Player | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const [notification, setNotification] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const [formNombre, setFormNombre] = useState("");
   const [formApellido, setFormApellido] = useState("");
   const [formEmail, setFormEmail] = useState("");
   const [formTelefono, setFormTelefono] = useState("");
+
+  const supabase = createClient();
+
+  const loadPlayers = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("players")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      if (data) setPlayers(data);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error al cargar jugadores";
+      console.error("Error cargando jugadores:", err);
+      setNotification({ type: "error", text: msg });
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase]);
+
+  useEffect(() => {
+    loadPlayers();
+  }, [loadPlayers]);
 
   const openCreate = () => {
     setFormNombre("");
@@ -56,42 +65,104 @@ export default function AdminJugadoresPage() {
     setEditing(player);
   };
 
-  const handleCreate = () => {
-    const newPlayer: Player = {
-      id: String(Date.now()),
-      user_id: null,
-      first_name: formNombre,
-      last_name: formApellido,
-      email: formEmail || null,
-      phone: formTelefono || null,
-      created_at: new Date().toISOString(),
-    };
-    setPlayers([...players, newPlayer]);
-    setShowCreate(false);
+  const handleCreate = async () => {
+    if (!formNombre.trim() || !formApellido.trim()) {
+      setNotification({ type: "error", text: "Nombre y apellido son obligatorios." });
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const payload = {
+          first_name: formNombre.trim(),
+          last_name: formApellido.trim(),
+          email: formEmail.trim() || null,
+          phone: formTelefono.trim() || null,
+        };
+
+        const { data, error } = await supabase
+          .from("players")
+          .insert(payload)
+          .select()
+          .single();
+
+        if (error) throw error;
+        if (data) {
+          setPlayers((prev) => [data, ...prev]);
+          setShowCreate(false);
+          setNotification({
+            type: "success",
+            text: `Jugador ${data.first_name} ${data.last_name} registrado exitosamente.`,
+          });
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Error al registrar jugador";
+        setNotification({ type: "error", text: msg });
+      }
+    });
   };
 
-  const handleEdit = () => {
+  const handleEdit = async () => {
     if (!editing) return;
-    setPlayers(
-      players.map((p) =>
-        p.id === editing.id
-          ? {
-              ...p,
-              first_name: formNombre,
-              last_name: formApellido,
-              email: formEmail || null,
-              phone: formTelefono || null,
-            }
-          : p
-      )
-    );
-    setEditing(null);
+
+    startTransition(async () => {
+      try {
+        const payload = {
+          first_name: formNombre.trim(),
+          last_name: formApellido.trim(),
+          email: formEmail.trim() || null,
+          phone: formTelefono.trim() || null,
+        };
+
+        const { data, error } = await supabase
+          .from("players")
+          .update(payload)
+          .eq("id", editing.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        if (data) {
+          setPlayers((prev) =>
+            prev.map((p) => (p.id === editing.id ? data : p))
+          );
+          setEditing(null);
+          setNotification({
+            type: "success",
+            text: `Jugador ${data.first_name} ${data.last_name} actualizado exitosamente.`,
+          });
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Error al actualizar jugador";
+        setNotification({ type: "error", text: msg });
+      }
+    });
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleting) return;
-    setPlayers(players.filter((p) => p.id !== deleting.id));
-    setDeleting(null);
+    const target = deleting;
+
+    startTransition(async () => {
+      try {
+        const { error } = await supabase
+          .from("players")
+          .delete()
+          .eq("id", target.id);
+
+        if (error) throw error;
+
+        setPlayers((prev) => prev.filter((p) => p.id !== target.id));
+        setDeleting(null);
+        setNotification({
+          type: "success",
+          text: `Jugador ${target.first_name} ${target.last_name} eliminado correctamente.`,
+        });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Error al eliminar el jugador";
+        setNotification({ type: "error", text: msg });
+      }
+    });
   };
 
   return (
@@ -99,46 +170,87 @@ export default function AdminJugadoresPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-white">Jugadores</h1>
-          <p className="text-dark-400 mt-1">Registrar y administrar jugadores</p>
+          <p className="text-dark-400 mt-1">Registrar, administrar y eliminar jugadores</p>
         </div>
         <Button onClick={openCreate}>+ Nuevo Jugador</Button>
       </div>
 
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-dark-900 text-dark-400 uppercase text-xs">
-                <th className="px-6 py-3 text-left">Nombre</th>
-                <th className="px-6 py-3 text-left">Email</th>
-                <th className="px-6 py-3 text-left">Teléfono</th>
-                <th className="px-6 py-3 text-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-dark-700">
-              {players.map((player) => (
-                <tr key={player.id} className="bg-dark-800">
-                  <td className="px-6 py-4 text-white font-medium">
-                    {player.first_name} {player.last_name}
-                  </td>
-                  <td className="px-6 py-4 text-dark-300">{player.email}</td>
-                  <td className="px-6 py-4 text-dark-300">{player.phone}</td>
-                  <td className="px-6 py-4 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(player)}>
-                        Editar
-                      </Button>
-                      <Button variant="danger" size="sm" onClick={() => setDeleting(player)}>
-                        Eliminar
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {notification && (
+        <div
+          className={`mb-6 p-4 rounded-xl border flex items-center justify-between gap-3 text-sm ${
+            notification.type === "success"
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+              : "bg-red-500/10 border-red-500/30 text-red-400"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {notification.type === "success" ? (
+              <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            )}
+            <span>{notification.text}</span>
+          </div>
+          <button
+            onClick={() => setNotification(null)}
+            className="text-xs uppercase font-bold tracking-wider hover:opacity-80 px-2 py-1"
+          >
+            Cerrar
+          </button>
         </div>
-      </Card>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : players.length === 0 ? (
+        <Card className="p-12 text-center">
+          <p className="text-dark-400 text-base mb-4">No hay jugadores registrados todavía.</p>
+          <Button onClick={openCreate}>Registrar el Primer Jugador</Button>
+        </Card>
+      ) : (
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-dark-900 text-dark-400 uppercase text-xs">
+                  <th className="px-6 py-3 text-left">Nombre</th>
+                  <th className="px-6 py-3 text-left">Email</th>
+                  <th className="px-6 py-3 text-left">Teléfono</th>
+                  <th className="px-6 py-3 text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-dark-700">
+                {players.map((player) => (
+                  <tr key={player.id} className="bg-dark-800">
+                    <td className="px-6 py-4 text-white font-medium">
+                      {player.first_name} {player.last_name}
+                    </td>
+                    <td className="px-6 py-4 text-dark-300">{player.email ?? "-"}</td>
+                    <td className="px-6 py-4 text-dark-300">{player.phone ?? "-"}</td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => openEdit(player)}>
+                          Editar
+                        </Button>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => setDeleting(player)}
+                          disabled={isPending}
+                        >
+                          Eliminar
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       <Modal
         isOpen={showCreate}
@@ -172,10 +284,12 @@ export default function AdminJugadoresPage() {
             onChange={(e) => setFormTelefono(e.target.value)}
           />
           <div className="flex justify-end gap-3 pt-4">
-            <Button variant="ghost" onClick={() => setShowCreate(false)}>
+            <Button variant="ghost" onClick={() => setShowCreate(false)} disabled={isPending}>
               Cancelar
             </Button>
-            <Button onClick={handleCreate}>Registrar</Button>
+            <Button onClick={handleCreate} disabled={isPending}>
+              {isPending ? "Registrando..." : "Registrar"}
+            </Button>
           </div>
         </div>
       </Modal>
@@ -212,10 +326,12 @@ export default function AdminJugadoresPage() {
             onChange={(e) => setFormTelefono(e.target.value)}
           />
           <div className="flex justify-end gap-3 pt-4">
-            <Button variant="ghost" onClick={() => setEditing(null)}>
+            <Button variant="ghost" onClick={() => setEditing(null)} disabled={isPending}>
               Cancelar
             </Button>
-            <Button onClick={handleEdit}>Guardar Cambios</Button>
+            <Button onClick={handleEdit} disabled={isPending}>
+              {isPending ? "Guardando..." : "Guardar Cambios"}
+            </Button>
           </div>
         </div>
       </Modal>
@@ -224,8 +340,9 @@ export default function AdminJugadoresPage() {
         isOpen={!!deleting}
         onClose={() => setDeleting(null)}
         onConfirm={handleDelete}
+        loading={isPending}
         title="Eliminar Jugador"
-        message={`¿Eliminar a ${deleting?.first_name} ${deleting?.last_name}? Esta acción no se puede deshacer.`}
+        message={`¿Estás seguro de eliminar a ${deleting?.first_name} ${deleting?.last_name}? Esta acción no se puede deshacer.`}
       />
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useCallback, useTransition } from "react";
 import Link from "next/link";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -9,7 +9,9 @@ import Select from "@/components/ui/Select";
 import Badge from "@/components/ui/Badge";
 import Modal from "@/components/ui/Modal";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import { createClient } from "@/lib/supabase/client";
 import type { Tournament, TournamentStatus } from "@/types/tournament";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 
 const INITIAL_TOURNAMENTS: Tournament[] = [
   {
@@ -57,10 +59,13 @@ const GAME_MODE_LABELS: Record<string, string> = {
 };
 
 export default function AdminTorneosPage() {
-  const [tournaments, setTournaments] = useState<Tournament[]>(INITIAL_TOURNAMENTS);
+  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<Tournament | null>(null);
   const [deleting, setDeleting] = useState<Tournament | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const [notification, setNotification] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const [formNombre, setFormNombre] = useState("");
   const [formFecha, setFormFecha] = useState("");
@@ -69,9 +74,34 @@ export default function AdminTorneosPage() {
   const [formParejasZona, setFormParejasZona] = useState("4");
   const [formNumZonas, setFormNumZonas] = useState("2");
 
+  const supabase = createClient();
+
+  const loadTournaments = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("tournaments")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      if (data) setTournaments(data);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error al cargar torneos";
+      console.error("Error al cargar torneos:", err);
+      setNotification({ type: "error", text: msg });
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase]);
+
+  useEffect(() => {
+    loadTournaments();
+  }, [loadTournaments]);
+
   const openCreate = () => {
     setFormNombre("");
-    setFormFecha("");
+    setFormFecha(new Date().toISOString().split("T")[0]);
     setFormLugar("");
     setFormModalidad("american_9games");
     setFormParejasZona("4");
@@ -81,7 +111,7 @@ export default function AdminTorneosPage() {
 
   const openEdit = (t: Tournament) => {
     setFormNombre(t.name);
-    setFormFecha(t.date);
+    setFormFecha(t.date ? t.date.split("T")[0] : "");
     setFormLugar(t.location ?? "");
     setFormModalidad(t.game_mode);
     setFormParejasZona(String(t.zone_size));
@@ -101,49 +131,105 @@ export default function AdminTorneosPage() {
     }
   };
 
-  const handleCreate = () => {
-    const newTournament: Tournament = {
-      id: String(Date.now()),
-      name: formNombre,
-      date: formFecha,
-      category: "5ta",
-      golden_point: true,
-      location: formLugar || null,
-      game_mode: formModalidad as Tournament["game_mode"],
-      zone_size: Number(formParejasZona),
-      num_zones: Number(formNumZonas),
-      status: "draft",
-      created_by: null,
-      created_at: new Date().toISOString(),
-    };
-    setTournaments([...tournaments, newTournament]);
-    setShowCreate(false);
+  const handleCreate = async () => {
+    if (!formNombre.trim()) {
+      setNotification({ type: "error", text: "El nombre del torneo es obligatorio." });
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const payload = {
+          name: formNombre.trim(),
+          date: formFecha || new Date().toISOString().split("T")[0],
+          category: "5ta",
+          golden_point: true,
+          location: formLugar.trim() || null,
+          game_mode: formModalidad,
+          zone_size: Number(formParejasZona),
+          num_zones: Number(formNumZonas),
+          status: "draft",
+        };
+
+        const { data, error } = await supabase
+          .from("tournaments")
+          .insert(payload)
+          .select()
+          .single();
+
+        if (error) throw error;
+        if (data) {
+          setTournaments((prev) => [data, ...prev]);
+          setShowCreate(false);
+          setNotification({ type: "success", text: `Torneo "${data.name}" creado con éxito.` });
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Error al crear el torneo";
+        setNotification({ type: "error", text: msg });
+      }
+    });
   };
 
-  const handleEdit = () => {
+  const handleEdit = async () => {
     if (!editing) return;
-    setTournaments(
-      tournaments.map((t) =>
-        t.id === editing.id
-          ? {
-              ...t,
-              name: formNombre,
-              date: formFecha,
-              location: formLugar || null,
-              game_mode: formModalidad as Tournament["game_mode"],
-              zone_size: Number(formParejasZona),
-              num_zones: Number(formNumZonas),
-            }
-          : t
-      )
-    );
-    setEditing(null);
+
+    startTransition(async () => {
+      try {
+        const payload = {
+          name: formNombre.trim(),
+          date: formFecha || editing.date,
+          location: formLugar.trim() || null,
+          game_mode: formModalidad as Tournament["game_mode"],
+          zone_size: Number(formParejasZona),
+          num_zones: Number(formNumZonas),
+        };
+
+        const { data, error } = await supabase
+          .from("tournaments")
+          .update(payload)
+          .eq("id", editing.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        if (data) {
+          setTournaments((prev) =>
+            prev.map((t) => (t.id === editing.id ? data : t))
+          );
+          setEditing(null);
+          setNotification({ type: "success", text: `Torneo "${data.name}" actualizado con éxito.` });
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Error al actualizar el torneo";
+        setNotification({ type: "error", text: msg });
+      }
+    });
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleting) return;
-    setTournaments(tournaments.filter((t) => t.id !== deleting.id));
-    setDeleting(null);
+    const target = deleting;
+
+    startTransition(async () => {
+      try {
+        const { error } = await supabase
+          .from("tournaments")
+          .delete()
+          .eq("id", target.id);
+
+        if (error) throw error;
+
+        setTournaments((prev) => prev.filter((t) => t.id !== target.id));
+        setDeleting(null);
+        setNotification({
+          type: "success",
+          text: `Torneo "${target.name}" eliminado correctamente.`,
+        });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Error al eliminar el torneo";
+        setNotification({ type: "error", text: msg });
+      }
+    });
   };
 
   return (
@@ -151,57 +237,104 @@ export default function AdminTorneosPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-white">Torneos</h1>
-          <p className="text-dark-400 mt-1">Crear y gestionar torneos</p>
+          <p className="text-dark-400 mt-1">Crear, gestionar y eliminar torneos</p>
         </div>
         <Button onClick={openCreate}>+ Nuevo Torneo</Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {tournaments.map((tournament) => (
-          <Card key={tournament.id} className="p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-bold text-white">{tournament.name}</h3>
-                <p className="text-dark-400 text-sm">{formatDate(tournament.date)}</p>
+      {notification && (
+        <div
+          className={`mb-6 p-4 rounded-xl border flex items-center justify-between gap-3 text-sm ${
+            notification.type === "success"
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+              : "bg-red-500/10 border-red-500/30 text-red-400"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {notification.type === "success" ? (
+              <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            )}
+            <span>{notification.text}</span>
+          </div>
+          <button
+            onClick={() => setNotification(null)}
+            className="text-xs uppercase font-bold tracking-wider hover:opacity-80 px-2 py-1"
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : tournaments.length === 0 ? (
+        <Card className="p-12 text-center">
+          <p className="text-dark-400 text-base mb-4">No hay torneos registrados todavía.</p>
+          <Button onClick={openCreate}>Crear el Primer Torneo</Button>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {tournaments.map((tournament) => (
+            <Card key={tournament.id} className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-white">{tournament.name}</h3>
+                  <p className="text-dark-400 text-sm">{formatDate(tournament.date)}</p>
+                </div>
+                <Badge variant={STATUS_VARIANTS[tournament.status] ?? "default"}>
+                  {STATUS_LABELS[tournament.status] ?? tournament.status}
+                </Badge>
               </div>
-              <Badge variant={STATUS_VARIANTS[tournament.status]}>
-                {STATUS_LABELS[tournament.status]}
-              </Badge>
-            </div>
-            <div className="space-y-2 text-sm mb-4">
-              <div className="flex justify-between text-dark-300">
-                <span>Modalidad:</span>
-                <span className="text-white">
-                  {GAME_MODE_LABELS[tournament.game_mode] ?? tournament.game_mode}
-                </span>
+              <div className="space-y-2 text-sm mb-4">
+                <div className="flex justify-between text-dark-300">
+                  <span>Modalidad:</span>
+                  <span className="text-white font-medium">
+                    {GAME_MODE_LABELS[tournament.game_mode] ?? tournament.game_mode}
+                  </span>
+                </div>
+                <div className="flex justify-between text-dark-300">
+                  <span>Zonas:</span>
+                  <span className="text-white font-medium">
+                    {tournament.num_zones} de {tournament.zone_size} parejas
+                  </span>
+                </div>
+                {tournament.location && (
+                  <div className="flex justify-between text-dark-300">
+                    <span>Lugar:</span>
+                    <span className="text-dark-200">{tournament.location}</span>
+                  </div>
+                )}
               </div>
-              <div className="flex justify-between text-dark-300">
-                <span>Zonas:</span>
-                <span className="text-white">
-                  {tournament.num_zones} de {tournament.zone_size} parejas
-                </span>
+              <div className="flex flex-wrap gap-2 pt-2 border-t border-dark-800">
+                <Link href={`/admin/torneos/${tournament.id}/zonas`}>
+                  <Button variant="secondary" size="sm">Zonas</Button>
+                </Link>
+                <Link href={`/admin/torneos/${tournament.id}/fixture`}>
+                  <Button variant="secondary" size="sm">Fixture</Button>
+                </Link>
+                <Link href={`/admin/torneos/${tournament.id}/results`}>
+                  <Button variant="secondary" size="sm">Resultados</Button>
+                </Link>
+                <Button variant="ghost" size="sm" onClick={() => openEdit(tournament)}>
+                  Editar
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setDeleting(tournament)}
+                  disabled={isPending}
+                >
+                  Eliminar
+                </Button>
               </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Link href={`/admin/torneos/${tournament.id}/zonas`}>
-                <Button variant="secondary" size="sm">Zonas</Button>
-              </Link>
-              <Link href={`/admin/torneos/${tournament.id}/fixture`}>
-                <Button variant="secondary" size="sm">Fixture</Button>
-              </Link>
-              <Link href={`/admin/torneos/${tournament.id}/results`}>
-                <Button variant="secondary" size="sm">Resultados</Button>
-              </Link>
-              <Button variant="ghost" size="sm" onClick={() => openEdit(tournament)}>
-                Editar
-              </Button>
-              <Button variant="danger" size="sm" onClick={() => setDeleting(tournament)}>
-                Eliminar
-              </Button>
-            </div>
-          </Card>
-        ))}
-      </div>
+            </Card>
+          ))}
+        </div>
+      )}
 
       <Modal
         isOpen={showCreate}
@@ -258,10 +391,12 @@ export default function AdminTorneosPage() {
             />
           </div>
           <div className="flex justify-end gap-3 pt-4">
-            <Button variant="ghost" onClick={() => setShowCreate(false)}>
+            <Button variant="ghost" onClick={() => setShowCreate(false)} disabled={isPending}>
               Cancelar
             </Button>
-            <Button onClick={handleCreate}>Crear Torneo</Button>
+            <Button onClick={handleCreate} disabled={isPending}>
+              {isPending ? "Creando..." : "Crear Torneo"}
+            </Button>
           </div>
         </div>
       </Modal>
@@ -321,10 +456,12 @@ export default function AdminTorneosPage() {
             />
           </div>
           <div className="flex justify-end gap-3 pt-4">
-            <Button variant="ghost" onClick={() => setEditing(null)}>
+            <Button variant="ghost" onClick={() => setEditing(null)} disabled={isPending}>
               Cancelar
             </Button>
-            <Button onClick={handleEdit}>Guardar Cambios</Button>
+            <Button onClick={handleEdit} disabled={isPending}>
+              {isPending ? "Guardando..." : "Guardar Cambios"}
+            </Button>
           </div>
         </div>
       </Modal>
@@ -333,8 +470,9 @@ export default function AdminTorneosPage() {
         isOpen={!!deleting}
         onClose={() => setDeleting(null)}
         onConfirm={handleDelete}
+        loading={isPending}
         title="Eliminar Torneo"
-        message={`¿Eliminar el torneo "${deleting?.name}"? Se eliminarán todas las zonas, parejas y partidos asociados. Esta acción no se puede deshacer.`}
+        message={`¿Estás seguro de eliminar el torneo "${deleting?.name}"? Se eliminarán todas las zonas, parejas y partidos asociados en la base de datos. Esta acción no se puede deshacer.`}
       />
     </div>
   );
