@@ -13,28 +13,47 @@ export default function AuthGuard({
   requireAdmin?: boolean;
 }) {
   const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const supabase = createClient();
 
   useEffect(() => {
+    const checkAuthAndRole = async (currentUser: User | null) => {
+      setUser(currentUser);
+      if (currentUser && requireAdmin) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", currentUser.id)
+          .maybeSingle();
+
+        const isRootAdmin = currentUser.email?.toLowerCase() === "matiasvidal11972@gmail.com";
+        const userIsAdmin = isRootAdmin || profile?.role === "admin";
+        setIsAdmin(userIsAdmin);
+        if (!userIsAdmin) {
+          router.push("/");
+        }
+      }
+      setLoading(false);
+    };
+
     const getUser = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      setUser(user);
-      setLoading(false);
+      await checkAuthAndRole(user);
     };
     getUser();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      await checkAuthAndRole(session?.user ?? null);
     });
 
     return () => subscription.unsubscribe();
-  }, [supabase]);
+  }, [supabase, requireAdmin, router]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -45,12 +64,13 @@ export default function AuthGuard({
   if (loading) {
     return (
       <div className="min-h-screen bg-dark-950 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   if (!user) return null;
+  if (requireAdmin && !isAdmin) return null;
 
   return <>{children}</>;
 }

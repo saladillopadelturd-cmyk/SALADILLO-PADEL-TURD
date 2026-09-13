@@ -1,67 +1,117 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Tournament, Zone, Pair, Match, ZoneStanding } from "@/types/tournament";
+import type { Tournament, Zone, Couple, Match, ZoneStanding } from "@/types/tournament";
+import { calculateRoundRobinStandings } from "@/lib/tournament/standings";
 
 export function useTournament(tournamentId: string) {
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
-  const [pairs, setPairs] = useState<Pair[]>([]);
+  const [couples, setCouples] = useState<Couple[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
-  const [standings, setStandings] = useState<ZoneStanding[]>([]);
+  const [zoneCouplesMap, setZoneCouplesMap] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const [tournamentsRes, zonesRes, pairsRes, matchesRes] = await Promise.all([
-        supabase.from("tournaments").select("*").eq("id", tournamentId).single(),
-        supabase.from("zones").select("*").eq("tournament_id", tournamentId),
+  const normalizeMatch = (m: Match): Match => ({
+    ...m,
+    pair1: m.couple1,
+    pair2: m.couple2,
+    pair1_id: m.couple1_id ?? undefined,
+    pair2_id: m.couple2_id ?? undefined,
+  });
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [tournamentsRes, zonesRes, couplesRes, matchesRes, zoneCouplesRes] = await Promise.all([
+        supabase.from("tournaments").select("*").eq("id", tournamentId).maybeSingle(),
+        supabase.from("zones").select("*").eq("tournament_id", tournamentId).order("zone_number", { ascending: true }),
         supabase
-          .from("pairs")
-          .select("*, player1:players!pairs_player1_id_fkey(*), player2:players!pairs_player2_id_fkey(*)")
+          .from("couples")
+          .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*)")
           .eq("tournament_id", tournamentId),
         supabase
           .from("matches")
-          .select("*, pair1:pairs!matches_pair1_id_fkey(*), pair2:pairs!matches_pair2_id_fkey(*)")
-          .eq("tournament_id", tournamentId),
+          .select("*, couple1:couples!matches_couple1_id_fkey(*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*)), couple2:couples!matches_couple2_id_fkey(*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*))")
+          .eq("tournament_id", tournamentId)
+          .order("scheduled_time", { ascending: true, nullsFirst: false }),
+        supabase
+          .from("zone_couples")
+          .select("zone_id, couple_id"),
       ]);
 
-      setTournament(tournamentsRes.data);
-      setZones(zonesRes.data ?? []);
-      setPairs(pairsRes.data ?? []);
-      setMatches(matchesRes.data ?? []);
-      setLoading(false);
-    };
+      if (tournamentsRes.data) setTournament(tournamentsRes.data);
+      if (zonesRes.data) setZones(zonesRes.data);
+      if (couplesRes.data) setCouples(couplesRes.data);
 
-    fetchData();
+      const rawMatches = (matchesRes.data as Match[]) ?? [];
+      setMatches(rawMatches.map(normalizeMatch));
+
+      if (zoneCouplesRes.data) {
+        const map: Record<string, string[]> = {};
+        zoneCouplesRes.data.forEach((item) => {
+          if (!map[item.zone_id]) map[item.zone_id] = [];
+          map[item.zone_id].push(item.couple_id);
+        });
+        setZoneCouplesMap(map);
+      }
+    } catch (err) {
+      console.error("Error fetching tournament data in useTournament:", err);
+    } finally {
+      setLoading(false);
+    }
   }, [tournamentId, supabase]);
 
   useEffect(() => {
+    let isMounted = true;
+    const load = async () => {
+      if (isMounted) {
+        await fetchData();
+      }
+    };
+    void load();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [fetchData]);
+
+  // Realtime subscription for live match changes
+  useEffect(() => {
     const channel = supabase
-      .channel(`tournament_${tournamentId}`)
+      .channel(`public:matches:tour_${tournamentId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "matches", filter: `tournament_id=eq.${tournamentId}` },
+        {
+          event: "*",
+          schema: "public",
+          table: "matches",
+          filter: `tournament_id=eq.${tournamentId}`,
+        },
         (payload) => {
-          const newRow = payload.new as Record<string, unknown>;
-          setMatches((prev) => {
-            const idx = prev.findIndex((m) => m.id === newRow.id);
-            if (idx >= 0) {
-              const next = [...prev];
-              next[idx] = payload.new as Match;
-              return next;
-            }
-            return [...prev, payload.new as Match];
-          });
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "zone_standings" },
-        () => {
-          // Refetch standings when they change
+          if (payload.eventType === "DELETE") {
+            const oldId = (payload.old as { id?: string }).id;
+            setMatches((prev) => prev.filter((m) => m.id !== oldId));
+          } else if (payload.eventType === "INSERT") {
+            const inserted = normalizeMatch(payload.new as Match);
+            setMatches((prev) => [...prev, inserted]);
+          } else if (payload.eventType === "UPDATE") {
+            const updated = payload.new as Match;
+            setMatches((prev) => {
+              const idx = prev.findIndex((m) => m.id === updated.id);
+              if (idx >= 0) {
+                const next = [...prev];
+                // Preserve joined relations from existing item
+                next[idx] = normalizeMatch({
+                  ...prev[idx],
+                  ...updated,
+                });
+                return next;
+              }
+              return [...prev, normalizeMatch(updated)];
+            });
+          }
         }
       )
       .subscribe();
@@ -71,12 +121,29 @@ export function useTournament(tournamentId: string) {
     };
   }, [tournamentId, supabase]);
 
+  // Compute standings per zone dynamically based on matches and couples
+  const standings = useMemo<ZoneStanding[]>(() => {
+    const allStandings: ZoneStanding[] = [];
+    zones.forEach((zone) => {
+      const zoneCoupleIds = zoneCouplesMap[zone.id] ?? [];
+      const zoneMatches = matches.filter((m) => m.zone_id === zone.id);
+      const zoneRes = calculateRoundRobinStandings(zoneMatches, zoneCoupleIds).map((s) => ({
+        ...s,
+        zone_id: zone.id,
+      }));
+      allStandings.push(...zoneRes);
+    });
+    return allStandings;
+  }, [zones, zoneCouplesMap, matches]);
+
   return {
     tournament,
     zones,
-    pairs,
+    couples,
+    pairs: couples, // backward compatibility
     matches,
     standings,
     loading,
+    refetch: fetchData,
   };
 }

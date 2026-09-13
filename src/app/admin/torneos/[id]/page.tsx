@@ -14,7 +14,8 @@ export default function AdminTorneoDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = use(params);
+  const { id: _id } = use(params);
+  void _id;
   const router = useRouter();
   const [showDelete, setShowDelete] = useState(false);
 

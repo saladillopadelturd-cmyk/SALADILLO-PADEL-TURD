@@ -38,20 +38,20 @@ export default function Modal({
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in"
       onClick={(e) => {
         if (e.target === overlayRef.current) onClose();
       }}
     >
       <div
-        className={`${sizes[size]} w-full bg-dark-800 border border-dark-700 rounded-xl shadow-2xl animate-in fade-in zoom-in-95 duration-200`}
+        className={`${sizes[size]} w-full bg-dark-900/95 border border-dark-700/80 rounded-2xl shadow-2xl shadow-black/60 animate-in overflow-hidden`}
       >
         {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-dark-700">
-            <h2 className="text-lg font-bold text-white">{title}</h2>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-dark-800 bg-dark-950/60">
+            <h2 className="text-base sm:text-lg font-black text-white tracking-tight">{title}</h2>
             <button
               onClick={onClose}
-              className="text-dark-400 hover:text-white transition-colors"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-dark-400 hover:text-white hover:bg-dark-800 transition-colors cursor-pointer"
             >
               <svg
                 className="w-5 h-5"

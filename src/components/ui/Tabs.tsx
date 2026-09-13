@@ -33,7 +33,7 @@ export function TabsList({
 }) {
   return (
     <div
-      className={`flex border-b border-dark-700 overflow-x-auto ${className}`}
+      className={`flex items-center gap-1.5 p-1.5 bg-dark-900/90 border border-dark-800/90 rounded-2xl overflow-x-auto scrollbar-none shadow-inner ${className}`}
     >
       {children}
     </div>
@@ -43,21 +43,24 @@ export function TabsList({
 export function TabsTrigger({
   value,
   children,
+  className = "",
 }: {
   value: string;
   children: ReactNode;
+  className?: string;
 }) {
   const ctx = useContext(TabsContext);
   if (!ctx) throw new Error("TabsTrigger must be used within Tabs");
   const isActive = ctx.activeTab === value;
   return (
     <button
+      type="button"
       onClick={() => ctx.setActiveTab(value)}
-      className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
+      className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl whitespace-nowrap transition-all duration-150 active:scale-[0.97] cursor-pointer min-h-[38px] flex items-center justify-center ${
         isActive
-          ? "border-blue-500 text-blue-400"
-          : "border-transparent text-dark-400 hover:text-white hover:border-dark-500"
-      }`}
+          ? "bg-gradient-to-r from-blue-600 to-emerald-600 text-white shadow-md shadow-blue-500/20 border border-white/10"
+          : "text-dark-400 hover:text-white hover:bg-dark-800/80 border border-transparent"
+      } ${className}`}
     >
       {children}
     </button>
@@ -74,5 +77,6 @@ export function TabsContent({
   const ctx = useContext(TabsContext);
   if (!ctx) throw new Error("TabsContent must be used within Tabs");
   if (ctx.activeTab !== value) return null;
-  return <div className="py-4">{children}</div>;
+  return <div className="py-4 animate-in">{children}</div>;
 }
+

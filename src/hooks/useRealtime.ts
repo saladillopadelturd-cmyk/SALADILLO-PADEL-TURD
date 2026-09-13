@@ -1,32 +1,51 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-export function useRealtime<T>(
+export function useRealtime<T extends { id?: string }>(
   table: string,
   filter?: string
-): { data: T[]; loading: boolean } {
+): { data: T[]; loading: boolean; refetch: () => Promise<void> } {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
+
+  const fetchData = useCallback(async () => {
+    let query = supabase.from(table).select("*");
+    if (filter) {
+      const [column, value] = filter.split("=eq.");
+      if (column && value) {
+        query = query.eq(column, value);
+      }
+    }
+    const { data: result } = await query;
+    setData((result as T[]) ?? []);
+    setLoading(false);
+  }, [table, filter, supabase]);
 
   useEffect(() => {
-    const fetchData = async () => {
+    let isMounted = true;
+
+    const init = async () => {
       let query = supabase.from(table).select("*");
       if (filter) {
         const [column, value] = filter.split("=eq.");
-        query = query.eq(column, value);
+        if (column && value) {
+          query = query.eq(column, value);
+        }
       }
       const { data: result } = await query;
-      setData((result as T[]) ?? []);
-      setLoading(false);
+      if (isMounted) {
+        setData((result as T[]) ?? []);
+        setLoading(false);
+      }
     };
 
-    fetchData();
+    void init();
 
     const channel = supabase
-      .channel(`realtime_${table}`)
+      .channel(`realtime_${table}_${filter || "all"}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table, filter },
@@ -34,26 +53,25 @@ export function useRealtime<T>(
           if (payload.eventType === "INSERT") {
             setData((prev) => [...prev, payload.new as T]);
           } else if (payload.eventType === "UPDATE") {
+            const updated = payload.new as T;
             setData((prev) =>
               prev.map((item) =>
-                (item as any).id === (payload.new as any).id
-                  ? (payload.new as T)
-                  : item
+                item.id === updated.id ? { ...item, ...updated } : item
               )
             );
           } else if (payload.eventType === "DELETE") {
-            setData((prev) =>
-              prev.filter((item) => (item as any).id !== (payload.old as any).id)
-            );
+            const deletedId = (payload.old as { id?: string })?.id;
+            setData((prev) => prev.filter((item) => item.id !== deletedId));
           }
         }
       )
       .subscribe();
 
     return () => {
+      isMounted = false;
       supabase.removeChannel(channel);
     };
   }, [table, filter, supabase]);
 
-  return { data, loading };
+  return { data, loading, refetch: fetchData };
 }

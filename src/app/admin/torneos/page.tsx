@@ -16,10 +16,12 @@ const INITIAL_TOURNAMENTS: Tournament[] = [
     id: "demo",
     name: "Torneo Demo",
     date: "2026-12-15",
+    category: "5ta",
     location: "Club de Pádel Saladillo",
     game_mode: "american_9games",
     zone_size: 4,
     num_zones: 4,
+    golden_point: true,
     status: "active",
     created_by: null,
     created_at: new Date().toISOString(),
@@ -28,6 +30,9 @@ const INITIAL_TOURNAMENTS: Tournament[] = [
 
 const STATUS_LABELS: Record<TournamentStatus, string> = {
   draft: "Borrador",
+  zones: "Fase de Zonas",
+  playoffs: "Playoffs",
+  finished: "Finalizado",
   registration: "Inscripción",
   active: "Activo",
   completed: "Finalizado",
@@ -36,6 +41,9 @@ const STATUS_LABELS: Record<TournamentStatus, string> = {
 
 const STATUS_VARIANTS: Record<TournamentStatus, "default" | "success" | "warning" | "danger" | "info"> = {
   draft: "default",
+  zones: "warning",
+  playoffs: "info",
+  finished: "success",
   registration: "info",
   active: "success",
   completed: "default",
@@ -98,6 +106,8 @@ export default function AdminTorneosPage() {
       id: String(Date.now()),
       name: formNombre,
       date: formFecha,
+      category: "5ta",
+      golden_point: true,
       location: formLugar || null,
       game_mode: formModalidad as Tournament["game_mode"],
       zone_size: Number(formParejasZona),

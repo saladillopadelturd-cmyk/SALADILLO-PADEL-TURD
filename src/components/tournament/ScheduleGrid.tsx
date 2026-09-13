@@ -12,8 +12,9 @@ interface ScheduleGridProps {
 export default function ScheduleGrid({
   matches,
   courts,
-  onUpdateMatch,
+  onUpdateMatch: _onUpdateMatch,
 }: ScheduleGridProps) {
+  void _onUpdateMatch;
   const scheduledMatches = matches.filter((m) => m.scheduled_at);
 
   const groupedByDate = scheduledMatches.reduce(

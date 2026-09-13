@@ -1,6 +1,6 @@
 import { type HTMLAttributes, forwardRef } from "react";
 
-interface TableProps extends HTMLAttributes<HTMLTableElement> {}
+type TableProps = HTMLAttributes<HTMLTableElement>;
 
 const Table = forwardRef<HTMLTableElement, TableProps>(
   ({ className = "", children, ...props }, ref) => {

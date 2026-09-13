@@ -8,8 +8,8 @@ interface UserProfile {
   id: string;
   email: string;
   full_name: string | null;
-  avatar_url: string | null;
-  role: "public" | "admin" | "super_admin";
+  role: "admin" | "user" | "public" | "super_admin";
+  created_at?: string;
 }
 
 export function useAuth() {
@@ -19,22 +19,33 @@ export function useAuth() {
   const supabase = createClient();
 
   useEffect(() => {
-    const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setUser(user);
+    const fetchProfile = async (currentUser: User) => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", currentUser.id)
+        .maybeSingle();
 
-      if (user) {
-        const { data } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", user.id)
-          .single();
+      if (data && !error) {
         setProfile(data);
       }
+    };
 
-      setLoading(false);
+    const getUser = async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        setUser(user);
+
+        if (user) {
+          await fetchProfile(user);
+        }
+      } catch (err) {
+        console.error("Auth error:", err);
+      } finally {
+        setLoading(false);
+      }
     };
 
     getUser();
@@ -42,14 +53,10 @@ export function useAuth() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        const { data } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", session.user.id)
-          .single();
-        setProfile(data);
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      if (currentUser) {
+        await fetchProfile(currentUser);
       } else {
         setProfile(null);
       }
@@ -64,12 +71,15 @@ export function useAuth() {
     setProfile(null);
   };
 
+  const isRootAdmin = user?.email?.toLowerCase() === "matiasvidal11972@gmail.com";
+  const isAdmin = isRootAdmin || profile?.role === "admin" || (profile as unknown as { role: string })?.role === "super_admin";
+
   return {
     user,
     profile,
     loading,
     signOut,
-    isAdmin: profile?.role === "admin" || profile?.role === "super_admin",
-    isSuperAdmin: profile?.role === "super_admin",
+    isAdmin,
+    isSuperAdmin: isRootAdmin || (profile as unknown as { role: string })?.role === "super_admin",
   };
 }

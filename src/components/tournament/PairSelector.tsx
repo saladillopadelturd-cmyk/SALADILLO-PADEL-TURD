@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import type { Pair } from "@/types/tournament";
 
 interface PairSelectorProps {
