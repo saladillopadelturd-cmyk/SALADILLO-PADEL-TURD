@@ -42,7 +42,13 @@ import {
   type IndividualRankingRecord,
 } from "./rankings";
 
-import type { Match } from "@/types/tournament";
+import {
+  getAssignedPlayerIdsInTournament,
+  getAvailablePlayersForTournament,
+  validateCoupleFormation,
+} from "./couples";
+
+import type { Match, Couple, Player } from "@/types/tournament";
 
 export interface TestResult {
   passed: number;
@@ -544,6 +550,81 @@ export function runTournamentBusinessLogicTests(): TestResult {
   }
 
   assert(stressPassed, "Prueba de Estrés: 100 zonas aleatorias resueltas sin errores ni fallos de ordenamiento");
+
+  // ==========================================================================
+  // 6. REGLAS DE FORMACIÓN DE PAREJAS (Unicidad y Jugadores Disponibles)
+  // ==========================================================================
+  const samplePlayers: Player[] = [
+    { id: "p1", first_name: "Matías", last_name: "Vidal", created_at: "" },
+    { id: "p2", first_name: "Juan", last_name: "Pérez", created_at: "" },
+    { id: "p3", first_name: "Lucas", last_name: "González", created_at: "" },
+    { id: "p4", first_name: "Carlos", last_name: "López", created_at: "" },
+    { id: "p5", first_name: "Federico", last_name: "Gómez", created_at: "" },
+  ];
+
+  const sampleCouples: Couple[] = [
+    {
+      id: "c1",
+      tournament_id: "tour_1",
+      player1_id: "p1",
+      player2_id: "p2",
+      created_at: "",
+    },
+    {
+      id: "c2",
+      tournament_id: "tour_2", // Distinto torneo
+      player1_id: "p1",
+      player2_id: "p3",
+      created_at: "",
+    },
+  ];
+
+  // a) getAssignedPlayerIdsInTournament
+  const assignedTour1 = getAssignedPlayerIdsInTournament(sampleCouples, "tour_1");
+  assert(assignedTour1.has("p1") && assignedTour1.has("p2"), "Jugadores p1 y p2 están asignados en tour_1");
+  assert(!assignedTour1.has("p3") && !assignedTour1.has("p4"), "Jugadores p3 y p4 NO están asignados en tour_1");
+
+  const assignedTour1ExcludingC1 = getAssignedPlayerIdsInTournament(sampleCouples, "tour_1", "c1");
+  assert(assignedTour1ExcludingC1.size === 0, "Al excluir c1, ningún jugador está asignado en tour_1");
+
+  // b) getAvailablePlayersForTournament: Jugador que ya integra pareja NO aparece en la lista
+  const availableTour1 = getAvailablePlayersForTournament(samplePlayers, sampleCouples, "tour_1");
+  assert(availableTour1.length === 3, "Hay exactamente 3 jugadores disponibles en tour_1");
+  assert(availableTour1.some((p) => p.id === "p3"), "Jugador libre p3 está disponible en tour_1");
+  assert(availableTour1.some((p) => p.id === "p4"), "Jugador libre p4 está disponible en tour_1");
+  assert(availableTour1.some((p) => p.id === "p5"), "Jugador libre p5 está disponible en tour_1");
+  assert(!availableTour1.some((p) => p.id === "p1"), "Jugador asignado p1 NO aparece en la lista de disponibles");
+  assert(!availableTour1.some((p) => p.id === "p2"), "Jugador asignado p2 NO aparece en la lista de disponibles");
+
+  // Jugador ya elegido como Jugador 1 se excluye de las opciones para Jugador 2 (evita auto-pareja)
+  const availableForPartner = getAvailablePlayersForTournament(samplePlayers, sampleCouples, "tour_1", null, "p3");
+  assert(!availableForPartner.some((p) => p.id === "p3"), "Jugador p3 ya seleccionado se excluye para Jugador 2");
+  assert(availableForPartner.length === 2, "Quedan 2 jugadores disponibles para ser compañero de p3");
+
+  // c) validateCoupleFormation
+  // Caso válido: dos jugadores libres
+  const validFormation = validateCoupleFormation("tour_1", "p3", "p4", sampleCouples);
+  assert(validFormation.isValid === true, "Formación válida con jugadores libres p3 y p4");
+
+  // Caso inválido: mismo jugador en ambas posiciones
+  const selfPairing = validateCoupleFormation("tour_1", "p3", "p3", sampleCouples);
+  assert(!selfPairing.isValid && selfPairing.error?.includes("distintas") === true, "Rechaza formar pareja consigo mismo (p3-p3)");
+
+  // Caso inválido: Jugador 1 ya integra una pareja en este torneo
+  const p1AlreadyInCouple = validateCoupleFormation("tour_1", "p1", "p3", sampleCouples);
+  assert(!p1AlreadyInCouple.isValid && p1AlreadyInCouple.error?.includes("Jugador 1 ya integra") === true, "Rechaza si Jugador 1 ya está en una pareja en el torneo");
+
+  // Caso inválido: Jugador 2 ya integra una pareja en este torneo
+  const p2AlreadyInCouple = validateCoupleFormation("tour_1", "p4", "p2", sampleCouples);
+  assert(!p2AlreadyInCouple.isValid && p2AlreadyInCouple.error?.includes("Jugador 2 ya integra") === true, "Rechaza si Jugador 2 ya está en una pareja en el torneo");
+
+  // Caso válido en edición: los miembros de la pareja editada pueden mantenerse
+  const editSamePlayers = validateCoupleFormation("tour_1", "p1", "p2", sampleCouples, "c1");
+  assert(editSamePlayers.isValid === true, "Permite editar y conservar los mismos jugadores excluyendo la pareja actual");
+
+  // Caso válido en edición: cambiar uno de los jugadores por uno libre
+  const editWithFreePlayer = validateCoupleFormation("tour_1", "p1", "p5", sampleCouples, "c1");
+  assert(editWithFreePlayer.isValid === true, "Permite editar y cambiar jugador por uno libre");
 
   return {
     passed,
