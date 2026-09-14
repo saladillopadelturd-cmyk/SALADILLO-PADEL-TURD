@@ -195,6 +195,18 @@ export function getCoupleLabelWithNumber(
 }
 
 /**
+ * Devuelve únicamente los nombres abreviados de los jugadores de la pareja ("I. Apellido / I. Apellido").
+ * Sin el prefijo "Pareja X:".
+ * Ejemplo: "M. Vidal / A. Ruiz"
+ */
+export function getCouplePlayersShortLabel(couple?: Couple | null): string {
+  if (!couple) return "Por definir";
+  const p1 = couple.player1 ? formatPlayerShortName(couple.player1) : "Jugador 1";
+  const p2 = couple.player2 ? formatPlayerShortName(couple.player2) : "Jugador 2";
+  return `${p1} / ${p2}`;
+}
+
+/**
  * Genera parejas aleatorias a partir de una lista de jugadores disponibles para un torneo.
  * Empareja de a dos en dos y asigna la numeración secuencial correlativa ("Pareja 1", "Pareja 2", etc.).
  */

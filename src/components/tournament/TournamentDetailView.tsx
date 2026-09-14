@@ -8,7 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/Tabs";
 import { createClient } from "@/lib/supabase/client";
 import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
 import { calculateRoundRobinStandings } from "@/lib/tournament/standings";
-import { getCoupleNumberMap, getCoupleLabelWithNumber } from "@/lib/tournament/couples";
+import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel } from "@/lib/tournament/couples";
 import Bracket from "@/components/tournament/Bracket";
 import { Calendar, MapPin, Trophy, Clock, ArrowLeft, Users } from "lucide-react";
 
@@ -161,9 +161,13 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
 
   const coupleNumberMap = getCoupleNumberMap(couples);
   const coupleNamesMap: Record<string, string> = {};
+  const couplePlayersMap: Record<string, string> = {};
+  const coupleByIdMap: Record<string, Couple> = {};
   couples.forEach((c) => {
     const num = coupleNumberMap.get(c.id);
     coupleNamesMap[c.id] = getCoupleLabelWithNumber(c, num);
+    couplePlayersMap[c.id] = getCouplePlayersShortLabel(c);
+    coupleByIdMap[c.id] = c;
   });
 
   // Build bracket structure for playoffs tab
@@ -403,12 +407,76 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {matches.map((m) => {
-                  const c1Name = coupleNamesMap[m.couple1_id ?? ""] ?? "Por definir";
-                  const c2Name = coupleNamesMap[m.couple2_id ?? ""] ?? "Por definir";
+                  const hasResult = m.status === "completed" || Boolean(m.score_set1 || m.score_set2 || m.score_super_tb);
                   const isFinished = m.status === "completed";
                   const isLive = m.status === "in_progress";
                   const isP1Winner = m.winner_couple_id && m.winner_couple_id === m.couple1_id;
                   const isP2Winner = m.winner_couple_id && m.winner_couple_id === m.couple2_id;
+
+                  const c1Players = m.couple1 ? getCouplePlayersShortLabel(m.couple1) : couplePlayersMap[m.couple1_id ?? ""] ?? "Por definir";
+                  const c2Players = m.couple2 ? getCouplePlayersShortLabel(m.couple2) : couplePlayersMap[m.couple2_id ?? ""] ?? "Por definir";
+                  const c1Name = coupleNamesMap[m.couple1_id ?? ""] ?? "Por definir";
+                  const c2Name = coupleNamesMap[m.couple2_id ?? ""] ?? "Por definir";
+
+                  // Si ya tiene un resultado cargado, solo mostrar los nombres de los jugadores y el resultado
+                  if (hasResult) {
+                    return (
+                      <Card
+                        key={m.id}
+                        className="p-4 border border-emerald-500/30 bg-dark-900/90 shadow-md transition-all duration-200"
+                      >
+                        <div className="flex items-center justify-between text-xs text-dark-400 mb-3">
+                          <Badge variant="success" size="xs">
+                            FINALIZADO
+                          </Badge>
+                          <span className="font-semibold text-emerald-400/80 text-[11px] uppercase tracking-wider">
+                            {m.stage === "zone" ? "Fase Zonas" : m.stage}
+                          </span>
+                        </div>
+
+                        {/* Electronic Scoreboard: solo nombres de jugadores y resultado */}
+                        <div className="space-y-1.5 bg-dark-950/80 p-2 rounded-xl border border-dark-800/80 mb-2">
+                          <div
+                            className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
+                              isP1Winner
+                                ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold"
+                                : "text-slate-200"
+                            }`}
+                          >
+                            <span className="truncate pr-2">{c1Players}</span>
+                            {m.score_set1 && (
+                              <span className="scoreboard-digit px-2 py-0.5 rounded bg-dark-900 border border-dark-700 text-xs font-mono font-black text-white">
+                                {m.score_set1}
+                              </span>
+                            )}
+                          </div>
+
+                          <div
+                            className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
+                              isP2Winner
+                                ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold"
+                                : "text-slate-200"
+                            }`}
+                          >
+                            <span className="truncate pr-2">{c2Players}</span>
+                            {m.score_set2 && (
+                              <span className="scoreboard-digit px-2 py-0.5 rounded bg-dark-900 border border-dark-700 text-xs font-mono font-black text-white">
+                                {m.score_set2}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {m.score_super_tb && (
+                          <div className="flex items-center justify-end pt-1">
+                            <span className="text-amber-400 text-xs font-mono font-bold bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/25">
+                              STB: {m.score_super_tb}
+                            </span>
+                          </div>
+                        )}
+                      </Card>
+                    );
+                  }
 
                   return (
                     <Card

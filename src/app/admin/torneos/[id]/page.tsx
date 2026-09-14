@@ -13,7 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
 import { calculateRoundRobinStandings } from "@/lib/tournament/standings";
 import { calculateOptimalZones } from "@/lib/tournament/zones";
-import { getCoupleNumberMap, getCoupleLabelWithNumber } from "@/lib/tournament/couples";
+import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel } from "@/lib/tournament/couples";
 import ZoneCard from "@/components/tournament/ZoneCard";
 import {
   AlertCircle,
@@ -788,47 +788,94 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                   </Card>
                 ) : (
                   <div className="grid grid-cols-1 gap-4">
-                    {matches.map((m) => (
-                      <Card
-                        key={m.id}
-                        className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-dark-700/80 hover:border-dark-600 transition-colors"
-                      >
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <Badge variant={m.stage === "zone" ? "info" : "success"} size="sm">
-                              {STAGE_LABELS[m.stage] ?? m.stage}
-                            </Badge>
-                            <span className="text-dark-400 text-xs">Partido #{m.match_number ?? "-"}</span>
-                          </div>
-                          <div className="text-sm font-semibold text-white">
-                            <span>{getCoupleLabel(m.couple1)}</span>
-                            <span className="text-primary-400 mx-2">vs</span>
-                            <span>{getCoupleLabel(m.couple2)}</span>
-                          </div>
-                          <div className="flex items-center gap-3 text-xs text-dark-400">
-                            <span className="flex items-center gap-1">
-                              <MapPin className="w-3.5 h-3.5 text-sky-400" />
-                              {m.court_name || "Sin cancha asignada"}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                              {m.scheduled_time || "Horario a definir"}
-                            </span>
-                          </div>
-                        </div>
+                    {matches.map((m) => {
+                      const hasResult = m.status === "completed" || Boolean(m.score_set1 || m.score_set2 || m.score_super_tb);
+                      const isP1Winner = m.winner_couple_id && m.winner_couple_id === m.couple1_id;
+                      const isP2Winner = m.winner_couple_id && m.winner_couple_id === m.couple2_id;
+                      const scoreDisplay = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
 
-                        <div className="flex items-center gap-2">
-                          <Button variant="secondary" size="sm" onClick={() => openScheduleModal(m)}>
-                            <Clock className="w-3.5 h-3.5 mr-1" />
-                            Programar
-                          </Button>
-                          <Button size="sm" onClick={() => openScoreModal(m)}>
-                            <Edit2 className="w-3.5 h-3.5 mr-1" />
-                            {m.status === "completed" ? "Modificar Marcador" : "Cargar Marcador"}
-                          </Button>
-                        </div>
-                      </Card>
-                    ))}
+                      if (hasResult) {
+                        return (
+                          <Card
+                            key={m.id}
+                            className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-emerald-500/30 bg-dark-900/60 transition-colors"
+                          >
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="success" size="sm">
+                                  FINALIZADO
+                                </Badge>
+                                <span className="text-dark-400 text-xs">
+                                  {STAGE_LABELS[m.stage] ?? m.stage}
+                                </span>
+                                <span className="text-dark-400 text-xs">Partido #{m.match_number ?? "-"}</span>
+                              </div>
+                              <div className="text-sm font-semibold text-white">
+                                <span className={isP1Winner ? "text-emerald-400 font-bold" : "text-white"}>
+                                  {getCouplePlayersShortLabel(m.couple1)}
+                                </span>
+                                <span className="text-dark-500 mx-2">vs</span>
+                                <span className={isP2Winner ? "text-emerald-400 font-bold" : "text-white"}>
+                                  {getCouplePlayersShortLabel(m.couple2)}
+                                </span>
+                              </div>
+                              <div className="text-xs font-mono font-bold text-sky-400">
+                                Resultado: {scoreDisplay || "Finalizado"}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <Button size="sm" variant="secondary" onClick={() => openScoreModal(m)}>
+                                <Edit2 className="w-3.5 h-3.5 mr-1" />
+                                Modificar Marcador
+                              </Button>
+                            </div>
+                          </Card>
+                        );
+                      }
+
+                      return (
+                        <Card
+                          key={m.id}
+                          className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-dark-700/80 hover:border-dark-600 transition-colors"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <Badge variant={m.stage === "zone" ? "info" : "success"} size="sm">
+                                {STAGE_LABELS[m.stage] ?? m.stage}
+                              </Badge>
+                              <span className="text-dark-400 text-xs">Partido #{m.match_number ?? "-"}</span>
+                            </div>
+                            <div className="text-sm font-semibold text-white">
+                              <span>{getCoupleLabel(m.couple1)}</span>
+                              <span className="text-primary-400 mx-2">vs</span>
+                              <span>{getCoupleLabel(m.couple2)}</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-xs text-dark-400">
+                              <span className="flex items-center gap-1">
+                                <MapPin className="w-3.5 h-3.5 text-sky-400" />
+                                {m.court_name || "Sin cancha asignada"}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                                {m.scheduled_time || "Horario a definir"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <Button variant="secondary" size="sm" onClick={() => openScheduleModal(m)}>
+                              <Clock className="w-3.5 h-3.5 mr-1" />
+                              Programar
+                            </Button>
+                            <Button size="sm" onClick={() => openScoreModal(m)}>
+                              <Edit2 className="w-3.5 h-3.5 mr-1" />
+                              Cargar Marcador
+                            </Button>
+                          </div>
+                        </Card>
+                      );
+                    })}
                   </div>
                 )}
               </div>
