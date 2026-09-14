@@ -193,6 +193,101 @@ export function findNextPlayoffMatchSlot<
   };
 }
 
+export interface PlayoffSlotUpdate {
+  id: string;
+  couple1_id?: string | null;
+  couple2_id?: string | null;
+}
+
+/**
+ * Propaga de manera reactiva los ganadores de cada ronda eliminatoria hacia los slots correspondientes
+ * (couple1_id o couple2_id) de la siguiente ronda en memoria.
+ * 
+ * Además retorna una lista de `updatesToPersist` para que cualquier backend o endpoint (ej. GET /api/playoffs)
+ * pueda persistir y auto-reparar la base de datos de manera transparente.
+ */
+export function propagatePlayoffWinners<
+  T extends {
+    id: string;
+    stage: MatchStage | string;
+    couple1_id?: string | null;
+    couple2_id?: string | null;
+    winner_couple_id?: string | null;
+    status?: string | null;
+    match_number?: number | null;
+    created_at?: string;
+  }
+>(
+  tournamentMatches: T[]
+): {
+  updatedMatches: T[];
+  updatesToPersist: PlayoffSlotUpdate[];
+} {
+  // Clonar los partidos para no mutar el array original
+  const clonedMatches: T[] = tournamentMatches.map((m) => ({ ...m }));
+  const updatesMap = new Map<string, PlayoffSlotUpdate>();
+
+  const stageProgression: MatchStage[] = ["round_of_16", "quarter", "semi"];
+
+  for (const currentStage of stageProgression) {
+    const nextStage = getNextStage(currentStage);
+    if (!nextStage) continue;
+
+    // Obtener y ordenar partidos de la etapa actual
+    const currentStageMatches = clonedMatches
+      .filter((m) => normalizeStage(m.stage) === currentStage)
+      .sort((a, b) => {
+        if (a.match_number != null && b.match_number != null && a.match_number !== b.match_number) {
+          return a.match_number - b.match_number;
+        }
+        if (a.created_at && b.created_at && a.created_at !== b.created_at) {
+          return a.created_at.localeCompare(b.created_at);
+        }
+        return (a.id || "").localeCompare(b.id || "");
+      });
+
+    // Obtener y ordenar partidos de la etapa siguiente
+    const nextStageMatches = clonedMatches
+      .filter((m) => normalizeStage(m.stage) === nextStage)
+      .sort((a, b) => {
+        if (a.match_number != null && b.match_number != null && a.match_number !== b.match_number) {
+          return a.match_number - b.match_number;
+        }
+        if (a.created_at && b.created_at && a.created_at !== b.created_at) {
+          return a.created_at.localeCompare(b.created_at);
+        }
+        return (a.id || "").localeCompare(b.id || "");
+      });
+
+    if (nextStageMatches.length === 0) continue;
+
+    for (let i = 0; i < currentStageMatches.length; i++) {
+      const match = currentStageMatches[i];
+      const winnerId = match.winner_couple_id;
+      if (!winnerId || winnerId === "BYE") continue;
+
+      const targetIdx = Math.floor(i / 2);
+      if (targetIdx >= nextStageMatches.length) continue;
+
+      const targetMatch = nextStageMatches[targetIdx];
+      const slotField: "couple1_id" | "couple2_id" = i % 2 === 0 ? "couple1_id" : "couple2_id";
+
+      if (targetMatch[slotField] !== winnerId) {
+        targetMatch[slotField] = winnerId;
+
+        const existingUpdate = updatesMap.get(targetMatch.id) || { id: targetMatch.id };
+        existingUpdate[slotField] = winnerId;
+        updatesMap.set(targetMatch.id, existingUpdate);
+      }
+    }
+  }
+
+  return {
+    updatedMatches: clonedMatches,
+    updatesToPersist: Array.from(updatesMap.values()),
+  };
+}
+
 /**
  * Cruce inteligente de Playoffs SPT:
  * - Clasificados ordenados por:

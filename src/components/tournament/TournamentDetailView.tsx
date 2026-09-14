@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
 import { calculateRoundRobinStandings } from "@/lib/tournament/standings";
 import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel } from "@/lib/tournament/couples";
+import { propagatePlayoffWinners } from "@/lib/tournament/elimination";
 import Bracket from "@/components/tournament/Bracket";
 import { Calendar, MapPin, Trophy, Clock, ArrowLeft, Users } from "lucide-react";
 
@@ -170,6 +171,25 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
     coupleByIdMap[c.id] = c;
   });
 
+  // Enriquecer mapas de parejas con información unida en los partidos si no estuviesen en el listado inicial
+  matches.forEach((m) => {
+    if (m.couple1 && m.couple1_id && !coupleNamesMap[m.couple1_id]) {
+      const num = coupleNumberMap.get(m.couple1_id);
+      coupleNamesMap[m.couple1_id] = getCoupleLabelWithNumber(m.couple1, num);
+      couplePlayersMap[m.couple1_id] = getCouplePlayersShortLabel(m.couple1);
+      coupleByIdMap[m.couple1_id] = m.couple1;
+    }
+    if (m.couple2 && m.couple2_id && !coupleNamesMap[m.couple2_id]) {
+      const num = coupleNumberMap.get(m.couple2_id);
+      coupleNamesMap[m.couple2_id] = getCoupleLabelWithNumber(m.couple2, num);
+      couplePlayersMap[m.couple2_id] = getCouplePlayersShortLabel(m.couple2);
+      coupleByIdMap[m.couple2_id] = m.couple2;
+    }
+  });
+
+  // Propagar reactivamente en memoria los ganadores de rondas eliminatorias hacia las siguientes fases
+  const { updatedMatches: displayMatches } = propagatePlayoffWinners(matches);
+
   // Build bracket structure for playoffs tab
   const STAGE_ORDER: Record<string, number> = {
     round_of_16: 1,
@@ -183,7 +203,7 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
     tercer_puesto: 5,
   };
 
-  const playoffMatches = matches
+  const playoffMatches = displayMatches
     .filter((m) => m.stage !== "zone")
     .sort((a, b) => {
       if (a.match_number != null && b.match_number != null && a.match_number !== b.match_number) {
@@ -431,7 +451,7 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
               </Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {matches.map((m) => {
+                {displayMatches.map((m) => {
                   const hasResult = m.status === "completed" || Boolean(m.score_set1 || m.score_set2 || m.score_super_tb);
                   const isFinished = m.status === "completed";
                   const isLive = m.status === "in_progress";

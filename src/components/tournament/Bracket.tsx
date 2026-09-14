@@ -85,6 +85,9 @@ export default function Bracket({ rounds, pairNames }: BracketProps) {
                     const p1DisplayName = pairNames[match.pair1] ?? match.pair1;
                     const p2DisplayName = pairNames[match.pair2] ?? match.pair2;
 
+                    const isP1Pending = match.pair1 === "Por definir" || p1DisplayName === "Por definir";
+                    const isP2Pending = match.pair2 === "Por definir" || p2DisplayName === "Por definir";
+
                     return (
                       <div key={`${round.round}_${matchIndex}`} className="relative flex items-center">
                         <Card
@@ -99,6 +102,8 @@ export default function Bracket({ rounds, pairNames }: BracketProps) {
                             className={`flex items-center justify-between px-2.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors mb-1.5 ${
                               isP1Winner
                                 ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                                : isP1Pending
+                                ? "bg-dark-950/40 text-dark-400 italic font-normal border border-dark-800/50"
                                 : "bg-dark-950/70 text-slate-200 border border-dark-800"
                             }`}
                           >
@@ -120,6 +125,8 @@ export default function Bracket({ rounds, pairNames }: BracketProps) {
                             className={`flex items-center justify-between px-2.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
                               isP2Winner
                                 ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                                : isP2Pending
+                                ? "bg-dark-950/40 text-dark-400 italic font-normal border border-dark-800/50"
                                 : "bg-dark-950/70 text-slate-200 border border-dark-800"
                             }`}
                           >

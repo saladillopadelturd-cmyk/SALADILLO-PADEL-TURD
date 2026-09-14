@@ -5,11 +5,13 @@ import {
   generateSeededPlayoffBracket,
   type QualifiedPair,
   getStageName,
+  propagatePlayoffWinners,
 } from "@/lib/tournament/elimination";
 
 /**
  * GET /api/playoffs?tournamentId=xxx
  * Obtiene el cuadro eliminatorio completo y el estado de cada partido.
+ * Auto-sincroniza en background los ganadores definidos hacia las siguientes fases.
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -32,9 +34,37 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Propagar ganadores y auto-sanar slots pendientes en la base de datos si fuera necesario
+  const { updatedMatches, updatesToPersist } = propagatePlayoffWinners(playoffMatches || []);
+  if (updatesToPersist.length > 0) {
+    for (const update of updatesToPersist) {
+      const payload: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      };
+      if (update.couple1_id !== undefined) payload.couple1_id = update.couple1_id;
+      if (update.couple2_id !== undefined) payload.couple2_id = update.couple2_id;
+
+      await supabase.from("matches").update(payload).eq("id", update.id);
+    }
+
+    const { data: refreshedMatches } = await supabase
+      .from("matches")
+      .select("*, couple1:couples!matches_couple1_id_fkey(*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*)), couple2:couples!matches_couple2_id_fkey(*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*))")
+      .eq("tournament_id", tournamentId)
+      .neq("stage", "zone")
+      .order("match_number", { ascending: true });
+
+    if (refreshedMatches) {
+      return NextResponse.json({
+        success: true,
+        matches: refreshedMatches,
+      });
+    }
+  }
+
   return NextResponse.json({
     success: true,
-    matches: playoffMatches,
+    matches: updatedMatches,
   });
 }
 

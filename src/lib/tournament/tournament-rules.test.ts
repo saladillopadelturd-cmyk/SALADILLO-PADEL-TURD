@@ -33,6 +33,7 @@ import {
   findNextPlayoffMatchSlot,
   getNextStage,
   normalizeStage,
+  propagatePlayoffWinners,
   type QualifiedPair,
 } from "./elimination";
 
@@ -947,6 +948,61 @@ export function runTournamentBusinessLogicTests(): TestResult {
   // Verificar que la Gran Final tiene a Pareja_A vs Pareja_G
   assert(livePlayoffs["m_final_0"].couple1_id === "Pareja_A", "Gran Final tiene a Pareja_A como couple1");
   assert(livePlayoffs["m_final_0"].couple2_id === "Pareja_G", "Gran Final tiene a Pareja_G como couple2");
+
+  // 7. Pruebas de propagatePlayoffWinners (Propagación automática y auto-sanación en memoria):
+  // Simular un cuadro donde octavos fueron completados pero cuartos y semis tenían couple1_id/couple2_id null
+  const unpropagatedMatches: Match[] = [
+    // Octavos (8 partidos)
+    { id: "oct_0", stage: "round_of_16", match_number: 100, winner_couple_id: "c_winner_0", status: "completed" } as Match,
+    { id: "oct_1", stage: "round_of_16", match_number: 101, winner_couple_id: "c_winner_1", status: "completed" } as Match,
+    { id: "oct_2", stage: "round_of_16", match_number: 102, winner_couple_id: "c_winner_2", status: "completed" } as Match,
+    { id: "oct_3", stage: "round_of_16", match_number: 103, winner_couple_id: "c_winner_3", status: "completed" } as Match,
+    { id: "oct_4", stage: "round_of_16", match_number: 104, winner_couple_id: "c_winner_4", status: "completed" } as Match,
+    { id: "oct_5", stage: "round_of_16", match_number: 105, winner_couple_id: "c_winner_5", status: "completed" } as Match,
+    { id: "oct_6", stage: "round_of_16", match_number: 106, winner_couple_id: "c_winner_6", status: "completed" } as Match,
+    { id: "oct_7", stage: "round_of_16", match_number: 107, winner_couple_id: "c_winner_7", status: "completed" } as Match,
+    // Cuartos (4 partidos, con slots vacíos inicialmente)
+    { id: "qf_0", stage: "quarter", match_number: 108, couple1_id: null, couple2_id: null, winner_couple_id: "c_winner_0", status: "completed" } as Match,
+    { id: "qf_1", stage: "quarter", match_number: 109, couple1_id: null, couple2_id: null, winner_couple_id: "c_winner_3", status: "completed" } as Match,
+    { id: "qf_2", stage: "quarter", match_number: 110, couple1_id: null, couple2_id: null, winner_couple_id: null, status: "pending" } as Match,
+    { id: "qf_3", stage: "quarter", match_number: 111, couple1_id: null, couple2_id: null, winner_couple_id: null, status: "pending" } as Match,
+    // Semifinales (2 partidos, slots vacíos)
+    { id: "sf_0", stage: "semi", match_number: 112, couple1_id: null, couple2_id: null, winner_couple_id: null, status: "pending" } as Match,
+    { id: "sf_1", stage: "semi", match_number: 113, couple1_id: null, couple2_id: null, winner_couple_id: null, status: "pending" } as Match,
+    // Final (1 partido)
+    { id: "f_0", stage: "final", match_number: 114, couple1_id: null, couple2_id: null, winner_couple_id: null, status: "pending" } as Match,
+  ];
+
+  const { updatedMatches, updatesToPersist } = propagatePlayoffWinners(unpropagatedMatches);
+
+  // Validar Cuartos: los ganadores de Octavos deben haber llenado todos los slots de Cuartos
+  const updatedQ0 = updatedMatches.find((m) => m.id === "qf_0");
+  const updatedQ1 = updatedMatches.find((m) => m.id === "qf_1");
+  const updatedQ2 = updatedMatches.find((m) => m.id === "qf_2");
+  const updatedQ3 = updatedMatches.find((m) => m.id === "qf_3");
+
+  assert(updatedQ0?.couple1_id === "c_winner_0", "Cuartos 0 slot 1 recibe c_winner_0");
+  assert(updatedQ0?.couple2_id === "c_winner_1", "Cuartos 0 slot 2 recibe c_winner_1");
+  assert(updatedQ1?.couple1_id === "c_winner_2", "Cuartos 1 slot 1 recibe c_winner_2");
+  assert(updatedQ1?.couple2_id === "c_winner_3", "Cuartos 1 slot 2 recibe c_winner_3");
+  assert(updatedQ2?.couple1_id === "c_winner_4", "Cuartos 2 slot 1 recibe c_winner_4");
+  assert(updatedQ2?.couple2_id === "c_winner_5", "Cuartos 2 slot 2 recibe c_winner_5");
+  assert(updatedQ3?.couple1_id === "c_winner_6", "Cuartos 3 slot 1 recibe c_winner_6");
+  assert(updatedQ3?.couple2_id === "c_winner_7", "Cuartos 3 slot 2 recibe c_winner_7");
+
+  // Validar Semifinales: los ganadores de Cuartos (qf_0: c_winner_0 y qf_1: c_winner_3) deben haber llenado Semis 0
+  const updatedSf0 = updatedMatches.find((m) => m.id === "sf_0");
+  const updatedSf1 = updatedMatches.find((m) => m.id === "sf_1");
+
+  assert(updatedSf0?.couple1_id === "c_winner_0", "Semis 0 slot 1 recibe ganador de qf_0 (c_winner_0)");
+  assert(updatedSf0?.couple2_id === "c_winner_3", "Semis 0 slot 2 recibe ganador de qf_1 (c_winner_3)");
+  assert(updatedSf1?.couple1_id === null, "Semis 1 slot 1 permanece null porque qf_2 está pendiente");
+  assert(updatedSf1?.couple2_id === null, "Semis 1 slot 2 permanece null porque qf_3 está pendiente");
+
+  // Validar updatesToPersist: contiene exactamente las actualizaciones necesarias
+  assert(updatesToPersist.length > 0, "updatesToPersist reporta partidos para persistir en BD");
+  assert(updatesToPersist.some((u) => u.id === "qf_0" && u.couple1_id === "c_winner_0" && u.couple2_id === "c_winner_1"), "updatesToPersist incluye qf_0");
+  assert(updatesToPersist.some((u) => u.id === "sf_0" && u.couple1_id === "c_winner_0" && u.couple2_id === "c_winner_3"), "updatesToPersist incluye sf_0");
 
 
   return {
