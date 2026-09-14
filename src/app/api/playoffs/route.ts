@@ -173,14 +173,10 @@ export async function POST(request: Request) {
   const matchesToInsert: {
     tournament_id: string;
     stage: string;
-    round: string;
     match_number: number;
     couple1_id: string | null;
     couple2_id: string | null;
-    pair1_id: string | null;
-    pair2_id: string | null;
     winner_couple_id?: string | null;
-    winner_id?: string | null;
     score_set1?: string | null;
     status: string;
   }[] = [];
@@ -196,14 +192,10 @@ export async function POST(request: Request) {
     matchesToInsert.push({
       tournament_id: tournamentId,
       stage: initialStage,
-      round: initialStage,
       match_number: matchNumber++,
       couple1_id: couple1,
       couple2_id: couple2,
-      pair1_id: couple1,
-      pair2_id: couple2,
       winner_couple_id: winnerId,
-      winner_id: winnerId,
       score_set1: isBye ? "BYE (Pasa de ronda)" : null,
       status: isBye ? "completed" : "pending",
     });
@@ -240,12 +232,9 @@ export async function POST(request: Request) {
       matchesToInsert.push({
         tournament_id: tournamentId,
         stage: currentStage,
-        round: currentStage,
         match_number: matchNumber++,
         couple1_id: prefilledC1,
         couple2_id: prefilledC2,
-        pair1_id: prefilledC1,
-        pair2_id: prefilledC2,
         status: "pending",
       });
     }

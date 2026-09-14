@@ -185,25 +185,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No hay zonas configuradas" }, { status: 400 });
     }
 
-    // Borrar partidos previos de zona pendientes
+    // Borrar partidos previos de zona
     await supabase
       .from("matches")
       .delete()
       .eq("tournament_id", tournamentId)
-      .eq("stage", "zone")
-      .eq("status", "pending");
+      .eq("stage", "zone");
 
     let matchNumber = 1;
     const allMatchesToInsert: {
       tournament_id: string;
       zone_id: string;
       stage: string;
-      round: string;
       match_number: number;
       couple1_id: string;
       couple2_id: string;
-      pair1_id: string;
-      pair2_id: string;
       status: string;
     }[] = [];
 
@@ -234,12 +230,9 @@ export async function POST(request: Request) {
           tournament_id: tournamentId,
           zone_id: zone.id,
           stage: "zone",
-          round: "zones",
           match_number: matchNumber++,
           couple1_id: rr.couple1Id,
           couple2_id: rr.couple2Id,
-          pair1_id: rr.couple1Id,
-          pair2_id: rr.couple2Id,
           status: "pending",
         });
       }
@@ -284,7 +277,7 @@ export async function POST(request: Request) {
     .update({ num_zones: numZones, zone_size: zoneSize })
     .eq("id", tournamentId);
 
-  // Eliminar zonas anteriores y sus asignaciones si existían
+  // Eliminar zonas anteriores, partidos y sus asignaciones si existían
   const { data: existingZones } = await supabase
     .from("zones")
     .select("id")
@@ -292,6 +285,12 @@ export async function POST(request: Request) {
 
   if (existingZones && existingZones.length > 0) {
     const existingIds = existingZones.map((z) => z.id);
+    // Eliminar partidos de zona primero para no violar restricciones de clave foránea
+    await supabase
+      .from("matches")
+      .delete()
+      .eq("tournament_id", tournamentId)
+      .eq("stage", "zone");
     await supabase.from("zone_couples").delete().in("zone_id", existingIds);
     await supabase.from("zones").delete().eq("tournament_id", tournamentId);
   }
@@ -355,7 +354,15 @@ export async function POST(request: Request) {
 
   // 4. Generar automáticamente los partidos round-robin (todos contra todos)
   let matchNumber = 1;
-  const initialMatches = [];
+  const initialMatches: {
+    tournament_id: string;
+    zone_id: string;
+    stage: string;
+    match_number: number;
+    couple1_id: string;
+    couple2_id: string;
+    status: string;
+  }[] = [];
 
   for (const zone of createdZones) {
     const zoneCoupleIds = zoneCouplesToInsert
@@ -368,19 +375,19 @@ export async function POST(request: Request) {
         tournament_id: tournamentId,
         zone_id: zone.id,
         stage: "zone",
-        round: "zones",
         match_number: matchNumber++,
         couple1_id: rr.couple1Id,
         couple2_id: rr.couple2Id,
-        pair1_id: rr.couple1Id,
-        pair2_id: rr.couple2Id,
         status: "pending",
       });
     }
   }
 
   if (initialMatches.length > 0) {
-    await supabase.from("matches").insert(initialMatches);
+    const { error: matchInsertError } = await supabase.from("matches").insert(initialMatches);
+    if (matchInsertError) {
+      return NextResponse.json({ error: matchInsertError.message }, { status: 500 });
+    }
   }
 
   // Actualizar estado del torneo a 'zones'
