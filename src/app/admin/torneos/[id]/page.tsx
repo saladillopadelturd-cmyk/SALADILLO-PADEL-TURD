@@ -158,6 +158,15 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     return getCouplePlayersShortLabel(coupleObj);
   };
 
+  // Determinar si la Gran Final ya tiene ganador para habilitar liquidación de rankings
+  const hasCompletedFinal = useMemo(() => {
+    return matches.some(
+      (m) =>
+        m.stage === "final" &&
+        (m.status === "completed" || Boolean(m.winner_couple_id))
+    );
+  }, [matches]);
+
   // Configuración interactiva de Zonas para el sorteo
   const [targetZoneSize, setTargetZoneSize] = useState<number>(4);
   const [targetNumZones, setTargetNumZones] = useState<string>("");
@@ -407,6 +416,14 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
 
   // 6. Action: Liquidar / Actualizar Rankings Oficiales
   const handleProcessRankings = async () => {
+    if (!hasCompletedFinal) {
+      setNotification({
+        type: "error",
+        text: "Para liquidar los rankings oficiales, el torneo debe tener el partido de la Gran Final completado con su pareja ganadora.",
+      });
+      return;
+    }
+
     startTransition(async () => {
       try {
         const res = await fetch("/api/rankings", {
@@ -970,16 +987,32 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                       Registra los marcadores para que las tablas de posiciones y cuadros se calculen en vivo.
                     </p>
                   </div>
-                  <Button
-                    onClick={handleProcessRankings}
-                    disabled={isPending}
-                    variant="secondary"
-                    size="sm"
-                    className="flex items-center gap-2 border-amber-500/30 text-amber-300 hover:bg-amber-500/10"
-                  >
-                    <Medal className="w-4 h-4 text-amber-400" />
-                    {isPending ? "Procesando..." : "Liquidar / Actualizar Rankings"}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {!hasCompletedFinal && (
+                      <span className="text-[11px] text-dark-400 bg-dark-800/80 px-2.5 py-1 rounded-lg border border-dark-700/80 hidden sm:inline-block">
+                        Final pendiente
+                      </span>
+                    )}
+                    <Button
+                      onClick={handleProcessRankings}
+                      disabled={isPending || !hasCompletedFinal}
+                      variant="secondary"
+                      size="sm"
+                      title={
+                        !hasCompletedFinal
+                          ? "Disponible automáticamente cuando se complete la Gran Final"
+                          : "Liquidar puntos oficiales de este torneo"
+                      }
+                      className={`flex items-center gap-2 ${
+                        !hasCompletedFinal
+                          ? "opacity-50 cursor-not-allowed border-dark-700 text-dark-400"
+                          : "border-amber-500/30 text-amber-300 hover:bg-amber-500/10 shadow-sm shadow-amber-500/10"
+                      }`}
+                    >
+                      <Medal className="w-4 h-4 text-amber-400" />
+                      {isPending ? "Procesando..." : "Liquidar / Actualizar Rankings"}
+                    </Button>
+                  </div>
                 </div>
 
                 {matches.length === 0 ? (

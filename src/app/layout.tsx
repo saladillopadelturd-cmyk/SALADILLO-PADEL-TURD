@@ -19,7 +19,6 @@ export const metadata: Metadata = {
   title: "SPT - Saladillo Padel Tour",
   description:
     "Gestión de torneos de pádel - Saladillo Padel Tour. Consulta torneos, rankings, zonas y cuadros de eliminación en tiempo real.",
-  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -45,6 +44,13 @@ export default function RootLayout({
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <link
+          rel="manifest"
+          href="/manifest.webmanifest"
+          crossOrigin="use-credentials"
+        />
+      </head>
       <body className="min-h-full flex flex-col bg-dark-950 text-dark-200">
         <ServiceWorkerRegister />
         <Header />
