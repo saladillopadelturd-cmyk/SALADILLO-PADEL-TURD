@@ -47,7 +47,7 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
   const [zoneCouplesMap, setZoneCouplesMap] = useState<Record<string, string[]>>({});
   const [fixtureFilter, setFixtureFilter] = useState<"all" | "zone" | "playoff">("all");
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
     async function loadTournamentData() {
@@ -142,56 +142,45 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
     };
   }, [id, supabase]);
 
-  if (loading) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-500" />
-      </div>
-    );
-  }
+  // Incondicional: Mapas de parejas y numeración correlativa
+  const coupleNumberMap = useMemo(() => getCoupleNumberMap(couples), [couples]);
 
-  if (!tournament) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
-        <p className="text-dark-400 text-lg mb-4">Torneo no encontrado</p>
-        <Link href="/torneos" className="text-primary-400 hover:underline inline-flex items-center gap-2">
-          <ArrowLeft className="w-4 h-4" /> Volver a torneos
-        </Link>
-      </div>
-    );
-  }
+  const { coupleNamesMap, couplePlayersMap, coupleByIdMap } = useMemo(() => {
+    const names: Record<string, string> = {};
+    const players: Record<string, string> = {};
+    const byId: Record<string, Couple> = {};
 
-  const coupleNumberMap = getCoupleNumberMap(couples);
-  const coupleNamesMap: Record<string, string> = {};
-  const couplePlayersMap: Record<string, string> = {};
-  const coupleByIdMap: Record<string, Couple> = {};
-  couples.forEach((c) => {
-    const num = coupleNumberMap.get(c.id);
-    coupleNamesMap[c.id] = getCoupleLabelWithNumber(c, num);
-    couplePlayersMap[c.id] = getCouplePlayersShortLabel(c);
-    coupleByIdMap[c.id] = c;
-  });
+    couples.forEach((c) => {
+      const num = coupleNumberMap.get(c.id);
+      names[c.id] = getCoupleLabelWithNumber(c, num);
+      players[c.id] = getCouplePlayersShortLabel(c);
+      byId[c.id] = c;
+    });
 
-  // Enriquecer mapas de parejas con información unida en los partidos si no estuviesen en el listado inicial
-  matches.forEach((m) => {
-    if (m.couple1 && m.couple1_id && !coupleNamesMap[m.couple1_id]) {
-      const num = coupleNumberMap.get(m.couple1_id);
-      coupleNamesMap[m.couple1_id] = getCoupleLabelWithNumber(m.couple1, num);
-      couplePlayersMap[m.couple1_id] = getCouplePlayersShortLabel(m.couple1);
-      coupleByIdMap[m.couple1_id] = m.couple1;
-    }
-    if (m.couple2 && m.couple2_id && !coupleNamesMap[m.couple2_id]) {
-      const num = coupleNumberMap.get(m.couple2_id);
-      coupleNamesMap[m.couple2_id] = getCoupleLabelWithNumber(m.couple2, num);
-      couplePlayersMap[m.couple2_id] = getCouplePlayersShortLabel(m.couple2);
-      coupleByIdMap[m.couple2_id] = m.couple2;
-    }
-  });
+    matches.forEach((m) => {
+      if (m.couple1 && m.couple1_id && !names[m.couple1_id]) {
+        const num = coupleNumberMap.get(m.couple1_id);
+        names[m.couple1_id] = getCoupleLabelWithNumber(m.couple1, num);
+        players[m.couple1_id] = getCouplePlayersShortLabel(m.couple1);
+        byId[m.couple1_id] = m.couple1;
+      }
+      if (m.couple2 && m.couple2_id && !names[m.couple2_id]) {
+        const num = coupleNumberMap.get(m.couple2_id);
+        names[m.couple2_id] = getCoupleLabelWithNumber(m.couple2, num);
+        players[m.couple2_id] = getCouplePlayersShortLabel(m.couple2);
+        byId[m.couple2_id] = m.couple2;
+      }
+    });
 
-  // Propagar reactivamente en memoria los ganadores de rondas eliminatorias hacia las siguientes fases
-  const { updatedMatches: displayMatches } = propagatePlayoffWinners(matches);
+    return { coupleNamesMap: names, couplePlayersMap: players, coupleByIdMap: byId };
+  }, [couples, matches, coupleNumberMap]);
 
-  // Ordenar fixture: fase de zonas primero, seguido de eliminatorias en orden cronológico (Octavos -> Cuartos -> Semis -> Final)
+  // Incondicional: Propagar reactivamente en memoria los ganadores de eliminatorias
+  const { updatedMatches: displayMatches } = useMemo(() => {
+    return propagatePlayoffWinners(matches);
+  }, [matches]);
+
+  // Incondicional: Ordenar fixture cronológicamente
   const sortedDisplayMatches = useMemo(() => {
     return [...displayMatches].sort((a, b) => {
       if (a.stage === "zone" && b.stage !== "zone") return -1;
@@ -223,51 +212,72 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
     return sortedDisplayMatches;
   }, [sortedDisplayMatches, fixtureFilter]);
 
-  // Build bracket structure for playoffs tab
-  const STAGE_ORDER: Record<string, number> = {
-    round_of_16: 1,
-    octavos: 1,
-    quarter: 2,
-    cuartos: 2,
-    semi: 3,
-    semifinal: 3,
-    final: 4,
-    third_place: 5,
-    tercer_puesto: 5,
-  };
+  // Incondicional: Estructura del cuadro eliminatorio para pestaña playoffs
+  const bracketRounds = useMemo(() => {
+    const STAGE_ORDER: Record<string, number> = {
+      round_of_16: 1,
+      octavos: 1,
+      quarter: 2,
+      cuartos: 2,
+      semi: 3,
+      semifinal: 3,
+      final: 4,
+      third_place: 5,
+      tercer_puesto: 5,
+    };
 
-  const playoffMatches = displayMatches
-    .filter((m) => m.stage !== "zone")
-    .sort((a, b) => {
-      if (a.match_number != null && b.match_number != null && a.match_number !== b.match_number) {
-        return a.match_number - b.match_number;
-      }
-      if (a.created_at && b.created_at && a.created_at !== b.created_at) {
-        return a.created_at.localeCompare(b.created_at);
-      }
-      return a.id.localeCompare(b.id);
+    const playoffMatches = displayMatches
+      .filter((m) => m.stage !== "zone")
+      .sort((a, b) => {
+        if (a.match_number != null && b.match_number != null && a.match_number !== b.match_number) {
+          return a.match_number - b.match_number;
+        }
+        if (a.created_at && b.created_at && a.created_at !== b.created_at) {
+          return a.created_at.localeCompare(b.created_at);
+        }
+        return a.id.localeCompare(b.id);
+      });
+
+    const playoffRoundsMap: Record<string, { pair1: string; pair2: string; winner?: string; score?: string }[]> = {};
+
+    playoffMatches.forEach((m) => {
+      const stage = m.stage;
+      if (!playoffRoundsMap[stage]) playoffRoundsMap[stage] = [];
+      const scoreStr = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
+      playoffRoundsMap[stage].push({
+        pair1: m.couple1_id ?? "Por definir",
+        pair2: m.couple2_id ?? "Por definir",
+        winner: m.winner_couple_id ?? undefined,
+        score: scoreStr || undefined,
+      });
     });
 
-  const playoffRoundsMap: Record<string, { pair1: string; pair2: string; winner?: string; score?: string }[]> = {};
+    return Object.entries(playoffRoundsMap)
+      .sort(([roundA], [roundB]) => (STAGE_ORDER[roundA] ?? 99) - (STAGE_ORDER[roundB] ?? 99))
+      .map(([round, roundMatches]) => ({
+        round,
+        matches: roundMatches,
+      }));
+  }, [displayMatches]);
 
-  playoffMatches.forEach((m) => {
-    const stage = m.stage;
-    if (!playoffRoundsMap[stage]) playoffRoundsMap[stage] = [];
-    const scoreStr = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
-    playoffRoundsMap[stage].push({
-      pair1: m.couple1_id ?? "Por definir",
-      pair2: m.couple2_id ?? "Por definir",
-      winner: m.winner_couple_id ?? undefined,
-      score: scoreStr || undefined,
-    });
-  });
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-500" />
+      </div>
+    );
+  }
 
-  const bracketRounds = Object.entries(playoffRoundsMap)
-    .sort(([roundA], [roundB]) => (STAGE_ORDER[roundA] ?? 99) - (STAGE_ORDER[roundB] ?? 99))
-    .map(([round, roundMatches]) => ({
-      round,
-      matches: roundMatches,
-    }));
+  if (!tournament) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
+        <p className="text-dark-400 text-lg mb-4">Torneo no encontrado</p>
+        <Link href="/torneos" className="text-primary-400 hover:underline inline-flex items-center gap-2">
+          <ArrowLeft className="w-4 h-4" /> Volver a torneos
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
