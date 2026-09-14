@@ -702,28 +702,62 @@ export function runTournamentBusinessLogicTests(): TestResult {
   assert(zones20.distribution.length === 5, "Se crearon 5 zonas (Zonas A, B, C, D, E)");
   assert(zones20.distribution.every((z) => z.targetCount === 4), "Cada una de las 5 zonas tiene exactamente 4 parejas");
   assert(zones20.summary === "5 zonas de 4 parejas", "Resumen correcto: 5 zonas de 4 parejas");
+  assert(zones20.isEqual === true, "20 parejas genera zonas perfectamente iguales");
+  assert(zones20.missingCouples === 0 && zones20.missingPlayers === 0, "No faltan jugadores para 20 parejas");
 
   // 16 parejas -> 4 zonas de 4
   const zones16 = calculateOptimalZones(16, 4);
   assert(zones16.numZones === 4 && zones16.distribution.every((z) => z.targetCount === 4), "16 parejas genera 4 zonas de 4");
+  assert(zones16.isEqual === true && zones16.missingPlayers === 0, "16 parejas es perfectamente igual");
 
   // 12 parejas con objetivo de 4 -> 3 zonas de 4
   const zones12_4 = calculateOptimalZones(12, 4);
   assert(zones12_4.numZones === 3 && zones12_4.distribution.every((z) => z.targetCount === 4), "12 parejas con objetivo 4 genera 3 zonas de 4");
+  assert(zones12_4.isEqual === true && zones12_4.missingPlayers === 0, "12 parejas con objetivo 4 es igual");
 
   // 12 parejas con objetivo de 3 -> 4 zonas de 3
   const zones12_3 = calculateOptimalZones(12, 3);
   assert(zones12_3.numZones === 4 && zones12_3.distribution.every((z) => z.targetCount === 3), "12 parejas con objetivo 3 genera 4 zonas de 3");
+  assert(zones12_3.isEqual === true && zones12_3.missingPlayers === 0, "12 parejas con objetivo 3 es igual");
 
-  // 11 parejas con objetivo de 4 -> 3 zonas (2 de 4, 1 de 3)
+  // 18 parejas con objetivo de 4 -> 18 % 4 = 2 -> faltan 2 parejas (4 jugadores) para completar 5 zonas de 4
+  const zones18 = calculateOptimalZones(18, 4);
+  assert(zones18.isEqual === false, "18 parejas no genera zonas estrictamente iguales de 4");
+  assert(zones18.missingCouples === 2, "18 parejas le faltan 2 parejas para completar zonas de 4");
+  assert(zones18.missingPlayers === 4, "18 parejas le faltan 4 jugadores (2 parejas * 2)");
+  assert(zones18.warningMessage !== null && zones18.warningMessage.includes("4 jugadores"), "El mensaje de advertencia menciona 4 jugadores");
+
+  // 14 parejas con objetivo de 4 -> 14 % 4 = 2 -> faltan 2 parejas (4 jugadores)
+  const zones14 = calculateOptimalZones(14, 4);
+  assert(zones14.isEqual === false, "14 parejas no es igual para zonas de 4");
+  assert(zones14.missingCouples === 2 && zones14.missingPlayers === 4, "14 parejas le faltan 4 jugadores");
+
+  // 11 parejas con objetivo de 4 -> 11 % 4 = 3 -> falta 1 pareja (2 jugadores) para 3 zonas de 4
   const zones11 = calculateOptimalZones(11, 4);
   assert(zones11.numZones === 3, "11 parejas genera 3 zonas");
-  const counts11 = zones11.distribution.map((z) => z.targetCount).sort();
-  assert(counts11[0] === 3 && counts11[1] === 4 && counts11[2] === 4, "11 parejas se distribuye en 1 zona de 3 y 2 zonas de 4");
+  assert(zones11.isEqual === false, "11 parejas no es igual");
+  assert(zones11.missingCouples === 1, "11 parejas le falta 1 pareja");
+  assert(zones11.missingPlayers === 2, "11 parejas le faltan 2 jugadores (1 pareja * 2)");
 
-  // Forzar número de zonas personalizado (ej: 20 parejas forzado a 5)
+  // 10 parejas con objetivo de 3 -> 10 % 3 = 1 -> faltan 2 parejas (4 jugadores) para 4 zonas de 3
+  const zones10_3 = calculateOptimalZones(10, 3);
+  assert(zones10_3.isEqual === false, "10 parejas no es igual para zonas de 3");
+  assert(zones10_3.missingCouples === 2 && zones10_3.missingPlayers === 4, "10 parejas le faltan 4 jugadores para zonas de 3");
+
+  // 0 parejas registradas
+  const zones0 = calculateOptimalZones(0, 4);
+  assert(zones0.isEqual === false, "0 parejas no es igual");
+  assert(zones0.missingCouples === 4 && zones0.missingPlayers === 8, "0 parejas le faltan 8 jugadores (4 parejas)");
+
+  // Forzar número de zonas personalizado (ej: 20 parejas forzado a 5 zonas -> 20 % 5 = 0 -> igual)
   const customZones = calculateOptimalZones(20, 4, 5);
   assert(customZones.numZones === 5, "Respeta número de zonas personalizado (5 zonas)");
+  assert(customZones.isEqual === true && customZones.missingPlayers === 0, "20 parejas en 5 zonas es igual");
+
+  // Forzar 19 parejas en 5 zonas -> 19 % 5 = 4 -> falta 1 pareja (2 jugadores)
+  const customZones19 = calculateOptimalZones(19, 4, 5);
+  assert(customZones19.isEqual === false, "19 parejas en 5 zonas no es igual");
+  assert(customZones19.missingCouples === 1 && customZones19.missingPlayers === 2, "19 parejas en 5 zonas le faltan 2 jugadores");
 
   return {
     passed,

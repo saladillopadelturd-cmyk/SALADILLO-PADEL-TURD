@@ -15,7 +15,8 @@ import {
   getCoupleNumberMap,
   generateRandomCouples,
 } from "@/lib/tournament/couples";
-import { AlertCircle, CheckCircle2, Users, Filter, Plus, Shuffle, Sparkles } from "lucide-react";
+import { calculateOptimalZones } from "@/lib/tournament/zones";
+import { AlertCircle, AlertTriangle, CheckCircle2, Users, Filter, Plus, Shuffle, Sparkles, Trophy } from "lucide-react";
 
 export default function AdminParejasPage() {
   const [couples, setCouples] = useState<Couple[]>([]);
@@ -175,6 +176,15 @@ export default function AdminParejasPage() {
     if (filterTorneo === "all") return couples;
     return couples.filter((c) => c.tournament_id === filterTorneo);
   }, [couples, filterTorneo]);
+
+  // Estado de conformación de zonas para el torneo seleccionado en el filtro
+  const selectedTournamentZoneStatus = useMemo(() => {
+    if (filterTorneo === "all") return null;
+    const tourCouples = couples.filter((c) => c.tournament_id === filterTorneo);
+    const tour = tournaments.find((t) => t.id === filterTorneo);
+    const zoneSize = tour?.zone_size || 4;
+    return calculateOptimalZones(tourCouples.length, zoneSize);
+  }, [filterTorneo, couples, tournaments]);
 
   const handleCreate = async () => {
     const validation = validateCoupleFormation(formTorneo, formJugador1, formJugador2, couples);
@@ -399,6 +409,46 @@ export default function AdminParejasPage() {
           })}
         </select>
       </div>
+
+      {/* Indicador de Estado de Zonas y Paridad para el Torneo Filtrado */}
+      {selectedTournamentZoneStatus && filterTorneo !== "all" && (
+        <div className="mb-6">
+          {!selectedTournamentZoneStatus.isEqual ? (
+            <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-amber-300 text-sm">
+                    Atención: Zonas con Cantidad Desigual de Parejas
+                  </p>
+                  <p className="text-amber-200/90 mt-0.5">
+                    Este torneo tiene <strong>{filteredCouples.length} parejas</strong> registradas.
+                    {" "}Para conformar zonas con la misma cantidad de parejas ({selectedTournamentZoneStatus.zoneSize} parejas por zona),{" "}
+                    <strong className="text-white underline decoration-amber-400 decoration-2">
+                      faltan {selectedTournamentZoneStatus.missingPlayers} jugadores ({selectedTournamentZoneStatus.missingCouples} {selectedTournamentZoneStatus.missingCouples === 1 ? "pareja" : "parejas"})
+                    </strong>.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button size="sm" onClick={openCreate} className="text-xs">
+                  <Plus className="w-3.5 h-3.5 mr-1" />
+                  Inscribir Pareja
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center justify-between gap-3 text-xs text-emerald-300">
+              <div className="flex items-center gap-2.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                <span>
+                  <strong>Condición reglamentaria cumplida:</strong> {filteredCouples.length} parejas conformarán exactamente {selectedTournamentZoneStatus.numZones} zonas de {selectedTournamentZoneStatus.zoneSize} parejas.
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-16">

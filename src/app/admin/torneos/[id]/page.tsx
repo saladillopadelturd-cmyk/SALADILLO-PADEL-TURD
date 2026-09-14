@@ -17,6 +17,7 @@ import { getCoupleNumberMap, getCoupleLabelWithNumber } from "@/lib/tournament/c
 import ZoneCard from "@/components/tournament/ZoneCard";
 import {
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   Trophy,
   Calendar,
@@ -151,6 +152,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
   // Configuración interactiva de Zonas para el sorteo
   const [targetZoneSize, setTargetZoneSize] = useState<number>(4);
   const [targetNumZones, setTargetNumZones] = useState<string>("");
+  const [showUnequalWarningModal, setShowUnequalWarningModal] = useState(false);
 
   useEffect(() => {
     if (tournament) {
@@ -173,7 +175,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
   }, [couples.length, targetZoneSize, targetNumZones]);
 
   // 1. Action: Sorteo Automático de Zonas
-  const handleShuffleZones = async () => {
+  const executeShuffleZones = async (force: boolean = false) => {
     startTransition(async () => {
       try {
         const chosenNumZones = targetNumZones ? parseInt(targetNumZones, 10) : zoneDistribution.numZones;
@@ -185,12 +187,20 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
             action: "shuffle",
             numZones: chosenNumZones,
             zoneSize: targetZoneSize,
+            force,
           }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Error al sortear zonas");
+        if (!res.ok) {
+          if (data.canForce) {
+            setShowUnequalWarningModal(true);
+            return;
+          }
+          throw new Error(data.error || "Error al sortear zonas");
+        }
 
         await loadData();
+        setShowUnequalWarningModal(false);
         setNotification({
           type: "success",
           text: `Sorteo de zonas realizado exitosamente (${data.zones?.length ?? 0} zonas conformadas).`,
@@ -200,6 +210,14 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
         setNotification({ type: "error", text: msg });
       }
     });
+  };
+
+  const handleShuffleZones = () => {
+    if (!zoneDistribution.isEqual) {
+      setShowUnequalWarningModal(true);
+    } else {
+      executeShuffleZones(false);
+    }
   };
 
   // 2. Action: Generar Partidos de Fase de Zonas
@@ -605,6 +623,40 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                     </div>
                   </div>
 
+                  {/* Estado de Igualdad de Zonas y Advertencia de Jugadores Faltantes */}
+                  {!zoneDistribution.isEqual ? (
+                    <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold text-amber-300 text-sm">
+                            Condición Reglamentaria: Zonas con Igual Cantidad de Parejas
+                          </p>
+                          <p className="text-amber-200/90 mt-0.5">
+                            Con las <strong>{couples.length} parejas</strong> inscriptas, las zonas quedarían desiguales.
+                            {" "}Para que todas las zonas tengan la misma cantidad ({targetZoneSize} parejas por zona),{" "}
+                            <strong className="text-white underline decoration-amber-400 decoration-2">
+                              faltan {zoneDistribution.missingPlayers} jugadores ({zoneDistribution.missingCouples} {zoneDistribution.missingCouples === 1 ? "pareja" : "parejas"})
+                            </strong>.
+                          </p>
+                        </div>
+                      </div>
+                      <Link
+                        href={`/admin/parejas?tournamentId=${tournamentId}`}
+                        className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-semibold whitespace-nowrap self-start sm:self-center transition-colors"
+                      >
+                        Inscribir Parejas
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-2.5 text-xs text-emerald-300">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                      <span>
+                        <strong>Condición reglamentaria cumplida:</strong> Todas las {zoneDistribution.numZones} zonas tienen exactamente {zoneDistribution.zoneSize} parejas.
+                      </span>
+                    </div>
+                  )}
+
                   {/* Resumen dinámico del reparto de parejas */}
                   <div className="p-3.5 bg-dark-950/80 border border-dark-800 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                     <div className="flex items-center gap-2">
@@ -1009,6 +1061,59 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
             title="Eliminar Torneo"
             message={`¿Estás seguro de eliminar el torneo "${tournament.name}"? Se eliminarán todas las zonas, parejas y partidos asociados en la base de datos. Esta acción no se puede deshacer.`}
           />
+
+          {/* Modal: Advertencia de Zonas Desiguales y Jugadores Faltantes */}
+          <Modal
+            isOpen={showUnequalWarningModal}
+            onClose={() => setShowUnequalWarningModal(false)}
+            title="⚠️ Advertencia: Zonas con Cantidad Desigual de Parejas"
+          >
+            <div className="space-y-4">
+              <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs space-y-2 text-amber-200">
+                <p className="font-bold text-amber-300 text-sm flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-400" />
+                  Condición reglamentaria no cumplida
+                </p>
+                <p>
+                  En SPT, todas las zonas deben tener la <strong>misma cantidad exacta de parejas</strong> ({targetZoneSize} por zona).
+                </p>
+                <p className="text-white text-sm font-semibold bg-dark-900/80 p-2.5 rounded-lg border border-amber-500/20">
+                  Actualmente hay {couples.length} parejas. Para completar zonas equitativas de {targetZoneSize} parejas,{" "}
+                  <span className="text-amber-300">
+                    faltan {zoneDistribution.missingPlayers} jugadores ({zoneDistribution.missingCouples} {zoneDistribution.missingCouples === 1 ? "pareja" : "parejas"})
+                  </span>.
+                </p>
+                <p className="text-dark-300 text-xs">
+                  Si continúas, algunas zonas tendrán {targetZoneSize} parejas y otras menos, dejando un fixture desbalanceado.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+                <Link
+                  href={`/admin/parejas?tournamentId=${tournamentId}`}
+                  className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-xs font-bold text-center transition-colors"
+                >
+                  Inscribir Jugadores/Parejas
+                </Link>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowUnequalWarningModal(false)}
+                  disabled={isPending}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => executeShuffleZones(true)}
+                  disabled={isPending}
+                >
+                  {isPending ? "Sorteando..." : "Forzar Sorteo de Todos Modos"}
+                </Button>
+              </div>
+            </div>
+          </Modal>
         </>
       )}
     </div>

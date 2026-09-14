@@ -16,10 +16,18 @@ export interface ZoneDistribution {
     targetCount: number;
   }[];
   summary: string;
+  isEqual: boolean;
+  missingCouples: number;
+  missingPlayers: number;
+  warningMessage: string | null;
 }
 
 /**
  * Calcula la cantidad óptima de zonas y su distribución según la cantidad de parejas inscritas.
+ * 
+ * Regla de Oro SPT:
+ * Todas las zonas deben tener la misma cantidad de parejas.
+ * Si no se logra esta condición, se calcula cuántas parejas y cuántos jugadores faltan para conseguirlo.
  * 
  * @param couplesCount Cantidad de parejas registradas
  * @param preferredZoneSize Tamaño objetivo por zona (3 o 4)
@@ -33,11 +41,17 @@ export function calculateOptimalZones(
   const zoneSize = preferredZoneSize === 3 ? 3 : 4;
 
   if (couplesCount <= 0) {
+    const missingCouples = zoneSize;
+    const missingPlayers = missingCouples * 2;
     return {
       numZones: 1,
       zoneSize,
       distribution: [{ zoneIndex: 0, zoneName: "Zona A", targetCount: 0 }],
       summary: "0 parejas registradas",
+      isEqual: false,
+      missingCouples,
+      missingPlayers,
+      warningMessage: `Faltan ${missingPlayers} jugadores (${missingCouples} parejas) para conformar al menos 1 zona completa de ${zoneSize} parejas.`,
     };
   }
 
@@ -60,7 +74,6 @@ export function calculateOptimalZones(
   numZones = Math.max(1, Math.min(numZones, couplesCount));
 
   // 2. Distribuir las parejas entre las numZones
-  // Las primeras remainder zonas reciben baseCount + 1, las demás baseCount
   const baseCount = Math.floor(couplesCount / numZones);
   const remainder = couplesCount % numZones;
 
@@ -84,10 +97,45 @@ export function calculateOptimalZones(
 
   const summary = summaryParts.join(" y ");
 
+  // 3. Verificación de igualdad de parejas en todas las zonas
+  // Si remainder === 0 cuando se fuerza numZones, todas las zonas tienen baseCount.
+  // En modo automático o si baseCount != zoneSize, calculamos el desfasaje respecto al objetivo reglamentario.
+  let isEqual = false;
+  let missingCouples = 0;
+
+  if (customNumZones && customNumZones >= 1) {
+    // Si el usuario fijó la cantidad de zonas:
+    const rem = couplesCount % customNumZones;
+    isEqual = rem === 0 && baseCount >= 2;
+    missingCouples = rem === 0 ? 0 : customNumZones - rem;
+  } else {
+    // Modo automático según targetZoneSize (3 o 4):
+    const rem = couplesCount % zoneSize;
+    isEqual = rem === 0 && couplesCount >= zoneSize;
+    missingCouples = rem === 0 ? 0 : zoneSize - rem;
+  }
+
+  const missingPlayers = missingCouples * 2;
+  let warningMessage: string | null = null;
+
+  if (!isEqual) {
+    const targetCouplesPerZone = customNumZones && customNumZones >= 1
+      ? Math.ceil(couplesCount / customNumZones)
+      : zoneSize;
+
+    warningMessage = `Atención: Las zonas no tienen la misma cantidad de parejas. Faltan ${missingPlayers} jugadores (${missingCouples} ${
+      missingCouples === 1 ? "pareja" : "parejas"
+    }) para que todas las zonas queden completas y equitativas de ${targetCouplesPerZone} parejas.`;
+  }
+
   return {
     numZones,
     zoneSize,
     distribution,
     summary,
+    isEqual,
+    missingCouples,
+    missingPlayers,
+    warningMessage,
   };
 }

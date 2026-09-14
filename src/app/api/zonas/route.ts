@@ -271,6 +271,22 @@ export async function POST(request: Request) {
   );
   const numZones = optimal.numZones;
 
+  // Si no se cumple la igualdad de zonas y no se forzó explícitamente con force: true,
+  // advertir cuántos jugadores faltan
+  if (!optimal.isEqual && body.force !== true) {
+    return NextResponse.json(
+      {
+        error: optimal.warningMessage,
+        isEqual: false,
+        missingCouples: optimal.missingCouples,
+        missingPlayers: optimal.missingPlayers,
+        canForce: true,
+        summary: optimal.summary,
+      },
+      { status: 400 }
+    );
+  }
+
   // Actualizar configuración real en el torneo (num_zones y zone_size)
   await supabase
     .from("tournaments")
