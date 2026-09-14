@@ -61,16 +61,24 @@ export function getStagesSequence(totalSlots: number): MatchStage[] {
   return ["semi", "final"];
 }
 
-export function getStageName(stage: MatchStage): string {
+export function getStageName(stage: MatchStage | string): string {
   switch (stage) {
+    case "zone":
+      return "Fase de Zonas";
     case "round_of_16":
+    case "octavos":
       return "Octavos de Final";
     case "quarter":
+    case "cuartos":
       return "Cuartos de Final";
     case "semi":
-      return "Semifinal";
+    case "semifinal":
+      return "Semifinales";
     case "final":
-      return "Final";
+      return "Gran Final";
+    case "third_place":
+    case "tercer_puesto":
+      return "3° y 4° Puesto";
     default:
       return stage;
   }
@@ -275,9 +283,32 @@ export function propagatePlayoffWinners<
       if (targetMatch[slotField] !== winnerId) {
         targetMatch[slotField] = winnerId;
 
+        const coupleObjField = slotField === "couple1_id" ? "couple1" : "couple2";
+        let winnerObj = null;
+        const currentAsAny = match as Record<string, unknown>;
+        if (currentAsAny.couple1_id === winnerId && currentAsAny.couple1) {
+          winnerObj = currentAsAny.couple1;
+        } else if (currentAsAny.couple2_id === winnerId && currentAsAny.couple2) {
+          winnerObj = currentAsAny.couple2;
+        }
+        if (winnerObj) {
+          (targetMatch as Record<string, unknown>)[coupleObjField] = winnerObj;
+        }
+
         const existingUpdate = updatesMap.get(targetMatch.id) || { id: targetMatch.id };
         existingUpdate[slotField] = winnerId;
         updatesMap.set(targetMatch.id, existingUpdate);
+      } else {
+        const coupleObjField = slotField === "couple1_id" ? "couple1" : "couple2";
+        const targetAsAny = targetMatch as Record<string, unknown>;
+        if (!targetAsAny[coupleObjField]) {
+          const currentAsAny = match as Record<string, unknown>;
+          if (currentAsAny.couple1_id === winnerId && currentAsAny.couple1) {
+            targetAsAny[coupleObjField] = currentAsAny.couple1;
+          } else if (currentAsAny.couple2_id === winnerId && currentAsAny.couple2) {
+            targetAsAny[coupleObjField] = currentAsAny.couple2;
+          }
+        }
       }
     }
   }

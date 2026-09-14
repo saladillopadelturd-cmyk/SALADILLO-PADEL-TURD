@@ -34,6 +34,7 @@ import {
   getNextStage,
   normalizeStage,
   propagatePlayoffWinners,
+  getStageName,
   type QualifiedPair,
 } from "./elimination";
 
@@ -1003,6 +1004,55 @@ export function runTournamentBusinessLogicTests(): TestResult {
   assert(updatesToPersist.length > 0, "updatesToPersist reporta partidos para persistir en BD");
   assert(updatesToPersist.some((u) => u.id === "qf_0" && u.couple1_id === "c_winner_0" && u.couple2_id === "c_winner_1"), "updatesToPersist incluye qf_0");
   assert(updatesToPersist.some((u) => u.id === "sf_0" && u.couple1_id === "c_winner_0" && u.couple2_id === "c_winner_3"), "updatesToPersist incluye sf_0");
+
+  // 8. Pruebas de getStageName y nombres amigables de fases del fixture
+  assert(getStageName("zone") === "Fase de Zonas", "getStageName zone retorna Fase de Zonas");
+  assert(getStageName("round_of_16") === "Octavos de Final", "getStageName round_of_16 retorna Octavos de Final");
+  assert(getStageName("octavos") === "Octavos de Final", "getStageName octavos retorna Octavos de Final");
+  assert(getStageName("quarter") === "Cuartos de Final", "getStageName quarter retorna Cuartos de Final");
+  assert(getStageName("cuartos") === "Cuartos de Final", "getStageName cuartos retorna Cuartos de Final");
+  assert(getStageName("semi") === "Semifinales", "getStageName semi retorna Semifinales");
+  assert(getStageName("semifinal") === "Semifinales", "getStageName semifinal retorna Semifinales");
+  assert(getStageName("final") === "Gran Final", "getStageName final retorna Gran Final");
+
+  // 9. Hidratación de objetos couple1/couple2 en fixture al avanzar
+  const matchesWithCouples: Match[] = [
+    {
+      id: "oct_a",
+      stage: "round_of_16",
+      match_number: 100,
+      couple1_id: "c1",
+      couple2_id: "c2",
+      winner_couple_id: "c1",
+      status: "completed",
+      couple1: { id: "c1", tournament_id: "t1" } as Couple,
+    } as Match,
+    {
+      id: "oct_b",
+      stage: "round_of_16",
+      match_number: 101,
+      couple1_id: "c3",
+      couple2_id: "c4",
+      winner_couple_id: "c4",
+      status: "completed",
+      couple2: { id: "c4", tournament_id: "t1" } as Couple,
+    } as Match,
+    {
+      id: "qf_a",
+      stage: "quarter",
+      match_number: 108,
+      couple1_id: null,
+      couple2_id: null,
+      status: "pending",
+    } as Match,
+  ];
+
+  const { updatedMatches: fixtureConformed } = propagatePlayoffWinners(matchesWithCouples);
+  const qfMatch = fixtureConformed.find((m) => m.id === "qf_a");
+  assert(qfMatch?.couple1_id === "c1", "Cuartos fixture conforma couple1_id automáticamente con ganador de oct_a");
+  assert(qfMatch?.couple2_id === "c4", "Cuartos fixture conforma couple2_id automáticamente con ganador de oct_b");
+  assert((qfMatch as any)?.couple1?.id === "c1", "Cuartos fixture hidrata objeto couple1");
+  assert((qfMatch as any)?.couple2?.id === "c4", "Cuartos fixture hidrata objeto couple2");
 
 
   return {

@@ -277,6 +277,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
+  // 8.1. Conformar automáticamente el fixture para rondas sucesivas (por ejemplo cruces con BYE)
+  const { data: insertedMatches } = await supabase
+    .from("matches")
+    .select("*")
+    .eq("tournament_id", tournamentId)
+    .neq("stage", "zone")
+    .order("match_number", { ascending: true });
+
+  if (insertedMatches && insertedMatches.length > 0) {
+    const { updatesToPersist } = propagatePlayoffWinners(insertedMatches);
+    for (const update of updatesToPersist) {
+      const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (update.couple1_id !== undefined) payload.couple1_id = update.couple1_id;
+      if (update.couple2_id !== undefined) payload.couple2_id = update.couple2_id;
+      await supabase.from("matches").update(payload).eq("id", update.id);
+    }
+  }
+
   // 9. Actualizar estado del torneo a 'playoffs'
   await supabase
     .from("tournaments")

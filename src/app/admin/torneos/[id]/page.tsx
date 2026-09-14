@@ -14,7 +14,7 @@ import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
 import { calculateRoundRobinStandings } from "@/lib/tournament/standings";
 import { calculateOptimalZones } from "@/lib/tournament/zones";
 import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel } from "@/lib/tournament/couples";
-import { findNextPlayoffMatchSlot } from "@/lib/tournament/elimination";
+import { findNextPlayoffMatchSlot, propagatePlayoffWinners, getStageName } from "@/lib/tournament/elimination";
 import ZoneCard from "@/components/tournament/ZoneCard";
 import {
   AlertCircle,
@@ -56,6 +56,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
   const tabParam = searchParams.get("tab") || "config";
 
   const [activeTab, setActiveTab] = useState(tabParam);
+  const [fixtureFilter, setFixtureFilter] = useState<"all" | "zone" | "playoff">("all");
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
   const [couples, setCouples] = useState<Couple[]>([]);
@@ -126,7 +127,24 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
         setZoneCouplesMap(map);
       }
 
-      if (matchesRes.data) setMatches(matchesRes.data as unknown as Match[]);
+      if (matchesRes.data) {
+        const rawMatches = matchesRes.data as unknown as Match[];
+        // Conformar y propagar automáticamente los ganadores de eliminatorias a las siguientes rondas del fixture
+        const { updatedMatches, updatesToPersist } = propagatePlayoffWinners(rawMatches);
+        setMatches(updatedMatches);
+
+        // Auto-sanar y persistir slots en segundo plano si hubiera desincronización
+        if (updatesToPersist.length > 0) {
+          for (const update of updatesToPersist) {
+            const payload: Record<string, unknown> = {
+              updated_at: new Date().toISOString(),
+            };
+            if (update.couple1_id !== undefined) payload.couple1_id = update.couple1_id;
+            if (update.couple2_id !== undefined) payload.couple2_id = update.couple2_id;
+            await supabase.from("matches").update(payload).eq("id", update.id);
+          }
+        }
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error al cargar datos del torneo";
       console.error(err);
@@ -880,95 +898,166 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                     <Button onClick={() => setActiveTab("zonas")}>Ir a Zonas</Button>
                   </Card>
                 ) : (
-                  <div className="grid grid-cols-1 gap-4">
-                    {matches.map((m) => {
-                      const hasResult = m.status === "completed" || Boolean(m.score_set1 || m.score_set2 || m.score_super_tb);
-                      const isP1Winner = m.winner_couple_id && m.winner_couple_id === m.couple1_id;
-                      const isP2Winner = m.winner_couple_id && m.winner_couple_id === m.couple2_id;
-                      const scoreDisplay = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
+                  <div className="space-y-4">
+                    {/* Filtros de Fixture */}
+                    <div className="flex items-center gap-2 p-1 bg-dark-950/80 rounded-xl border border-dark-800 w-fit flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setFixtureFilter("all")}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          fixtureFilter === "all"
+                            ? "bg-primary-500 text-white shadow-md font-black"
+                            : "text-dark-400 hover:text-white"
+                        }`}
+                      >
+                        Todos ({matches.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFixtureFilter("zone")}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          fixtureFilter === "zone"
+                            ? "bg-primary-500 text-white shadow-md font-black"
+                            : "text-dark-400 hover:text-white"
+                        }`}
+                      >
+                        Fase de Zonas ({matches.filter((m) => m.stage === "zone").length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFixtureFilter("playoff")}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          fixtureFilter === "playoff"
+                            ? "bg-primary-500 text-white shadow-md font-black"
+                            : "text-dark-400 hover:text-white"
+                        }`}
+                      >
+                        Eliminación Directa ({matches.filter((m) => m.stage !== "zone").length})
+                      </button>
+                    </div>
 
-                      if (hasResult) {
-                        return (
-                          <Card
-                            key={m.id}
-                            className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-emerald-500/30 bg-dark-900/60 transition-colors"
-                          >
-                            <div className="space-y-1.5">
+                    <div className="grid grid-cols-1 gap-4">
+                      {matches
+                        .filter((m) => {
+                          if (fixtureFilter === "zone") return m.stage === "zone";
+                          if (fixtureFilter === "playoff") return m.stage !== "zone";
+                          return true;
+                        })
+                        .map((m) => {
+                          const isPlayoff = m.stage !== "zone";
+                          const isPendingRival = isPlayoff && (!m.couple1_id || !m.couple2_id);
+                          const hasResult = m.status === "completed" || Boolean(m.score_set1 || m.score_set2 || m.score_super_tb);
+                          const isP1Winner = m.winner_couple_id && m.winner_couple_id === m.couple1_id;
+                          const isP2Winner = m.winner_couple_id && m.winner_couple_id === m.couple2_id;
+                          const scoreDisplay = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
+
+                          if (hasResult) {
+                            return (
+                              <Card
+                                key={m.id}
+                                className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-emerald-500/30 bg-dark-900/60 transition-colors"
+                              >
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <Badge variant="success" size="sm">
+                                      FINALIZADO
+                                    </Badge>
+                                    <span className="text-dark-400 text-xs">
+                                      {STAGE_LABELS[m.stage] ?? getStageName(m.stage)}
+                                    </span>
+                                    <span className="text-dark-400 text-xs">Partido #{m.match_number ?? "-"}</span>
+                                  </div>
+                                  <div className="text-sm font-semibold text-white">
+                                    <span className={isP1Winner ? "text-emerald-400 font-bold" : "text-white"}>
+                                      {getCouplePlayersLabel(m.couple1, m.couple1_id)}
+                                    </span>
+                                    <span className="text-dark-500 mx-2">vs</span>
+                                    <span className={isP2Winner ? "text-emerald-400 font-bold" : "text-white"}>
+                                      {getCouplePlayersLabel(m.couple2, m.couple2_id)}
+                                    </span>
+                                  </div>
+                                  <div className="text-xs font-mono font-bold text-sky-400">
+                                    Resultado: {scoreDisplay || "Finalizado"}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <Button size="sm" variant="secondary" onClick={() => openScoreModal(m)}>
+                                    <Edit2 className="w-3.5 h-3.5 mr-1" />
+                                    Modificar Marcador
+                                  </Button>
+                                </div>
+                              </Card>
+                            );
+                          }
+
+                          return (
+                            <Card
+                              key={m.id}
+                              className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border transition-colors ${
+                                isPendingRival
+                                  ? "border-dark-800 bg-dark-950/50 opacity-80"
+                                  : "border-dark-700/80 hover:border-dark-600"
+                              }`}
+                            >
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Badge variant={m.stage === "zone" ? "info" : "success"} size="sm">
+                                    {STAGE_LABELS[m.stage] ?? getStageName(m.stage)}
+                                  </Badge>
+                                  <span className="text-dark-400 text-xs">Partido #{m.match_number ?? "-"}</span>
+                                  {isPlayoff && (
+                                    isPendingRival ? (
+                                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/10 text-amber-300 border border-amber-400/25">
+                                        Esperando Clasificados
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                                        Cruce Confirmado
+                                      </span>
+                                    )
+                                  )}
+                                </div>
+                                <div className="text-sm font-semibold text-white">
+                                  <span>{getCoupleLabel(m.couple1, m.couple1_id)}</span>
+                                  <span className="text-primary-400 mx-2">vs</span>
+                                  <span>{getCoupleLabel(m.couple2, m.couple2_id)}</span>
+                                </div>
+                                <div className="flex items-center gap-3 text-xs text-dark-400">
+                                  <span className="flex items-center gap-1">
+                                    <MapPin className="w-3.5 h-3.5 text-sky-400" />
+                                    {m.court_name || "Sin cancha asignada"}
+                                  </span>
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                                    {m.scheduled_time || "Horario a definir"}
+                                  </span>
+                                </div>
+                              </div>
+
                               <div className="flex items-center gap-2">
-                                <Badge variant="success" size="sm">
-                                  FINALIZADO
-                                </Badge>
-                                <span className="text-dark-400 text-xs">
-                                  {STAGE_LABELS[m.stage] ?? m.stage}
-                                </span>
-                                <span className="text-dark-400 text-xs">Partido #{m.match_number ?? "-"}</span>
+                                <Button variant="secondary" size="sm" onClick={() => openScheduleModal(m)}>
+                                  <Clock className="w-3.5 h-3.5 mr-1" />
+                                  Programar
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  onClick={() => openScoreModal(m)}
+                                  disabled={isPendingRival}
+                                  title={
+                                    isPendingRival
+                                      ? "El cruce se conformará automáticamente cuando concluyan los partidos de la fase previa"
+                                      : "Cargar Marcador"
+                                  }
+                                >
+                                  <Edit2 className="w-3.5 h-3.5 mr-1" />
+                                  Cargar Marcador
+                                </Button>
                               </div>
-                              <div className="text-sm font-semibold text-white">
-                                <span className={isP1Winner ? "text-emerald-400 font-bold" : "text-white"}>
-                                  {getCouplePlayersLabel(m.couple1, m.couple1_id)}
-                                </span>
-                                <span className="text-dark-500 mx-2">vs</span>
-                                <span className={isP2Winner ? "text-emerald-400 font-bold" : "text-white"}>
-                                  {getCouplePlayersLabel(m.couple2, m.couple2_id)}
-                                </span>
-                              </div>
-                              <div className="text-xs font-mono font-bold text-sky-400">
-                                Resultado: {scoreDisplay || "Finalizado"}
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <Button size="sm" variant="secondary" onClick={() => openScoreModal(m)}>
-                                <Edit2 className="w-3.5 h-3.5 mr-1" />
-                                Modificar Marcador
-                              </Button>
-                            </div>
-                          </Card>
-                        );
-                      }
-
-                      return (
-                        <Card
-                          key={m.id}
-                          className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-dark-700/80 hover:border-dark-600 transition-colors"
-                        >
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <Badge variant={m.stage === "zone" ? "info" : "success"} size="sm">
-                                {STAGE_LABELS[m.stage] ?? m.stage}
-                              </Badge>
-                              <span className="text-dark-400 text-xs">Partido #{m.match_number ?? "-"}</span>
-                            </div>
-                            <div className="text-sm font-semibold text-white">
-                              <span>{getCoupleLabel(m.couple1, m.couple1_id)}</span>
-                              <span className="text-primary-400 mx-2">vs</span>
-                              <span>{getCoupleLabel(m.couple2, m.couple2_id)}</span>
-                            </div>
-                            <div className="flex items-center gap-3 text-xs text-dark-400">
-                              <span className="flex items-center gap-1">
-                                <MapPin className="w-3.5 h-3.5 text-sky-400" />
-                                {m.court_name || "Sin cancha asignada"}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                                {m.scheduled_time || "Horario a definir"}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <Button variant="secondary" size="sm" onClick={() => openScheduleModal(m)}>
-                              <Clock className="w-3.5 h-3.5 mr-1" />
-                              Programar
-                            </Button>
-                            <Button size="sm" onClick={() => openScoreModal(m)}>
-                              <Edit2 className="w-3.5 h-3.5 mr-1" />
-                              Cargar Marcador
-                            </Button>
-                          </div>
-                        </Card>
-                      );
-                    })}
+                            </Card>
+                          );
+                        })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1023,21 +1112,28 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                   <div className="space-y-3">
                     {matches.map((m) => {
                       const isCompleted = m.status === "completed";
+                      const isPlayoffPendingRival = !isCompleted && m.stage !== "zone" && (!m.couple1_id || !m.couple2_id);
+
                       return (
                         <Card
                           key={m.id}
-                          className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border ${
-                            isCompleted ? "border-emerald-500/30 bg-dark-900/60" : "border-dark-700/80"
+                          className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border transition-colors ${
+                            isCompleted
+                              ? "border-emerald-500/30 bg-dark-900/60"
+                              : isPlayoffPendingRival
+                              ? "border-dark-800 bg-dark-950/50 opacity-80"
+                              : "border-dark-700/80"
                           }`}
                         >
                           <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <Badge variant={isCompleted ? "success" : "default"} size="sm">
-                                {isCompleted ? "FINALIZADO" : "PENDIENTE"}
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <Badge variant={isCompleted ? "success" : isPlayoffPendingRival ? "warning" : "default"} size="sm">
+                                {isCompleted ? "FINALIZADO" : isPlayoffPendingRival ? "ESPERANDO RIVAL" : "PENDIENTE"}
                               </Badge>
                               <span className="text-xs text-dark-400">
-                                {STAGE_LABELS[m.stage] ?? m.stage}
+                                {STAGE_LABELS[m.stage] ?? getStageName(m.stage)}
                               </span>
+                              <span className="text-dark-500 text-xs">Partido #{m.match_number ?? "-"}</span>
                             </div>
                             <div className="text-sm font-semibold text-white">
                               <span className={m.winner_couple_id === m.couple1_id ? "text-emerald-400 font-bold" : ""}>
@@ -1059,6 +1155,14 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                             size="sm"
                             variant={isCompleted ? "secondary" : "primary"}
                             onClick={() => openScoreModal(m)}
+                            disabled={isPlayoffPendingRival}
+                            title={
+                              isPlayoffPendingRival
+                                ? "El cruce se conformará automáticamente cuando concluyan los partidos de la ronda previa"
+                                : isCompleted
+                                ? "Editar Marcador"
+                                : "Cargar Marcador"
+                            }
                           >
                             {isCompleted ? "Editar Marcador" : "Cargar Marcador"}
                           </Button>
@@ -1083,7 +1187,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                   Partido
                 </label>
                 <p className="text-white text-sm font-semibold p-2.5 bg-dark-900 rounded-lg border border-dark-700">
-                  {getCoupleLabel(schedulingMatch?.couple1)} vs {getCoupleLabel(schedulingMatch?.couple2)}
+                  {getCoupleLabel(schedulingMatch?.couple1, schedulingMatch?.couple1_id)} vs {getCoupleLabel(schedulingMatch?.couple2, schedulingMatch?.couple2_id)}
                 </p>
               </div>
 

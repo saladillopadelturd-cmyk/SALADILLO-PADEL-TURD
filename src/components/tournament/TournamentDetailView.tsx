@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
 import { calculateRoundRobinStandings } from "@/lib/tournament/standings";
 import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel } from "@/lib/tournament/couples";
-import { propagatePlayoffWinners } from "@/lib/tournament/elimination";
+import { propagatePlayoffWinners, getStageName } from "@/lib/tournament/elimination";
 import Bracket from "@/components/tournament/Bracket";
 import { Calendar, MapPin, Trophy, Clock, ArrowLeft, Users } from "lucide-react";
 
@@ -45,6 +45,7 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
   const [couples, setCouples] = useState<Couple[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [zoneCouplesMap, setZoneCouplesMap] = useState<Record<string, string[]>>({});
+  const [fixtureFilter, setFixtureFilter] = useState<"all" | "zone" | "playoff">("all");
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
@@ -189,6 +190,38 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
 
   // Propagar reactivamente en memoria los ganadores de rondas eliminatorias hacia las siguientes fases
   const { updatedMatches: displayMatches } = propagatePlayoffWinners(matches);
+
+  // Ordenar fixture: fase de zonas primero, seguido de eliminatorias en orden cronológico (Octavos -> Cuartos -> Semis -> Final)
+  const sortedDisplayMatches = useMemo(() => {
+    return [...displayMatches].sort((a, b) => {
+      if (a.stage === "zone" && b.stage !== "zone") return -1;
+      if (a.stage !== "zone" && b.stage === "zone") return 1;
+
+      if (a.stage !== "zone" && b.stage !== "zone") {
+        if (a.match_number != null && b.match_number != null) {
+          return a.match_number - b.match_number;
+        }
+      }
+
+      if (a.scheduled_time && b.scheduled_time) {
+        return a.scheduled_time.localeCompare(b.scheduled_time);
+      }
+      if (a.match_number != null && b.match_number != null) {
+        return a.match_number - b.match_number;
+      }
+      return (a.id || "").localeCompare(b.id || "");
+    });
+  }, [displayMatches]);
+
+  const filteredMatches = useMemo(() => {
+    if (fixtureFilter === "zone") {
+      return sortedDisplayMatches.filter((m) => m.stage === "zone");
+    }
+    if (fixtureFilter === "playoff") {
+      return sortedDisplayMatches.filter((m) => m.stage !== "zone");
+    }
+    return sortedDisplayMatches;
+  }, [sortedDisplayMatches, fixtureFilter]);
 
   // Build bracket structure for playoffs tab
   const STAGE_ORDER: Record<string, number> = {
@@ -440,28 +473,74 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
         {/* 2. TAB: FIXTURE / HORARIOS */}
         <TabsContent value="fixture">
           <div className="mt-6">
-            <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <Clock className="w-5 h-5 text-emerald-400" />
-              Programación de Partidos y Horarios
-            </h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-emerald-400" />
+                  Programación de Partidos y Fixture
+                </h2>
+                <p className="text-xs text-dark-400 mt-1">
+                  En eliminación directa, los cruces de cada fase se conforman automáticamente a medida que las parejas ganan sus partidos.
+                </p>
+              </div>
+            </div>
 
-            {matches.length === 0 ? (
+            {/* Filtros de Fixture */}
+            <div className="flex items-center gap-2 mb-6 p-1 bg-dark-900/80 rounded-xl border border-dark-800 w-fit flex-wrap">
+              <button
+                type="button"
+                onClick={() => setFixtureFilter("all")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  fixtureFilter === "all"
+                    ? "bg-emerald-500 text-dark-950 shadow-md font-black"
+                    : "text-dark-400 hover:text-white"
+                }`}
+              >
+                Todos ({sortedDisplayMatches.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFixtureFilter("zone")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  fixtureFilter === "zone"
+                    ? "bg-emerald-500 text-dark-950 shadow-md font-black"
+                    : "text-dark-400 hover:text-white"
+                }`}
+              >
+                Fase de Zonas ({sortedDisplayMatches.filter((m) => m.stage === "zone").length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFixtureFilter("playoff")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  fixtureFilter === "playoff"
+                    ? "bg-emerald-500 text-dark-950 shadow-md font-black"
+                    : "text-dark-400 hover:text-white"
+                }`}
+              >
+                Eliminación Directa ({sortedDisplayMatches.filter((m) => m.stage !== "zone").length})
+              </button>
+            </div>
+
+            {filteredMatches.length === 0 ? (
               <Card className="p-8 text-center text-dark-400">
-                Aún no hay partidos programados para este torneo.
+                Aún no hay partidos programados en esta sección.
               </Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {displayMatches.map((m) => {
+                {filteredMatches.map((m) => {
+                  const isPlayoff = m.stage !== "zone";
+                  const isPendingRival = isPlayoff && (!m.couple1_id || !m.couple2_id);
                   const hasResult = m.status === "completed" || Boolean(m.score_set1 || m.score_set2 || m.score_super_tb);
                   const isFinished = m.status === "completed";
                   const isLive = m.status === "in_progress";
                   const isP1Winner = m.winner_couple_id && m.winner_couple_id === m.couple1_id;
                   const isP2Winner = m.winner_couple_id && m.winner_couple_id === m.couple2_id;
 
-                  const c1Players = m.couple1 ? getCouplePlayersShortLabel(m.couple1) : couplePlayersMap[m.couple1_id ?? ""] ?? "Por definir";
-                  const c2Players = m.couple2 ? getCouplePlayersShortLabel(m.couple2) : couplePlayersMap[m.couple2_id ?? ""] ?? "Por definir";
-                  const c1Name = coupleNamesMap[m.couple1_id ?? ""] ?? "Por definir";
-                  const c2Name = coupleNamesMap[m.couple2_id ?? ""] ?? "Por definir";
+                  const c1Players = couplePlayersMap[m.couple1_id ?? ""] ?? (m.couple1 ? getCouplePlayersShortLabel(m.couple1) : "Por definir");
+                  const c2Players = couplePlayersMap[m.couple2_id ?? ""] ?? (m.couple2 ? getCouplePlayersShortLabel(m.couple2) : "Por definir");
+                  const c1Name = coupleNamesMap[m.couple1_id ?? ""] ?? (m.couple1 ? getCoupleLabelWithNumber(m.couple1, coupleNumberMap.get(m.couple1.id)) : "Por definir");
+                  const c2Name = coupleNamesMap[m.couple2_id ?? ""] ?? (m.couple2 ? getCoupleLabelWithNumber(m.couple2, coupleNumberMap.get(m.couple2.id)) : "Por definir");
 
                   // Si ya tiene un resultado cargado, solo mostrar los nombres de los jugadores y el resultado
                   if (hasResult) {
@@ -471,11 +550,18 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
                         className="p-4 border border-emerald-500/30 bg-dark-900/90 shadow-md transition-all duration-200"
                       >
                         <div className="flex items-center justify-between text-xs text-dark-400 mb-3">
-                          <Badge variant="success" size="xs">
-                            FINALIZADO
-                          </Badge>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Badge variant="success" size="xs">
+                              FINALIZADO
+                            </Badge>
+                            {isPlayoff && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                                CLASIFICÓ GANADOR
+                              </span>
+                            )}
+                          </div>
                           <span className="font-semibold text-emerald-400/80 text-[11px] uppercase tracking-wider">
-                            {m.stage === "zone" ? "Fase Zonas" : m.stage}
+                            {getStageName(m.stage)}
                           </span>
                         </div>
 
@@ -529,19 +615,32 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
                       className={`p-4 border transition-all duration-200 ${
                         isLive
                           ? "border-rose-500/60 bg-gradient-to-b from-rose-950/20 via-dark-900/90 to-dark-950 shadow-lg shadow-rose-950/30"
+                          : isPendingRival
+                          ? "border-dark-800/80 bg-dark-950/40 opacity-80"
                           : "border-dark-700/70 bg-dark-900/90 shadow-md"
                       }`}
                     >
                       <div className="flex items-center justify-between text-xs text-dark-400 mb-3">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           {isLive ? (
                             <Badge variant="live" pulse size="xs">
                               EN JUEGO
                             </Badge>
                           ) : (
                             <span className="font-bold text-emerald-400 text-[11px] uppercase tracking-wider">
-                              {m.stage === "zone" ? "Fase Zonas" : m.stage}
+                              {getStageName(m.stage)}
                             </span>
+                          )}
+                          {isPlayoff && (
+                            isPendingRival ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/10 text-amber-300 border border-amber-400/25">
+                                Esperando Rival
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                                Cruce Confirmado
+                              </span>
+                            )
                           )}
                         </div>
 
@@ -568,6 +667,8 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
                           className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
                             isP1Winner
                               ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold"
+                              : !m.couple1_id
+                              ? "text-dark-400 italic font-normal bg-dark-950/40"
                               : "text-slate-200"
                           }`}
                         >
@@ -583,6 +684,8 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
                           className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
                             isP2Winner
                               ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold"
+                              : !m.couple2_id
+                              ? "text-dark-400 italic font-normal bg-dark-950/40"
                               : "text-slate-200"
                           }`}
                         >
