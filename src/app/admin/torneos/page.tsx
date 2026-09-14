@@ -237,7 +237,9 @@ export default function AdminTorneosPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-white">Torneos</h1>
-          <p className="text-dark-400 mt-1">Crear, gestionar y eliminar torneos</p>
+          <p className="text-dark-400 mt-1">
+            Crear y gestionar torneos. Todos los torneos se disputan en parejas que se enfrentan en zonas.
+          </p>
         </div>
         <Button onClick={openCreate}>+ Nuevo Torneo</Button>
       </div>
@@ -347,6 +349,15 @@ export default function AdminTorneosPage() {
         size="lg"
       >
         <div className="space-y-4">
+          <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs space-y-1">
+            <span className="text-emerald-400 font-bold block">
+              🎾 Formato Oficial: Torneo de Pádel por Parejas
+            </span>
+            <p className="text-emerald-300/90 text-[11px]">
+              Todos los torneos se disputan exclusivamente en duplas (pareja vs pareja). Las parejas inscriptas se distribuyen en zonas (3 o 4 parejas por zona) jugando todas contra todas en su grupo para avanzar a los playoffs.
+            </p>
+          </div>
+
           <Input
             label="Nombre del Torneo"
             placeholder="Ej: Torneo Apertura 2026"

@@ -170,7 +170,9 @@ export default function AdminJugadoresPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-white">Jugadores</h1>
-          <p className="text-dark-400 mt-1">Registrar, administrar y eliminar jugadores</p>
+          <p className="text-dark-400 mt-1">
+            Padrón de jugadores del circuito. Se registran aquí para conformar las parejas que disputan los torneos por zonas.
+          </p>
         </div>
         <Button onClick={openCreate}>+ Nuevo Jugador</Button>
       </div>
