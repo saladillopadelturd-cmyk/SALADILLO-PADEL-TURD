@@ -1,85 +1,241 @@
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import Card from "@/components/ui/Card";
+import { createClient } from "@/lib/supabase/client";
+import {
+  Trophy,
+  Users,
+  UserCheck,
+  Clock,
+  Shield,
+  ArrowRight,
+  RefreshCw,
+} from "lucide-react";
+
+interface DashboardStats {
+  activeTournaments: number;
+  totalTournaments: number;
+  players: number;
+  couples: number;
+  pendingMatches: number;
+  completedMatches: number;
+}
 
 export default function AdminDashboard() {
-  const stats = [
-    { label: "Torneos Activos", value: "2", color: "text-blue-400" },
-    { label: "Jugadores", value: "32", color: "text-green-400" },
-    { label: "Parejas", value: "16", color: "text-amber-400" },
-    { label: "Partidos Pendientes", value: "8", color: "text-purple-400" },
+  const [stats, setStats] = useState<DashboardStats>({
+    activeTournaments: 0,
+    totalTournaments: 0,
+    players: 0,
+    couples: 0,
+    pendingMatches: 0,
+    completedMatches: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const supabase = createClient();
+
+  const loadStats = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      const [
+        activeTournamentsRes,
+        totalTournamentsRes,
+        playersRes,
+        couplesRes,
+        pendingMatchesRes,
+        completedMatchesRes,
+      ] = await Promise.all([
+        supabase
+          .from("tournaments")
+          .select("*", { count: "exact", head: true })
+          .not("status", "in", '("finished","completed","cancelled")'),
+        supabase.from("tournaments").select("*", { count: "exact", head: true }),
+        supabase.from("players").select("*", { count: "exact", head: true }),
+        supabase.from("couples").select("*", { count: "exact", head: true }),
+        supabase
+          .from("matches")
+          .select("*", { count: "exact", head: true })
+          .neq("status", "completed"),
+        supabase
+          .from("matches")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "completed"),
+      ]);
+
+      setStats({
+        activeTournaments: activeTournamentsRes.count ?? 0,
+        totalTournaments: totalTournamentsRes.count ?? 0,
+        players: playersRes.count ?? 0,
+        couples: couplesRes.count ?? 0,
+        pendingMatches: pendingMatchesRes.count ?? 0,
+        completedMatches: completedMatchesRes.count ?? 0,
+      });
+    } catch (err) {
+      console.error("Error al cargar estadísticas del panel:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase]);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
+
+  const statCards = [
+    {
+      label: "Torneos Activos",
+      value: stats.activeTournaments,
+      subValue: `${stats.totalTournaments} en total`,
+      color: "text-blue-400",
+      bgBadge: "bg-blue-500/10 text-blue-400 border-blue-500/25",
+      icon: Trophy,
+      href: "/admin/torneos",
+    },
+    {
+      label: "Jugadores",
+      value: stats.players,
+      subValue: "Registrados en el sistema",
+      color: "text-emerald-400",
+      bgBadge: "bg-emerald-500/10 text-emerald-400 border-emerald-500/25",
+      icon: Users,
+      href: "/admin/jugadores",
+    },
+    {
+      label: "Parejas",
+      value: stats.couples,
+      subValue: "Formadas para torneos",
+      color: "text-amber-400",
+      bgBadge: "bg-amber-500/10 text-amber-400 border-amber-500/25",
+      icon: UserCheck,
+      href: "/admin/parejas",
+    },
+    {
+      label: "Partidos Pendientes",
+      value: stats.pendingMatches,
+      subValue: `${stats.completedMatches} finalizados`,
+      color: "text-purple-400",
+      bgBadge: "bg-purple-500/10 text-purple-400 border-purple-500/25",
+      icon: Clock,
+      href: "/admin/torneos",
+    },
   ];
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white">Panel de Administración</h1>
-        <p className="text-dark-400 mt-1">Gestioná los torneos de pádel</p>
+      {/* Header del Panel */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-black text-white tracking-tight">Panel de Administración</h1>
+          <p className="text-dark-400 mt-1">Gestión general y control de torneos de Saladillo Padel Tour</p>
+        </div>
+        <button
+          onClick={loadStats}
+          disabled={loading}
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-dark-300 hover:text-white border border-dark-700 text-xs font-medium transition-all cursor-pointer w-fit"
+          title="Actualizar datos en tiempo real"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-primary-400" : ""}`} />
+          <span>Actualizar datos</span>
+        </button>
       </div>
 
+      {/* 4 Fichas de Métricas Principales (Conectadas con Supabase) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {stats.map((stat) => (
-          <Card key={stat.label} className="p-4">
-            <p className="text-dark-400 text-sm">{stat.label}</p>
-            <p className={`text-3xl font-bold mt-1 ${stat.color}`}>
-              {stat.value}
-            </p>
-          </Card>
-        ))}
+        {statCards.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <Link key={stat.label} href={stat.href} className="group">
+              <Card hover className="p-5 h-full transition-all duration-200 border-dark-700/80 group-hover:border-dark-600">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-dark-400 text-xs font-semibold uppercase tracking-wider">
+                    {stat.label}
+                  </span>
+                  <div className={`p-2 rounded-xl border ${stat.bgBadge}`}>
+                    <Icon className="w-4 h-4" />
+                  </div>
+                </div>
+                {loading ? (
+                  <div className="h-9 w-16 bg-dark-700 animate-pulse rounded my-1" />
+                ) : (
+                  <p className={`text-3xl sm:text-4xl font-black tracking-tight ${stat.color}`}>
+                    {stat.value}
+                  </p>
+                )}
+                <p className="text-dark-500 text-xs mt-1">{stat.subValue}</p>
+              </Card>
+            </Link>
+          );
+        })}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <Link href="/admin/torneos">
-          <Card hover className="p-6">
-            <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center mb-4">
-              <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
+      {/* Accesos Rápidos de Navegación */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Link href="/admin/torneos" className="group">
+          <Card hover className="p-6 h-full border-dark-700/80 group-hover:border-blue-500/40 transition-all">
+            <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center mb-4 text-blue-400">
+              <Trophy className="w-5 h-5" />
             </div>
-            <h3 className="text-white font-semibold mb-2">Torneos</h3>
-            <p className="text-dark-400 text-sm">
-              Crear y gestionar torneos, configurar zonas y fixtures.
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-white font-bold text-base group-hover:text-blue-400 transition-colors">
+                Torneos
+              </h3>
+              <ArrowRight className="w-4 h-4 text-dark-500 group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
+            </div>
+            <p className="text-dark-400 text-xs leading-relaxed">
+              Crear y gestionar torneos, sorteo de zonas, programación de fixtures y resultados.
             </p>
           </Card>
         </Link>
 
-        <Link href="/admin/jugadores">
-          <Card hover className="p-6">
-            <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center mb-4">
-              <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
+        <Link href="/admin/jugadores" className="group">
+          <Card hover className="p-6 h-full border-dark-700/80 group-hover:border-emerald-500/40 transition-all">
+            <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center mb-4 text-emerald-400">
+              <Users className="w-5 h-5" />
             </div>
-            <h3 className="text-white font-semibold mb-2">Jugadores</h3>
-            <p className="text-dark-400 text-sm">
-              Registrar y administrar jugadores del torneo.
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-white font-bold text-base group-hover:text-emerald-400 transition-colors">
+                Jugadores
+              </h3>
+              <ArrowRight className="w-4 h-4 text-dark-500 group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
+            </div>
+            <p className="text-dark-400 text-xs leading-relaxed">
+              Registrar, buscar, editar y administrar todos los jugadores del circuito SPT.
             </p>
           </Card>
         </Link>
 
-        <Link href="/admin/parejas">
-          <Card hover className="p-6">
-            <div className="w-10 h-10 bg-amber-500/20 rounded-lg flex items-center justify-center mb-4">
-              <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-              </svg>
+        <Link href="/admin/parejas" className="group">
+          <Card hover className="p-6 h-full border-dark-700/80 group-hover:border-amber-500/40 transition-all">
+            <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center mb-4 text-amber-400">
+              <UserCheck className="w-5 h-5" />
             </div>
-            <h3 className="text-white font-semibold mb-2">Parejas</h3>
-            <p className="text-dark-400 text-sm">
-              Formar parejas y asignarlas a zonas.
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-white font-bold text-base group-hover:text-amber-400 transition-colors">
+                Parejas
+              </h3>
+              <ArrowRight className="w-4 h-4 text-dark-500 group-hover:text-amber-400 group-hover:translate-x-1 transition-all" />
+            </div>
+            <p className="text-dark-400 text-xs leading-relaxed">
+              Formar y administrar parejas por torneo con validación de disponibilidad única.
             </p>
           </Card>
         </Link>
 
-        <Link href="/admin/admins">
-          <Card hover className="p-6">
-            <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center mb-4">
-              <svg className="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
+        <Link href="/admin/admins" className="group">
+          <Card hover className="p-6 h-full border-dark-700/80 group-hover:border-purple-500/40 transition-all">
+            <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center mb-4 text-purple-400">
+              <Shield className="w-5 h-5" />
             </div>
-            <h3 className="text-white font-semibold mb-2">Administradores</h3>
-            <p className="text-dark-400 text-sm">
-              Gestionar permisos de administradores.
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-white font-bold text-base group-hover:text-purple-400 transition-colors">
+                Administradores
+              </h3>
+              <ArrowRight className="w-4 h-4 text-dark-500 group-hover:text-purple-400 group-hover:translate-x-1 transition-all" />
+            </div>
+            <p className="text-dark-400 text-xs leading-relaxed">
+              Gestionar accesos, roles de usuario y permisos administrativos en la plataforma.
             </p>
           </Card>
         </Link>
