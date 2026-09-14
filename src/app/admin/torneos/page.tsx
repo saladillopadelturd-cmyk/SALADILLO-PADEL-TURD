@@ -282,7 +282,11 @@ export default function AdminTorneosPage() {
             <Card key={tournament.id} className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h3 className="text-lg font-bold text-white">{tournament.name}</h3>
+                  <Link href={`/admin/torneos/${tournament.id}`} className="hover:underline">
+                    <h3 className="text-lg font-bold text-white hover:text-primary-400 transition-colors">
+                      {tournament.name}
+                    </h3>
+                  </Link>
                   <p className="text-dark-400 text-sm">{formatDate(tournament.date)}</p>
                 </div>
                 <Badge variant={STATUS_VARIANTS[tournament.status] ?? "default"}>
@@ -310,13 +314,13 @@ export default function AdminTorneosPage() {
                 )}
               </div>
               <div className="flex flex-wrap gap-2 pt-2 border-t border-dark-800">
-                <Link href={`/admin/torneos/${tournament.id}/zonas`}>
+                <Link href={`/admin/torneos/${tournament.id}?tab=zonas`}>
                   <Button variant="secondary" size="sm">Zonas</Button>
                 </Link>
-                <Link href={`/admin/torneos/${tournament.id}/fixture`}>
+                <Link href={`/admin/torneos/${tournament.id}?tab=fixture`}>
                   <Button variant="secondary" size="sm">Fixture</Button>
                 </Link>
-                <Link href={`/admin/torneos/${tournament.id}/results`}>
+                <Link href={`/admin/torneos/${tournament.id}?tab=results`}>
                   <Button variant="secondary" size="sm">Resultados</Button>
                 </Link>
                 <Button variant="ghost" size="sm" onClick={() => openEdit(tournament)}>
