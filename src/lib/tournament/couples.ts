@@ -146,15 +146,51 @@ export function getCoupleNumberMap(couples: Couple[]): Map<string, number> {
 }
 
 /**
- * Devuelve el nombre formateado de la pareja con su número correspondiente.
- * Ejemplo: "Pareja 1: Juan Pérez / Carlos Gómez"
+ * Abreviatura reglamentaria de jugador para SPT:
+ * Primer letra del nombre seguida de punto y el apellido (ej: "Matias Vidal" -> "M. Vidal").
+ * Si no tiene apellido, retorna el nombre.
  */
-export function getCoupleLabelWithNumber(couple?: Couple | null, coupleNumber?: number): string {
+export function formatPlayerShortName(player?: { first_name?: string | null; last_name?: string | null } | null): string {
+  if (!player) return "Jugador";
+  const firstName = player.first_name?.trim() || "";
+  const lastName = player.last_name?.trim() || "";
+
+  if (!firstName && !lastName) return "Jugador";
+  if (!lastName) return firstName;
+  if (!firstName) return lastName;
+
+  const initial = firstName.charAt(0).toUpperCase();
+  return `${initial}. ${lastName}`;
+}
+
+/**
+ * Devuelve el nombre formateado de la pareja con su número correspondiente y nombres abreviados.
+ * Ejemplo: "Pareja 1: M. Vidal / C. Gómez" o sin número "M. Vidal / C. Gómez".
+ * 
+ * @param couple Objeto pareja
+ * @param coupleNumber Número correlativo opcional (ej: 1 para "Pareja 1")
+ * @param useShortNames Si es true (por defecto), abrevia los nombres a "I. Apellido" (ej: "M. Vidal")
+ */
+export function getCoupleLabelWithNumber(
+  couple?: Couple | null,
+  coupleNumber?: number,
+  useShortNames: boolean = true
+): string {
   if (!couple) return "Por definir";
   const num = coupleNumber ?? couple.couple_number;
   const prefix = num ? `Pareja ${num}: ` : "Pareja: ";
-  const p1 = couple.player1 ? `${couple.player1.first_name} ${couple.player1.last_name}`.trim() : "Jugador 1";
-  const p2 = couple.player2 ? `${couple.player2.first_name} ${couple.player2.last_name}`.trim() : "Jugador 2";
+
+  let p1: string;
+  let p2: string;
+
+  if (useShortNames) {
+    p1 = couple.player1 ? formatPlayerShortName(couple.player1) : "Jugador 1";
+    p2 = couple.player2 ? formatPlayerShortName(couple.player2) : "Jugador 2";
+  } else {
+    p1 = couple.player1 ? `${couple.player1.first_name} ${couple.player1.last_name}`.trim() : "Jugador 1";
+    p2 = couple.player2 ? `${couple.player2.first_name} ${couple.player2.last_name}`.trim() : "Jugador 2";
+  }
+
   return `${prefix}${p1} / ${p2}`;
 }
 
@@ -191,6 +227,8 @@ export function generateRandomCouples(
     const p1 = shuffled[i];
     const p2 = shuffled[i + 1];
     const num = currentNum++;
+    const p1Short = formatPlayerShortName(p1);
+    const p2Short = formatPlayerShortName(p2);
     result.push({
       tournament_id: tournamentId,
       player1_id: p1.id,
@@ -198,7 +236,7 @@ export function generateRandomCouples(
       couple_number: num,
       player1: p1,
       player2: p2,
-      label: `Pareja ${num}: ${p1.first_name} ${p1.last_name} / ${p2.first_name} ${p2.last_name}`,
+      label: `Pareja ${num}: ${p1Short} / ${p2Short}`,
     });
   }
 

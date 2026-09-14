@@ -1,6 +1,7 @@
 "use client";
 
 import type { Pair } from "@/types/tournament";
+import { formatPlayerShortName } from "@/lib/tournament/couples";
 
 interface PairSelectorProps {
   pairs: Pair[];
@@ -21,7 +22,7 @@ export default function PairSelector({
       <div className="space-y-1">
         {pairs.map((pair) => {
           const isSelected = selectedPairs.includes(pair.id);
-          const pairName = `${pair.player1?.first_name} & ${pair.player2?.first_name}`;
+          const pairName = `${formatPlayerShortName(pair.player1)} / ${formatPlayerShortName(pair.player2)}`;
           return (
             <button
               key={pair.id}

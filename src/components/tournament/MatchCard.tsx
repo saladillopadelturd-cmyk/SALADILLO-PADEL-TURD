@@ -4,6 +4,7 @@ import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import type { Match, Pair } from "@/types/tournament";
 import { Trophy, Clock, MapPin, Edit3 } from "lucide-react";
+import { formatPlayerShortName } from "@/lib/tournament/couples";
 
 interface MatchCardProps {
   match: Match;
@@ -20,20 +21,20 @@ export default function MatchCard({
   hasGoldenPoint = true,
   onEdit,
 }: MatchCardProps) {
-  // Resolve pair 1 name
+  // Resolve pair 1 name con formato abreviado "I. Apellido"
   const p1 = pair1 || match.couple1 || match.pair1;
   const p1Name = p1?.player1 && p1?.player2
-    ? `${p1.player1.first_name} ${p1.player1.last_name || ""} & ${p1.player2.first_name} ${p1.player2.last_name || ""}`.trim()
-    : p1?.player1?.first_name
-    ? `${p1.player1.first_name} & Pareja`
+    ? `${formatPlayerShortName(p1.player1)} / ${formatPlayerShortName(p1.player2)}`
+    : p1?.player1
+    ? `${formatPlayerShortName(p1.player1)} / Pareja`
     : "Por definir";
 
-  // Resolve pair 2 name
+  // Resolve pair 2 name con formato abreviado "I. Apellido"
   const p2 = pair2 || match.couple2 || match.pair2;
   const p2Name = p2?.player1 && p2?.player2
-    ? `${p2.player1.first_name} ${p2.player1.last_name || ""} & ${p2.player2.first_name} ${p2.player2.last_name || ""}`.trim()
-    : p2?.player1?.first_name
-    ? `${p2.player1.first_name} & Pareja`
+    ? `${formatPlayerShortName(p2.player1)} / ${formatPlayerShortName(p2.player2)}`
+    : p2?.player1
+    ? `${formatPlayerShortName(p2.player1)} / Pareja`
     : "Por definir";
 
   const isLive = match.status === "in_progress";

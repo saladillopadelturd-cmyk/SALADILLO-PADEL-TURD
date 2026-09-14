@@ -48,6 +48,7 @@ import {
   validateCoupleFormation,
   getCoupleNumberMap,
   getCoupleLabelWithNumber,
+  formatPlayerShortName,
   generateRandomCouples,
 } from "./couples";
 
@@ -667,15 +668,24 @@ export function runTournamentBusinessLogicTests(): TestResult {
   assert(numberMap.get("coup_b") === 2, "coup_b es Pareja 2");
   assert(numberMap.get("coup_c") === 3, "coup_c es Pareja 3");
 
-  // Formateo de nombres con número
+  // Formateo de nombres con inicial y apellido ("I. Apellido")
+  assert(formatPlayerShortName({ first_name: "Matias", last_name: "Vidal" }) === "M. Vidal", "Matias Vidal abrevia a M. Vidal");
+  assert(formatPlayerShortName({ first_name: "Carlos", last_name: "Gómez" }) === "C. Gómez", "Carlos Gómez abrevia a C. Gómez");
+  assert(formatPlayerShortName({ first_name: "Agustín", last_name: "Ruiz" }) === "A. Ruiz", "Agustín Ruiz abrevia a A. Ruiz");
+  assert(formatPlayerShortName({ first_name: "Lucas", last_name: "" }) === "Lucas", "Jugador sin apellido conserva su nombre");
+
   const label1 = getCoupleLabelWithNumber(numberingCouples[0], 1);
-  assert(label1 === "Pareja 1: Juan Pérez / Carlos Gómez", "Formato Pareja 1 correcto");
+  assert(label1 === "Pareja 1: J. Pérez / C. Gómez", "Formato Pareja 1 abreviado correcto");
 
   const label2 = getCoupleLabelWithNumber(numberingCouples[1], 2);
-  assert(label2 === "Pareja 2: Marcos Díaz / Lucas Soto", "Formato Pareja 2 correcto");
+  assert(label2 === "Pareja 2: M. Díaz / L. Soto", "Formato Pareja 2 abreviado correcto");
 
   const label3 = getCoupleLabelWithNumber(numberingCouples[2], 3);
-  assert(label3 === "Pareja 3: Matías Vidal / Agustín Ruiz", "Formato Pareja 3 correcto");
+  assert(label3 === "Pareja 3: M. Vidal / A. Ruiz", "Formato Pareja 3 abreviado correcto");
+
+  // Formato completo sin abreviar opcional
+  const labelFull = getCoupleLabelWithNumber(numberingCouples[2], 3, false);
+  assert(labelFull === "Pareja 3: Matías Vidal / Agustín Ruiz", "Formato completo sin abreviar accesible con flag");
 
   // e) Generación automática de parejas con numeración consecutiva
   const playersForAuto: Player[] = [

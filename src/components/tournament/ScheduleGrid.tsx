@@ -2,6 +2,7 @@
 
 import Card from "@/components/ui/Card";
 import type { Match } from "@/types/tournament";
+import { formatPlayerShortName } from "@/lib/tournament/couples";
 
 interface ScheduleGridProps {
   matches: Match[];
@@ -44,8 +45,8 @@ export default function ScheduleGrid({
                     {courtMatch && (
                       <span className="text-dark-500 text-xs">
                         {new Date(courtMatch.scheduled_at!).toLocaleTimeString(
-                          "es-AR",
-                          { hour: "2-digit", minute: "2-digit" }
+                           "es-AR",
+                           { hour: "2-digit", minute: "2-digit" }
                         )}
                       </span>
                     )}
@@ -54,13 +55,13 @@ export default function ScheduleGrid({
                     <div className="space-y-1">
                       <p className="text-white text-sm">
                         {courtMatch.pair1
-                          ? `${courtMatch.pair1.player1?.first_name} & ${courtMatch.pair1.player2?.first_name}`
+                          ? `${formatPlayerShortName(courtMatch.pair1.player1)} / ${formatPlayerShortName(courtMatch.pair1.player2)}`
                           : "TBD"}
                       </p>
                       <p className="text-dark-500 text-xs text-center">vs</p>
                       <p className="text-white text-sm">
                         {courtMatch.pair2
-                          ? `${courtMatch.pair2.player1?.first_name} & ${courtMatch.pair2.player2?.first_name}`
+                          ? `${formatPlayerShortName(courtMatch.pair2.player1)} / ${formatPlayerShortName(courtMatch.pair2.player2)}`
                           : "TBD"}
                       </p>
                     </div>
