@@ -1,8 +1,10 @@
 import Card from "@/components/ui/Card";
+import Badge from "@/components/ui/Badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/Tabs";
 import { createClient } from "@/lib/supabase/server";
 import { formatPlayerShortName } from "@/lib/tournament/couples";
-import { Trophy, Medal, Users, User } from "lucide-react";
+import { syncAllTournamentsRankings } from "@/lib/tournament/rankings";
+import { Trophy, Medal, Users, User, Flame, CheckCircle2 } from "lucide-react";
 
 export const revalidate = 0;
 
@@ -26,56 +28,83 @@ interface IndividualRankingItem {
   matchesLost: number;
 }
 
-export default async function RankingsPage() {
+export default async function RankingsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ category?: string }>;
+}) {
+  const resolvedParams = searchParams ? await searchParams : {};
+  const selectedCategory = resolvedParams.category || "all";
   const supabase = await createClient();
 
   let coupleRankings: CoupleRankingItem[] = [];
   let individualRankings: IndividualRankingItem[] = [];
+  let availableCategories: string[] = [];
 
   try {
-    // 1. Fetch Couple Rankings
-    const { data: cData } = await supabase
-      .from("rankings")
-      .select("*, player1:players!rankings_player1_id_fkey(*), player2:players!rankings_player2_id_fkey(*)")
-      .eq("ranking_type", "couple")
-      .order("points", { ascending: false });
-
-    if (cData && cData.length > 0) {
-      coupleRankings = cData.map((r) => {
-        const p1 = r.player1 ? formatPlayerShortName(r.player1) : "Jugador 1";
-        const p2 = r.player2 ? formatPlayerShortName(r.player2) : "Jugador 2";
-        return {
-          id: r.id,
-          name: `${p1} / ${p2}`,
-          category: r.category || "General",
-          tournaments: r.tournaments_played,
-          points: r.points,
-          matchesWon: r.matches_won,
-          matchesLost: r.matches_lost,
-        };
-      });
+    // 1. Auto-sincronizar si la tabla de rankings está vacía para que siempre muestre datos al instante
+    const { count } = await supabase.from("rankings").select("*", { count: "exact", head: true });
+    if (!count || count === 0) {
+      await syncAllTournamentsRankings(supabase);
     }
 
-    // 2. Fetch Individual Rankings
-    const { data: iData } = await supabase
-      .from("rankings")
-      .select("*, player:players!rankings_player_id_fkey(*)")
-      .eq("ranking_type", "individual")
-      .order("points", { ascending: false });
+    // 2. Traer jugadores para resolución 100% segura de nombres abreviados
+    const { data: allPlayers } = await supabase.from("players").select("*");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const playersMap = new Map((allPlayers || []).map((p: any) => [p.id, p]));
 
-    if (iData && iData.length > 0) {
-      individualRankings = iData.map((r) => {
-        const p = r.player ? formatPlayerShortName(r.player) : "Jugador";
-        return {
-          id: r.id,
-          name: p,
-          category: r.category || "General",
-          tournaments: r.tournaments_played,
-          points: r.points,
-          matchesWon: r.matches_won,
-          matchesLost: r.matches_lost,
-        };
+    // 3. Obtener todos los rankings para extraer categorías disponibles
+    const { data: allRankings } = await supabase
+      .from("rankings")
+      .select("*")
+      .order("points", { ascending: false })
+      .order("matches_won", { ascending: false });
+
+    if (allRankings && allRankings.length > 0) {
+      const catsSet = new Set<string>();
+      allRankings.forEach((r) => {
+        if (r.category) catsSet.add(r.category);
       });
+      availableCategories = Array.from(catsSet).sort();
+
+      const filtered = selectedCategory === "all"
+        ? allRankings
+        : allRankings.filter((r) => r.category === selectedCategory);
+
+      // Separar parejas e individuales
+      coupleRankings = filtered
+        .filter((r) => r.ranking_type === "couple")
+        .map((r) => {
+          const p1 = r.player1_id ? playersMap.get(r.player1_id) : null;
+          const p2 = r.player2_id ? playersMap.get(r.player2_id) : null;
+          const p1Name = p1 ? formatPlayerShortName(p1) : "Jugador 1";
+          const p2Name = p2 ? formatPlayerShortName(p2) : "Jugador 2";
+          return {
+            id: r.id,
+            name: `${p1Name} / ${p2Name}`,
+            category: r.category || "General",
+            tournaments: r.tournaments_played,
+            points: r.points,
+            matchesWon: r.matches_won,
+            matchesLost: r.matches_lost,
+          };
+        });
+
+      individualRankings = filtered
+        .filter((r) => r.ranking_type === "individual")
+        .map((r) => {
+          const p = r.player_id ? playersMap.get(r.player_id) : null;
+          const pName = p ? formatPlayerShortName(p) : "Jugador";
+          return {
+            id: r.id,
+            name: pName,
+            category: r.category || "General",
+            tournaments: r.tournaments_played,
+            points: r.points,
+            matchesWon: r.matches_won,
+            matchesLost: r.matches_lost,
+          };
+        });
     }
   } catch (err) {
     console.error("Error fetching rankings from Supabase:", err);
@@ -95,6 +124,40 @@ export default async function RankingsPage() {
           <p className="text-dark-400 text-sm mt-1">
             Puntajes acumulados por torneos jugados. El ranking individual se conserva aunque cambies de pareja.
           </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            Actualizado en vivo
+          </div>
+          {availableCategories.length > 0 && (
+            <div className="flex items-center gap-1.5 bg-dark-900/80 p-1 rounded-xl border border-dark-700/70 text-xs">
+              <a
+                href="/rankings"
+                className={`px-3 py-1 rounded-lg font-bold transition-colors ${
+                  selectedCategory === "all"
+                    ? "bg-primary-600 text-white shadow-sm shadow-primary-600/30"
+                    : "text-dark-400 hover:text-white"
+                }`}
+              >
+                Todas
+              </a>
+              {availableCategories.map((cat) => (
+                <a
+                  key={cat}
+                  href={`/rankings?category=${encodeURIComponent(cat)}`}
+                  className={`px-3 py-1 rounded-lg font-bold transition-colors ${
+                    selectedCategory === cat
+                      ? "bg-primary-600 text-white shadow-sm shadow-primary-600/30"
+                      : "text-dark-400 hover:text-white"
+                  }`}
+                >
+                  {cat}
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

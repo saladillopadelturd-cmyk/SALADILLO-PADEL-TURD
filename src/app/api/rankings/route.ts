@@ -1,23 +1,31 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { SPT_POINTS_SCALE, getCoupleKey } from "@/lib/tournament/rankings";
+import { SPT_POINTS_SCALE, getCoupleKey, syncAllTournamentsRankings } from "@/lib/tournament/rankings";
+import { formatPlayerShortName } from "@/lib/tournament/couples";
 
 /**
- * GET /api/rankings?category=5ta&type=individual
- * Obtiene rankings por tipo (individual | couple) y categoría.
+ * GET /api/rankings?category=5ta&type=individual&sync=true
+ * Obtiene rankings oficiales por tipo (individual | couple) y categoría.
+ * Si la tabla está vacía o se solicita sync, auto-sincroniza los acumulados de todos los torneos.
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const category = searchParams.get("category");
   const type = searchParams.get("type"); // "couple" | "individual"
+  const sync = searchParams.get("sync") === "true";
 
   const supabase = await createClient();
 
-  let query = supabase.from("rankings").select(
-    "*, player:players!rankings_player_id_fkey(*), player1:players!rankings_player1_id_fkey(*), player2:players!rankings_player2_id_fkey(*)"
-  );
+  // Comprobar si la tabla está vacía o se forzó sync
+  const { count } = await supabase.from("rankings").select("*", { count: "exact", head: true });
+  if (count === 0 || sync) {
+    await syncAllTournamentsRankings(supabase);
+  }
 
-  if (category) {
+  // Traer los registros de rankings
+  let query = supabase.from("rankings").select("*");
+
+  if (category && category !== "all" && category !== "Todas") {
     query = query.eq("category", category);
   }
 
@@ -25,15 +33,48 @@ export async function GET(request: Request) {
     query = query.eq("ranking_type", type);
   }
 
-  query = query.order("points", { ascending: false });
+  query = query.order("points", { ascending: false }).order("matches_won", { ascending: false });
 
-  const { data, error } = await query;
+  const { data: rawRankings, error } = await query;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ success: true, rankings: data });
+  // Cargar jugadores para hidratar nombres de forma 100% segura
+  const { data: allPlayers } = await supabase.from("players").select("*");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const playersMap = new Map((allPlayers || []).map((p: any) => [p.id, p]));
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const enrichedRankings = (rawRankings || []).map((r: any) => {
+    if (r.ranking_type === "couple") {
+      const p1 = r.player1_id ? playersMap.get(r.player1_id) : null;
+      const p2 = r.player2_id ? playersMap.get(r.player2_id) : null;
+      const p1Name = p1 ? formatPlayerShortName(p1) : "Jugador 1";
+      const p2Name = p2 ? formatPlayerShortName(p2) : "Jugador 2";
+      return {
+        ...r,
+        name: `${p1Name} / ${p2Name}`,
+        player1: p1,
+        player2: p2,
+      };
+    } else {
+      const p = r.player_id ? playersMap.get(r.player_id) : null;
+      const pName = p ? formatPlayerShortName(p) : "Jugador";
+      return {
+        ...r,
+        name: pName,
+        player: p,
+      };
+    }
+  });
+
+  return NextResponse.json({
+    success: true,
+    rankings: enrichedRankings,
+    count: enrichedRankings.length,
+  });
 }
 
 /**
@@ -46,11 +87,23 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   const supabase = await createClient();
-  const body = await request.json();
-  const { tournamentId, recalculate = false } = body;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let body: any = {};
+  try {
+    body = await request.json();
+  } catch {
+    body = {};
+  }
 
-  if (!tournamentId) {
-    return NextResponse.json({ error: "tournamentId es requerido" }, { status: 400 });
+  const { tournamentId, recalculate = false, syncAll = false } = body;
+
+  if (syncAll || !tournamentId) {
+    const syncRes = await syncAllTournamentsRankings(supabase);
+    return NextResponse.json({
+      success: true,
+      message: "Rankings globales de todos los torneos sincronizados exitosamente",
+      result: syncRes,
+    });
   }
 
   // 1. Obtener datos del torneo

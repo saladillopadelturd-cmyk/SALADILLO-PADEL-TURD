@@ -417,11 +417,28 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
           }
         }
 
+        // Si el partido completado es la Gran Final, auto-liquidar los rankings oficiales de inmediato
+        let finalCompleted = false;
+        if (scoringMatch.stage === "final") {
+          try {
+            await fetch("/api/rankings", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ tournamentId, recalculate: true }),
+            });
+            finalCompleted = true;
+          } catch (rankErr) {
+            console.warn("Error auto-liquidando rankings tras la final:", rankErr);
+          }
+        }
+
         await loadData();
         setScoringMatch(null);
         setNotification({
           type: "success",
-          text: advancedToNextStage
+          text: finalCompleted
+            ? "¡Gran Final completada! Los rankings oficiales por parejas e individual han sido liquidados y actualizados automáticamente."
+            : advancedToNextStage
             ? "Resultado guardado y pareja ganadora clasificada automáticamente a la siguiente fase del cuadro."
             : "Resultado guardado y posiciones actualizadas con éxito.",
         });

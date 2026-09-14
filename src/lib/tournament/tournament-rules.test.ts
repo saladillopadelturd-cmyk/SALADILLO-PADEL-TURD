@@ -502,6 +502,30 @@ export function runTournamentBusinessLogicTests(): TestResult {
   // Ganó 70 pts en T1 con jD + 70 pts en T2 con jA = 140 pts
   assert(indivRankings.get("jC")?.points === 140, "Ranking Individual jC acumuló 140 pts (70 + 70)");
 
+  // 6. Verificación de cálculo de puntos acumulados en curso (hasta el momento de la consulta)
+  const inProgressCouples = [
+    { id: "pair1", player1_id: "p1", player2_id: "p2" },
+    { id: "pair2", player1_id: "p3", player2_id: "p4" },
+  ];
+  const inProgressMatches: Match[] = [
+    {
+      id: "m_r16",
+      tournament_id: "t_prog",
+      stage: "round_of_16",
+      couple1_id: "pair1",
+      couple2_id: "pair2",
+      winner_couple_id: "pair1",
+      score_set1: "9-4",
+      status: "completed",
+      created_at: "",
+    },
+  ];
+  const inProgStats = calculateTournamentStageStats(inProgressMatches, inProgressCouples);
+  assert(inProgStats["pair1"].pointsEarned === 30, "El ganador de octavos ya tiene garantizados al menos 30 pts (cuartofinalista)");
+  assert(inProgStats["pair2"].pointsEarned === 15, "El perdedor de octavos recibe 15 pts (octavofinalista)");
+  assert(inProgStats["pair1"].highestStage === "quarterfinalist", "pair1 avanzó a quarterfinalist");
+  assert(inProgStats["pair2"].highestStage === "round_of_16", "pair2 finalizó en round_of_16");
+
   // ==========================================================================
   // 7. PRUEBAS DE ESTRÉS Y SIMULACIÓN MASIVA (100 Torneos Aleatorios)
   // ==========================================================================

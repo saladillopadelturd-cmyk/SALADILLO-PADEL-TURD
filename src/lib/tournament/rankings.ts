@@ -104,6 +104,12 @@ export function calculateTournamentStageStats(
         statsMap[c2].pointsEarned = SPT_POINTS_SCALE.round_of_16;
         statsMap[c2].finalPosition = 9;
       }
+      // El ganador de Octavos avanza como mínimo a Cuartos de Final (30 pts)
+      if (winner && statsMap[winner] && statsMap[winner].pointsEarned < SPT_POINTS_SCALE.quarterfinalist) {
+        statsMap[winner].highestStage = "quarterfinalist";
+        statsMap[winner].pointsEarned = SPT_POINTS_SCALE.quarterfinalist;
+        statsMap[winner].finalPosition = 5;
+      }
     }
 
     if (m.stage === "quarter") {
@@ -116,6 +122,12 @@ export function calculateTournamentStageStats(
         statsMap[c2].highestStage = "quarterfinalist";
         statsMap[c2].pointsEarned = SPT_POINTS_SCALE.quarterfinalist;
         statsMap[c2].finalPosition = 5;
+      }
+      // El ganador de Cuartos avanza como mínimo a Semifinales (50 pts)
+      if (winner && statsMap[winner] && statsMap[winner].pointsEarned < SPT_POINTS_SCALE.semifinalist) {
+        statsMap[winner].highestStage = "semifinalist";
+        statsMap[winner].pointsEarned = SPT_POINTS_SCALE.semifinalist;
+        statsMap[winner].finalPosition = 3;
       }
     }
 
@@ -130,10 +142,34 @@ export function calculateTournamentStageStats(
         statsMap[c2].pointsEarned = SPT_POINTS_SCALE.semifinalist;
         statsMap[c2].finalPosition = 3;
       }
+      // El ganador de Semis avanza como mínimo a la Final / Subcampeón garantizado (70 pts)
+      if (winner && statsMap[winner] && statsMap[winner].pointsEarned < SPT_POINTS_SCALE.runner_up) {
+        statsMap[winner].highestStage = "runner_up";
+        statsMap[winner].pointsEarned = SPT_POINTS_SCALE.runner_up;
+        statsMap[winner].finalPosition = 2;
+      }
+    }
+
+    if (m.stage === "final") {
+      if (c1 && statsMap[c1] && statsMap[c1].pointsEarned < SPT_POINTS_SCALE.runner_up) {
+        statsMap[c1].highestStage = "runner_up";
+        statsMap[c1].pointsEarned = SPT_POINTS_SCALE.runner_up;
+        statsMap[c1].finalPosition = 2;
+      }
+      if (c2 && statsMap[c2] && statsMap[c2].pointsEarned < SPT_POINTS_SCALE.runner_up) {
+        statsMap[c2].highestStage = "runner_up";
+        statsMap[c2].pointsEarned = SPT_POINTS_SCALE.runner_up;
+        statsMap[c2].finalPosition = 2;
+      }
+      if (winner && statsMap[winner]) {
+        statsMap[winner].highestStage = "champion";
+        statsMap[winner].pointsEarned = SPT_POINTS_SCALE.champion;
+        statsMap[winner].finalPosition = 1;
+      }
     }
   });
 
-  // Finalistas: Campeón y Subcampeón
+  // Finalistas: Campeón y Subcampeón explícito
   const finalMatch = completedMatches.find((m) => m.stage === "final");
   if (finalMatch) {
     const championId = finalMatch.winner_couple_id || finalMatch.winner_id;
@@ -234,3 +270,200 @@ export function processDoubleRankingUpdate(params: {
 
   return { updatedCoupleRankings, updatedIndividualRankings };
 }
+
+/**
+ * Sincroniza y consolida los rankings de todos los torneos del circuito
+ * (activos y finalizados) de acuerdo a los puntos acumulados hasta el momento de la consulta.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function syncAllTournamentsRankings(supabase: any) {
+  // 1. Obtener todos los torneos excepto borradores
+  const { data: tournaments, error: tourErr } = await supabase
+    .from("tournaments")
+    .select("*")
+    .neq("status", "draft");
+
+  if (tourErr || !tournaments || tournaments.length === 0) {
+    return { success: false, message: "No hay torneos disponibles para procesar rankings" };
+  }
+
+  const coupleRankingsMap = new Map<
+    string,
+    {
+      ranking_type: string;
+      player1_id: string;
+      player2_id: string;
+      couple_key: string;
+      category: string;
+      points: number;
+      tournaments_played: number;
+      matches_won: number;
+      matches_lost: number;
+    }
+  >();
+
+  const individualRankingsMap = new Map<
+    string,
+    {
+      ranking_type: string;
+      player_id: string;
+      category: string;
+      points: number;
+      tournaments_played: number;
+      matches_won: number;
+      matches_lost: number;
+    }
+  >();
+
+  for (const tour of tournaments) {
+    const category = tour.category || "General";
+
+    // Obtener parejas del torneo
+    const { data: couplesData } = await supabase
+      .from("couples")
+      .select("id, player1_id, player2_id")
+      .eq("tournament_id", tour.id);
+
+    const couples = couplesData || [];
+    if (couples.length === 0) continue;
+
+    // Obtener partidos completados
+    const { data: matchesData } = await supabase
+      .from("matches")
+      .select("*")
+      .eq("tournament_id", tour.id)
+      .eq("status", "completed");
+
+    const matches = matchesData || [];
+    if (matches.length === 0) continue;
+
+    // Si la final ya se completó, asegurar que el torneo quede marcado como finished
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const finalMatch = matches.find((m: any) => m.stage === "final");
+    if (finalMatch && tour.status !== "finished") {
+      await supabase
+        .from("tournaments")
+        .update({ status: "finished", updated_at: new Date().toISOString() })
+        .eq("id", tour.id);
+    }
+
+    const statsMap = calculateTournamentStageStats(matches, couples);
+
+    for (const couple of couples) {
+      const stats = statsMap[couple.id];
+      if (!stats) continue;
+      const p1Id = couple.player1_id;
+      const p2Id = couple.player2_id;
+      if (!p1Id || !p2Id) continue;
+      const coupleKey = getCoupleKey(p1Id, p2Id);
+      const coupleCompositeKey = `${coupleKey}__${category}`;
+
+      // Acumular puntos de pareja
+      const existingCouple = coupleRankingsMap.get(coupleCompositeKey);
+      if (existingCouple) {
+        existingCouple.points += stats.pointsEarned;
+        existingCouple.tournaments_played += 1;
+        existingCouple.matches_won += stats.matchesWon;
+        existingCouple.matches_lost += stats.matchesLost;
+      } else {
+        coupleRankingsMap.set(coupleCompositeKey, {
+          ranking_type: "couple",
+          player1_id: p1Id,
+          player2_id: p2Id,
+          couple_key: coupleKey,
+          category,
+          points: stats.pointsEarned,
+          tournaments_played: 1,
+          matches_won: stats.matchesWon,
+          matches_lost: stats.matchesLost,
+        });
+      }
+
+      // Acumular puntos individuales para cada jugador
+      for (const pId of [p1Id, p2Id]) {
+        const indivCompositeKey = `${pId}__${category}`;
+        const existingIndiv = individualRankingsMap.get(indivCompositeKey);
+        if (existingIndiv) {
+          existingIndiv.points += stats.pointsEarned;
+          existingIndiv.tournaments_played += 1;
+          existingIndiv.matches_won += stats.matchesWon;
+          existingIndiv.matches_lost += stats.matchesLost;
+        } else {
+          individualRankingsMap.set(indivCompositeKey, {
+            ranking_type: "individual",
+            player_id: pId,
+            category,
+            points: stats.pointsEarned,
+            tournaments_played: 1,
+            matches_won: stats.matchesWon,
+            matches_lost: stats.matchesLost,
+          });
+        }
+      }
+    }
+  }
+
+  // Persistir en la tabla rankings de Supabase
+  for (const coupleRec of coupleRankingsMap.values()) {
+    const { data: existing } = await supabase
+      .from("rankings")
+      .select("id")
+      .eq("ranking_type", "couple")
+      .eq("category", coupleRec.category)
+      .eq("couple_key", coupleRec.couple_key)
+      .maybeSingle();
+
+    if (existing) {
+      await supabase
+        .from("rankings")
+        .update({
+          points: coupleRec.points,
+          tournaments_played: coupleRec.tournaments_played,
+          matches_won: coupleRec.matches_won,
+          matches_lost: coupleRec.matches_lost,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id);
+    } else {
+      await supabase.from("rankings").insert({
+        ...coupleRec,
+        updated_at: new Date().toISOString(),
+      });
+    }
+  }
+
+  for (const indivRec of individualRankingsMap.values()) {
+    const { data: existing } = await supabase
+      .from("rankings")
+      .select("id")
+      .eq("ranking_type", "individual")
+      .eq("category", indivRec.category)
+      .eq("player_id", indivRec.player_id)
+      .maybeSingle();
+
+    if (existing) {
+      await supabase
+        .from("rankings")
+        .update({
+          points: indivRec.points,
+          tournaments_played: indivRec.tournaments_played,
+          matches_won: indivRec.matches_won,
+          matches_lost: indivRec.matches_lost,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id);
+    } else {
+      await supabase.from("rankings").insert({
+        ...indivRec,
+        updated_at: new Date().toISOString(),
+      });
+    }
+  }
+
+  return {
+    success: true,
+    coupleRankingsCount: coupleRankingsMap.size,
+    individualRankingsCount: individualRankingsMap.size,
+  };
+}
+
