@@ -48,6 +48,8 @@ import {
   validateCoupleFormation,
 } from "./couples";
 
+import { calculateOptimalZones } from "./zones";
+
 import type { Match, Couple, Player } from "@/types/tournament";
 
 export interface TestResult {
@@ -625,6 +627,38 @@ export function runTournamentBusinessLogicTests(): TestResult {
   // Caso válido en edición: cambiar uno de los jugadores por uno libre
   const editWithFreePlayer = validateCoupleFormation("tour_1", "p1", "p5", sampleCouples, "c1");
   assert(editWithFreePlayer.isValid === true, "Permite editar y cambiar jugador por uno libre");
+
+  // ==========================================================================
+  // 7. DISTRIBUCIÓN Y CONFECCIÓN DE ZONAS (Zonas de 3 o 4 parejas)
+  // ==========================================================================
+  // Caso solicitado por el usuario: 20 parejas con zonas de 4 -> 5 zonas de 4 parejas
+  const zones20 = calculateOptimalZones(20, 4);
+  assert(zones20.numZones === 5, "20 parejas con objetivo de 4 genera exactamente 5 zonas");
+  assert(zones20.distribution.length === 5, "Se crearon 5 zonas (Zonas A, B, C, D, E)");
+  assert(zones20.distribution.every((z) => z.targetCount === 4), "Cada una de las 5 zonas tiene exactamente 4 parejas");
+  assert(zones20.summary === "5 zonas de 4 parejas", "Resumen correcto: 5 zonas de 4 parejas");
+
+  // 16 parejas -> 4 zonas de 4
+  const zones16 = calculateOptimalZones(16, 4);
+  assert(zones16.numZones === 4 && zones16.distribution.every((z) => z.targetCount === 4), "16 parejas genera 4 zonas de 4");
+
+  // 12 parejas con objetivo de 4 -> 3 zonas de 4
+  const zones12_4 = calculateOptimalZones(12, 4);
+  assert(zones12_4.numZones === 3 && zones12_4.distribution.every((z) => z.targetCount === 4), "12 parejas con objetivo 4 genera 3 zonas de 4");
+
+  // 12 parejas con objetivo de 3 -> 4 zonas de 3
+  const zones12_3 = calculateOptimalZones(12, 3);
+  assert(zones12_3.numZones === 4 && zones12_3.distribution.every((z) => z.targetCount === 3), "12 parejas con objetivo 3 genera 4 zonas de 3");
+
+  // 11 parejas con objetivo de 4 -> 3 zonas (2 de 4, 1 de 3)
+  const zones11 = calculateOptimalZones(11, 4);
+  assert(zones11.numZones === 3, "11 parejas genera 3 zonas");
+  const counts11 = zones11.distribution.map((z) => z.targetCount).sort();
+  assert(counts11[0] === 3 && counts11[1] === 4 && counts11[2] === 4, "11 parejas se distribuye en 1 zona de 3 y 2 zonas de 4");
+
+  // Forzar número de zonas personalizado (ej: 20 parejas forzado a 5)
+  const customZones = calculateOptimalZones(20, 4, 5);
+  assert(customZones.numZones === 5, "Respeta número de zonas personalizado (5 zonas)");
 
   return {
     passed,

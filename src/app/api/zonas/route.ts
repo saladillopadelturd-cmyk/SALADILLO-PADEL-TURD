@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { calculateOptimalZones } from "@/lib/tournament/zones";
 
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];
@@ -80,7 +81,13 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const supabase = await createClient();
   const body = await request.json();
-  const { tournamentId, action = "shuffle", assignments } = body;
+  const {
+    tournamentId,
+    action = "shuffle",
+    assignments,
+    numZones: reqNumZones,
+    zoneSize: reqZoneSize,
+  } = body;
 
   if (!tournamentId) {
     return NextResponse.json({ error: "tournamentId es requerido" }, { status: 400 });
@@ -263,9 +270,19 @@ export async function POST(request: Request) {
   // ==========================================================================
   // ACCIÓN 3: SORTEO AUTOMÁTICO DE ZONAS (Default)
   // ==========================================================================
-  const zoneSize = tournament.zone_size || 4; // Zonas de 3 o 4 parejas según admin
-  let numZones = tournament.num_zones || Math.ceil(couples.length / zoneSize);
-  if (numZones < 1) numZones = 1;
+  const zoneSize = reqZoneSize ? Number(reqZoneSize) : (tournament.zone_size || 4);
+  const optimal = calculateOptimalZones(
+    couples.length,
+    zoneSize,
+    reqNumZones ? Number(reqNumZones) : null
+  );
+  const numZones = optimal.numZones;
+
+  // Actualizar configuración real en el torneo (num_zones y zone_size)
+  await supabase
+    .from("tournaments")
+    .update({ num_zones: numZones, zone_size: zoneSize })
+    .eq("id", tournamentId);
 
   // Eliminar zonas anteriores y sus asignaciones si existían
   const { data: existingZones } = await supabase

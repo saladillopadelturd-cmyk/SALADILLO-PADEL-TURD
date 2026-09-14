@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect, useCallback, useTransition, Suspense } from "react";
+import { use, useState, useEffect, useCallback, useMemo, useTransition, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Card from "@/components/ui/Card";
@@ -12,6 +12,7 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 import { createClient } from "@/lib/supabase/client";
 import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
 import { calculateRoundRobinStandings } from "@/lib/tournament/standings";
+import { calculateOptimalZones } from "@/lib/tournament/zones";
 import ZoneCard from "@/components/tournament/ZoneCard";
 import {
   AlertCircle,
@@ -142,14 +143,44 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     return `${p1} / ${p2}`;
   };
 
+  // Configuración interactiva de Zonas para el sorteo
+  const [targetZoneSize, setTargetZoneSize] = useState<number>(4);
+  const [targetNumZones, setTargetNumZones] = useState<string>("");
+
+  useEffect(() => {
+    if (tournament) {
+      const defaultSize = tournament.zone_size || 4;
+      setTargetZoneSize(defaultSize);
+      const optimal = calculateOptimalZones(couples.length, defaultSize);
+      setTargetNumZones(String(optimal.numZones));
+    }
+  }, [tournament, couples.length]);
+
+  const handleZoneSizeChange = (newSize: number) => {
+    setTargetZoneSize(newSize);
+    const optimal = calculateOptimalZones(couples.length, newSize);
+    setTargetNumZones(String(optimal.numZones));
+  };
+
+  const zoneDistribution = useMemo(() => {
+    const num = targetNumZones ? parseInt(targetNumZones, 10) : undefined;
+    return calculateOptimalZones(couples.length, targetZoneSize, num);
+  }, [couples.length, targetZoneSize, targetNumZones]);
+
   // 1. Action: Sorteo Automático de Zonas
   const handleShuffleZones = async () => {
     startTransition(async () => {
       try {
+        const chosenNumZones = targetNumZones ? parseInt(targetNumZones, 10) : zoneDistribution.numZones;
         const res = await fetch("/api/zonas", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tournamentId, action: "shuffle" }),
+          body: JSON.stringify({
+            tournamentId,
+            action: "shuffle",
+            numZones: chosenNumZones,
+            zoneSize: targetZoneSize,
+          }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Error al sortear zonas");
@@ -480,48 +511,135 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
             {/* TAB 2: ZONAS */}
             <TabsContent value="zonas">
               <div className="space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-dark-900/80 p-4 rounded-xl border border-dark-700">
-                  <div>
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                      <Trophy className="w-5 h-5 text-emerald-400" />
-                      Fase de Zonas
-                    </h3>
-                    <p className="text-dark-400 text-xs mt-1">
-                      {couples.length} parejas inscritas en el torneo. {zones.length} zonas configuradas.
-                    </p>
+                {/* Panel de Configuración Interactiva de Zonas */}
+                <div className="bg-dark-900/90 border border-dark-700/80 rounded-2xl p-5 shadow-xl space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-dark-800">
+                    <div>
+                      <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <Trophy className="w-5 h-5 text-emerald-400" />
+                        Confección y Sorteo de Zonas
+                      </h3>
+                      <p className="text-dark-400 text-xs mt-0.5">
+                        Define la cantidad de zonas y parejas por zona para conformar la fase de grupos.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/25 text-blue-400 text-xs font-bold">
+                        {couples.length} Parejas inscriptas
+                      </span>
+                      {zones.length > 0 && (
+                        <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-bold">
+                          {zones.length} Zonas activas
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={handleShuffleZones}
-                      disabled={isPending || couples.length < 2}
-                      className="flex items-center gap-1.5"
-                    >
-                      <Shuffle className="w-4 h-4" />
-                      {zones.length === 0 ? "Realizar Sorteo Automático" : "Re-sortear Zonas"}
-                    </Button>
-                    {zones.length > 0 && (
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                    <div>
+                      <label className="block text-xs font-semibold text-dark-300 uppercase tracking-wider mb-2">
+                        Objetivo de Parejas por Zona
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleZoneSizeChange(4)}
+                          className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                            targetZoneSize === 4
+                              ? "bg-primary-500/20 border-primary-500 text-primary-300 shadow-sm shadow-primary-500/20"
+                              : "bg-dark-800 border-dark-700 text-dark-400 hover:text-white"
+                          }`}
+                        >
+                          4 parejas por zona
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleZoneSizeChange(3)}
+                          className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                            targetZoneSize === 3
+                              ? "bg-primary-500/20 border-primary-500 text-primary-300 shadow-sm shadow-primary-500/20"
+                              : "bg-dark-800 border-dark-700 text-dark-400 hover:text-white"
+                          }`}
+                        >
+                          3 parejas por zona
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-dark-300 uppercase tracking-wider mb-2">
+                        Cantidad de Zonas a Formar
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={1}
+                          max={couples.length || 1}
+                          value={targetNumZones}
+                          onChange={(e) => setTargetNumZones(e.target.value)}
+                          className="w-full px-3 py-2 bg-dark-800 border border-dark-600 rounded-xl text-white font-bold text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const optimal = calculateOptimalZones(couples.length, targetZoneSize);
+                            setTargetNumZones(String(optimal.numZones));
+                          }}
+                          className="px-3 py-2 bg-dark-800 hover:bg-dark-750 text-dark-300 hover:text-white border border-dark-700 rounded-xl text-xs font-medium whitespace-nowrap transition-colors cursor-pointer"
+                          title="Recalcular automáticamente según cantidad de parejas"
+                        >
+                          Calcular óptimo
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Resumen dinámico del reparto de parejas */}
+                  <div className="p-3.5 bg-dark-950/80 border border-dark-800 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                      <span className="text-dark-200">
+                        Distribución: <strong className="text-white">{zoneDistribution.summary}</strong>
+                        {couples.length > 0 && (
+                          <span className="text-dark-400 ml-1">
+                            ({zoneDistribution.distribution.map((d) => `${d.zoneName}: ${d.targetCount}`).join(", ")})
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                       <Button
                         size="sm"
-                        onClick={handleGenerateZoneMatches}
-                        disabled={isPending}
+                        onClick={handleShuffleZones}
+                        disabled={isPending || couples.length < 2}
                         className="flex items-center gap-1.5"
                       >
-                        <Play className="w-4 h-4" />
-                        Generar Fixture de Zonas
+                        <Shuffle className="w-4 h-4" />
+                        {zones.length === 0 ? "Realizar Sorteo" : "Re-sortear Zonas"}
                       </Button>
-                    )}
+                      {zones.length > 0 && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={handleGenerateZoneMatches}
+                          disabled={isPending}
+                          className="flex items-center gap-1.5"
+                        >
+                          <Play className="w-4 h-4" />
+                          Generar Fixture
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
                 {zones.length === 0 ? (
                   <Card className="p-12 text-center">
                     <Shuffle className="w-12 h-12 text-dark-500 mx-auto mb-3" />
-                    <h4 className="text-base font-bold text-white mb-2">Aún no se han sorteado las zonas</h4>
+                    <h4 className="text-base font-bold text-white mb-2">Aún no se han confeccionado las zonas</h4>
                     <p className="text-dark-400 text-sm max-w-md mx-auto mb-6">
-                      Hay {couples.length} parejas inscritas. Haz clic en el botón para sortear automáticamente las
-                      parejas en las zonas configuradas.
+                      Hay {couples.length} parejas inscritas. Con la configuración seleccionada arriba, se crearán{" "}
+                      <strong>{zoneDistribution.summary}</strong>. Haz clic en el botón para sortear.
                     </p>
                     <Button
                       onClick={handleShuffleZones}
