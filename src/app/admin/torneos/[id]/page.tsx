@@ -31,6 +31,7 @@ import {
   ChevronRight,
   Sparkles,
   Trash2,
+  Medal,
 } from "lucide-react";
 
 const GAME_MODE_LABELS: Record<string, string> = {
@@ -353,7 +354,31 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     });
   };
 
-  // 6. Action: Eliminar Torneo
+  // 6. Action: Liquidar / Actualizar Rankings Oficiales
+  const handleProcessRankings = async () => {
+    startTransition(async () => {
+      try {
+        const res = await fetch("/api/rankings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tournamentId, recalculate: true }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Error al liquidar rankings");
+
+        await loadData();
+        setNotification({
+          type: "success",
+          text: data.message || "Rankings oficiales liquidados y actualizados exitosamente.",
+        });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Error al procesar rankings";
+        setNotification({ type: "error", text: msg });
+      }
+    });
+  };
+
+  // 7. Action: Eliminar Torneo
   const handleDelete = () => {
     startTransition(async () => {
       try {
@@ -884,7 +909,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
             {/* TAB 4: RESULTADOS */}
             <TabsContent value="results">
               <div className="space-y-6">
-                <div className="flex items-center justify-between bg-dark-900/80 p-4 rounded-xl border border-dark-700">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-dark-900/80 p-4 rounded-xl border border-dark-700">
                   <div>
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                       <Trophy className="w-5 h-5 text-amber-400" />
@@ -894,6 +919,16 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                       Registra los marcadores para que las tablas de posiciones y cuadros se calculen en vivo.
                     </p>
                   </div>
+                  <Button
+                    onClick={handleProcessRankings}
+                    disabled={isPending}
+                    variant="secondary"
+                    size="sm"
+                    className="flex items-center gap-2 border-amber-500/30 text-amber-300 hover:bg-amber-500/10"
+                  >
+                    <Medal className="w-4 h-4 text-amber-400" />
+                    {isPending ? "Procesando..." : "Liquidar / Actualizar Rankings"}
+                  </Button>
                 </div>
 
                 {matches.length === 0 ? (
