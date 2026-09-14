@@ -95,11 +95,14 @@ CREATE TABLE public.couples (
   tournament_id UUID NOT NULL REFERENCES public.tournaments(id) ON DELETE CASCADE,
   player1_id UUID NOT NULL REFERENCES public.players(id) ON DELETE RESTRICT,
   player2_id UUID NOT NULL REFERENCES public.players(id) ON DELETE RESTRICT,
+  couple_number INT, -- Numeración correlativa ("Pareja 1", "Pareja 2", etc.)
   seed INT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT chk_different_players CHECK (player1_id <> player2_id),
   CONSTRAINT uq_tournament_players UNIQUE (tournament_id, player1_id, player2_id)
 );
+
+ALTER TABLE public.couples ADD COLUMN IF NOT EXISTS couple_number INT;
 
 -- Trigger: Un jugador no podrá integrar más de una pareja en el mismo torneo
 CREATE OR REPLACE FUNCTION public.check_couple_player_uniqueness()

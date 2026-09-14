@@ -64,6 +64,7 @@ export interface Couple {
   tournament_id: string;
   player1_id: string;
   player2_id: string;
+  couple_number?: number | null;
   seed?: number | null;
   created_at: string;
   player1?: Player;

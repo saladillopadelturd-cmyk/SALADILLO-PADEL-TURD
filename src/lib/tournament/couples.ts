@@ -110,3 +110,98 @@ export function validateCoupleFormation(
 
   return { isValid: true };
 }
+
+/**
+ * Calcula un mapa asociativo de ID de pareja a su número correlativo dentro de su respectivo torneo.
+ * Las parejas se ordenan cronológicamente (created_at ascendente), de modo que la primera registrada
+ * es la "Pareja 1", la segunda la "Pareja 2", y así sucesivamente.
+ * Si la pareja ya cuenta con `couple_number` guardado, se respeta dicho valor.
+ */
+export function getCoupleNumberMap(couples: Couple[]): Map<string, number> {
+  const byTournament: Record<string, Couple[]> = {};
+  for (const c of couples) {
+    if (!c.tournament_id) continue;
+    if (!byTournament[c.tournament_id]) byTournament[c.tournament_id] = [];
+    byTournament[c.tournament_id].push(c);
+  }
+
+  const map = new Map<string, number>();
+  for (const tCouples of Object.values(byTournament)) {
+    const sorted = [...tCouples].sort((a, b) => {
+      // Priorizar couple_number explícito si existe
+      if (a.couple_number != null && b.couple_number != null) {
+        return a.couple_number - b.couple_number;
+      }
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return timeA - timeB;
+    });
+
+    sorted.forEach((c, idx) => {
+      map.set(c.id, c.couple_number ?? (idx + 1));
+    });
+  }
+
+  return map;
+}
+
+/**
+ * Devuelve el nombre formateado de la pareja con su número correspondiente.
+ * Ejemplo: "Pareja 1: Juan Pérez / Carlos Gómez"
+ */
+export function getCoupleLabelWithNumber(couple?: Couple | null, coupleNumber?: number): string {
+  if (!couple) return "Por definir";
+  const num = coupleNumber ?? couple.couple_number;
+  const prefix = num ? `Pareja ${num}: ` : "Pareja: ";
+  const p1 = couple.player1 ? `${couple.player1.first_name} ${couple.player1.last_name}`.trim() : "Jugador 1";
+  const p2 = couple.player2 ? `${couple.player2.first_name} ${couple.player2.last_name}`.trim() : "Jugador 2";
+  return `${prefix}${p1} / ${p2}`;
+}
+
+/**
+ * Genera parejas aleatorias a partir de una lista de jugadores disponibles para un torneo.
+ * Empareja de a dos en dos y asigna la numeración secuencial correlativa ("Pareja 1", "Pareja 2", etc.).
+ */
+export function generateRandomCouples(
+  availablePlayers: Player[],
+  tournamentId: string,
+  startingNumber = 1
+): {
+  tournament_id: string;
+  player1_id: string;
+  player2_id: string;
+  couple_number: number;
+  player1: Player;
+  player2: Player;
+  label: string;
+}[] {
+  if (!tournamentId || availablePlayers.length < 2) return [];
+
+  // Mezclar jugadores con Fisher-Yates shuffle
+  const shuffled = [...availablePlayers];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  const result = [];
+  let currentNum = startingNumber;
+
+  for (let i = 0; i + 1 < shuffled.length; i += 2) {
+    const p1 = shuffled[i];
+    const p2 = shuffled[i + 1];
+    const num = currentNum++;
+    result.push({
+      tournament_id: tournamentId,
+      player1_id: p1.id,
+      player2_id: p2.id,
+      couple_number: num,
+      player1: p1,
+      player2: p2,
+      label: `Pareja ${num}: ${p1.first_name} ${p1.last_name} / ${p2.first_name} ${p2.last_name}`,
+    });
+  }
+
+  return result;
+}
+

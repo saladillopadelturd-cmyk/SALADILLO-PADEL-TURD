@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/Tabs";
 import { createClient } from "@/lib/supabase/client";
 import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
 import { calculateRoundRobinStandings } from "@/lib/tournament/standings";
+import { getCoupleNumberMap, getCoupleLabelWithNumber } from "@/lib/tournament/couples";
 import Bracket from "@/components/tournament/Bracket";
 import { Calendar, MapPin, Trophy, Clock, ArrowLeft, Users } from "lucide-react";
 
@@ -158,11 +159,11 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
     );
   }
 
+  const coupleNumberMap = getCoupleNumberMap(couples);
   const coupleNamesMap: Record<string, string> = {};
   couples.forEach((c) => {
-    const p1 = c.player1 ? `${c.player1.first_name} ${c.player1.last_name}` : "Jugador 1";
-    const p2 = c.player2 ? `${c.player2.first_name} ${c.player2.last_name}` : "Jugador 2";
-    coupleNamesMap[c.id] = `${p1} / ${p2}`;
+    const num = coupleNumberMap.get(c.id);
+    coupleNamesMap[c.id] = getCoupleLabelWithNumber(c, num);
   });
 
   // Build bracket structure for playoffs tab

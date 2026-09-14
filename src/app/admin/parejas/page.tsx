@@ -12,8 +12,10 @@ import {
   getAvailablePlayersForTournament,
   getAssignedPlayerIdsInTournament,
   validateCoupleFormation,
+  getCoupleNumberMap,
+  generateRandomCouples,
 } from "@/lib/tournament/couples";
-import { AlertCircle, CheckCircle2, Users, Filter } from "lucide-react";
+import { AlertCircle, CheckCircle2, Users, Filter, Plus, Shuffle, Sparkles } from "lucide-react";
 
 export default function AdminParejasPage() {
   const [couples, setCouples] = useState<Couple[]>([]);
@@ -21,6 +23,7 @@ export default function AdminParejasPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [showAutoGenerate, setShowAutoGenerate] = useState(false);
   const [editing, setEditing] = useState<Couple | null>(null);
   const [deleting, setDeleting] = useState<Couple | null>(null);
   const [filterTorneo, setFilterTorneo] = useState<string>("all");
@@ -30,6 +33,7 @@ export default function AdminParejasPage() {
   const [formTorneo, setFormTorneo] = useState("");
   const [formJugador1, setFormJugador1] = useState("");
   const [formJugador2, setFormJugador2] = useState("");
+  const [autoTorneo, setAutoTorneo] = useState("");
 
   const supabase = createClient();
 
@@ -67,12 +71,23 @@ export default function AdminParejasPage() {
     loadData();
   }, [loadData]);
 
+  // Mapa de numeración correlativa por torneo (Pareja 1, Pareja 2, etc.)
+  const coupleNumberMap = useMemo(() => {
+    return getCoupleNumberMap(couples);
+  }, [couples]);
+
   const openCreate = () => {
     const defaultTorneo = filterTorneo !== "all" ? filterTorneo : (tournaments[0]?.id ?? "");
     setFormTorneo(defaultTorneo);
     setFormJugador1("");
     setFormJugador2("");
     setShowCreate(true);
+  };
+
+  const openAutoGenerate = () => {
+    const defaultTorneo = filterTorneo !== "all" ? filterTorneo : (tournaments[0]?.id ?? "");
+    setAutoTorneo(defaultTorneo);
+    setShowAutoGenerate(true);
   };
 
   const openEdit = (pair: Couple) => {
@@ -104,10 +119,26 @@ export default function AdminParejasPage() {
     label: t.name,
   }));
 
+  // Siguiente número de pareja que se asignará en el torneo seleccionado
+  const nextCoupleNumber = useMemo(() => {
+    if (!formTorneo) return 1;
+    const count = couples.filter((c) => c.tournament_id === formTorneo).length;
+    return count + 1;
+  }, [couples, formTorneo]);
+
   // Jugadores disponibles para el torneo seleccionado (los que no integran ya una pareja)
   const availablePlayersInSelectedTorneo = useMemo(() => {
     return getAvailablePlayersForTournament(players, couples, formTorneo, editing?.id);
   }, [players, couples, formTorneo, editing]);
+
+  // Jugadores disponibles para generación automática en autoTorneo
+  const availablePlayersForAuto = useMemo(() => {
+    return getAvailablePlayersForTournament(players, couples, autoTorneo);
+  }, [players, couples, autoTorneo]);
+
+  const existingCountInAutoTorneo = useMemo(() => {
+    return couples.filter((c) => c.tournament_id === autoTorneo).length;
+  }, [couples, autoTorneo]);
 
   // Opciones para Jugador 1: excluye los ya asignados y al Jugador 2 (si fue seleccionado)
   const player1Options = useMemo(() => {
@@ -152,6 +183,8 @@ export default function AdminParejasPage() {
       return;
     }
 
+    const assignedNumber = nextCoupleNumber;
+
     startTransition(async () => {
       try {
         const payload = {
@@ -170,10 +203,56 @@ export default function AdminParejasPage() {
         if (data) {
           setCouples((prev) => [data as unknown as Couple, ...prev]);
           setShowCreate(false);
-          setNotification({ type: "success", text: "Pareja creada exitosamente." });
+          setNotification({
+            type: "success",
+            text: `Pareja ${assignedNumber} creada y numerada exitosamente.`,
+          });
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Error al crear la pareja";
+        setNotification({ type: "error", text: msg });
+      }
+    });
+  };
+
+  const handleAutoGenerate = async () => {
+    if (!autoTorneo || availablePlayersForAuto.length < 2) return;
+
+    startTransition(async () => {
+      try {
+        const startNumber = existingCountInAutoTorneo + 1;
+        const generated = generateRandomCouples(
+          availablePlayersForAuto,
+          autoTorneo,
+          startNumber
+        );
+
+        if (generated.length === 0) {
+          throw new Error("No hay suficientes jugadores libres disponibles.");
+        }
+
+        const payloads = generated.map((g) => ({
+          tournament_id: g.tournament_id,
+          player1_id: g.player1_id,
+          player2_id: g.player2_id,
+        }));
+
+        const { data, error } = await supabase
+          .from("couples")
+          .insert(payloads)
+          .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*), tournament:tournaments(name)");
+
+        if (error) throw error;
+        if (data) {
+          setCouples((prev) => [...(data as unknown as Couple[]), ...prev]);
+          setShowAutoGenerate(false);
+          setNotification({
+            type: "success",
+            text: `Se generaron exitosamente ${generated.length} parejas (desde Pareja ${startNumber} hasta Pareja ${startNumber + generated.length - 1}).`,
+          });
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Error al generar parejas automáticas";
         setNotification({ type: "error", text: msg });
       }
     });
@@ -249,12 +328,28 @@ export default function AdminParejasPage() {
         <div>
           <h1 className="text-3xl font-bold text-white">Parejas</h1>
           <p className="text-dark-400 mt-1">
-            Formar y administrar parejas. Cada jugador solo puede pertenecer a una pareja por torneo.
+            Formación y numeración correlativa de parejas por torneo (Pareja 1, Pareja 2, etc.).
           </p>
         </div>
-        <Button onClick={openCreate} disabled={tournaments.length === 0 || players.length < 2}>
-          + Nueva Pareja
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            onClick={openAutoGenerate}
+            disabled={tournaments.length === 0 || players.length < 2}
+            className="flex items-center gap-2"
+          >
+            <Shuffle className="w-4 h-4" />
+            Sortear / Generar Parejas
+          </Button>
+          <Button
+            onClick={openCreate}
+            disabled={tournaments.length === 0 || players.length < 2}
+            className="flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Nueva Pareja
+          </Button>
+        </div>
       </div>
 
       {notification && (
@@ -317,9 +412,20 @@ export default function AdminParejasPage() {
               ? "No hay parejas formadas todavía."
               : "No hay parejas registradas en el torneo seleccionado."}
           </p>
-          <Button onClick={openCreate} disabled={tournaments.length === 0 || players.length < 2}>
-            Formar Nueva Pareja
-          </Button>
+          <div className="flex items-center justify-center gap-3">
+            <Button
+              variant="secondary"
+              onClick={openAutoGenerate}
+              disabled={tournaments.length === 0 || players.length < 2}
+              className="flex items-center gap-2"
+            >
+              <Shuffle className="w-4 h-4" />
+              Generar Automáticas
+            </Button>
+            <Button onClick={openCreate} disabled={tournaments.length === 0 || players.length < 2}>
+              Formar Nueva Pareja
+            </Button>
+          </div>
         </Card>
       ) : (
         <Card className="overflow-hidden">
@@ -327,6 +433,7 @@ export default function AdminParejasPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-dark-900 text-dark-400 uppercase text-xs">
+                  <th className="px-6 py-3 text-left"># Pareja</th>
                   <th className="px-6 py-3 text-left">Jugador 1</th>
                   <th className="px-6 py-3 text-left">Jugador 2</th>
                   <th className="px-6 py-3 text-left">Torneo</th>
@@ -335,48 +442,56 @@ export default function AdminParejasPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-dark-700">
-                {filteredCouples.map((pair) => (
-                  <tr key={pair.id} className="bg-dark-800 hover:bg-dark-700/50 transition-colors">
-                    <td className="px-6 py-4 text-white font-medium">
-                      {getPlayerLabel(pair.player1)}
-                    </td>
-                    <td className="px-6 py-4 text-white font-medium">
-                      {getPlayerLabel(pair.player2)}
-                    </td>
-                    <td className="px-6 py-4 text-dark-300">
-                      {(pair as unknown as { tournament?: { name: string } }).tournament?.name ?? "Torneo"}
-                    </td>
-                    <td className="px-6 py-4 text-dark-300">
-                      {pair.seed ? `Cabeza de serie #${pair.seed}` : "-"}
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => openEdit(pair)}>
-                          Editar
-                        </Button>
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => setDeleting(pair)}
-                          disabled={isPending}
-                        >
-                          Eliminar
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filteredCouples.map((pair) => {
+                  const num = coupleNumberMap.get(pair.id) ?? 1;
+                  return (
+                    <tr key={pair.id} className="bg-dark-800 hover:bg-dark-700/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-black bg-primary-500/15 text-primary-400 border border-primary-500/30 whitespace-nowrap shadow-sm">
+                          Pareja {num}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-white font-medium">
+                        {getPlayerLabel(pair.player1)}
+                      </td>
+                      <td className="px-6 py-4 text-white font-medium">
+                        {getPlayerLabel(pair.player2)}
+                      </td>
+                      <td className="px-6 py-4 text-dark-300">
+                        {(pair as unknown as { tournament?: { name: string } }).tournament?.name ?? "Torneo"}
+                      </td>
+                      <td className="px-6 py-4 text-dark-300">
+                        {pair.seed ? `Cabeza de serie #${pair.seed}` : "-"}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => openEdit(pair)}>
+                            Editar
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => setDeleting(pair)}
+                            disabled={isPending}
+                          >
+                            Eliminar
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </Card>
       )}
 
-      {/* Modal: Formar Pareja */}
+      {/* Modal: Formar Pareja Manual */}
       <Modal
         isOpen={showCreate}
         onClose={() => setShowCreate(false)}
-        title="Formar Pareja"
+        title={`Formar Pareja ${formTorneo ? nextCoupleNumber : ""}`}
       >
         <div className="space-y-4">
           <Select
@@ -386,6 +501,19 @@ export default function AdminParejasPage() {
             value={formTorneo}
             onChange={(e) => handleTorneoChange(e.target.value)}
           />
+
+          {/* Indicador de número correlativo asignado */}
+          {formTorneo && (
+            <div className="p-3 bg-primary-500/10 border border-primary-500/30 rounded-xl flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-primary-400" />
+                <span className="text-xs text-primary-300 font-medium">Numeración asignada:</span>
+              </div>
+              <span className="px-2.5 py-0.5 rounded-md bg-primary-500/20 text-primary-300 font-black text-sm border border-primary-500/40">
+                Pareja {nextCoupleNumber}
+              </span>
+            </div>
+          )}
 
           {/* Información de disponibilidad */}
           <div className="p-3 bg-dark-800/80 border border-dark-700 rounded-lg text-xs space-y-1">
@@ -435,6 +563,15 @@ export default function AdminParejasPage() {
             disabled={player2Options.length === 0}
           />
 
+          {formJugador1 && formJugador2 && (
+            <div className="p-2.5 bg-dark-800/90 border border-dark-700 rounded-lg text-xs text-dark-200">
+              <span className="text-dark-400">Se creará:</span>{" "}
+              <strong className="text-primary-400">Pareja {nextCoupleNumber}:</strong>{" "}
+              {player1Options.find((p) => p.value === formJugador1)?.label} /{" "}
+              {player2Options.find((p) => p.value === formJugador2)?.label}
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="ghost" onClick={() => setShowCreate(false)} disabled={isPending}>
               Cancelar
@@ -449,7 +586,80 @@ export default function AdminParejasPage() {
                 availablePlayersInSelectedTorneo.length < 2
               }
             >
-              {isPending ? "Creando..." : "Crear Pareja"}
+              {isPending ? "Creando..." : `Crear Pareja ${nextCoupleNumber}`}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal: Generación Automática / Sorteo de Parejas */}
+      <Modal
+        isOpen={showAutoGenerate}
+        onClose={() => setShowAutoGenerate(false)}
+        title="Sortear / Generar Parejas Automáticamente"
+      >
+        <div className="space-y-4">
+          <Select
+            label="Torneo"
+            placeholder="Seleccionar torneo"
+            options={tournamentOptions}
+            value={autoTorneo}
+            onChange={(e) => setAutoTorneo(e.target.value)}
+          />
+
+          <div className="p-3 bg-dark-800/80 border border-dark-700 rounded-lg text-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-dark-300">Jugadores libres para emparejar:</span>
+              <span className="font-bold text-primary-400">
+                {availablePlayersForAuto.length} jugadores
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-dark-300">Parejas ya existentes en este torneo:</span>
+              <span className="font-bold text-white">
+                {existingCountInAutoTorneo}
+              </span>
+            </div>
+            <div className="flex items-center justify-between border-t border-dark-700/60 pt-2">
+              <span className="text-dark-300">Parejas a generarse:</span>
+              <span className="font-bold text-emerald-400">
+                {Math.floor(availablePlayersForAuto.length / 2)} parejas
+              </span>
+            </div>
+          </div>
+
+          {availablePlayersForAuto.length >= 2 ? (
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs space-y-1">
+              <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                <Sparkles className="w-4 h-4" />
+                <span>Numeración correlativa asegurada:</span>
+              </div>
+              <p className="text-emerald-300/90 text-[11px]">
+                Las parejas serán sorteadas y numeradas correlativamente desde{" "}
+                <strong>Pareja {existingCountInAutoTorneo + 1}</strong> hasta{" "}
+                <strong>Pareja {existingCountInAutoTorneo + Math.floor(availablePlayersForAuto.length / 2)}</strong>.
+              </p>
+            </div>
+          ) : (
+            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>
+                Se necesitan al menos 2 jugadores libres en este torneo para realizar el sorteo automático de parejas.
+              </span>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button variant="ghost" onClick={() => setShowAutoGenerate(false)} disabled={isPending}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleAutoGenerate}
+              disabled={isPending || !autoTorneo || availablePlayersForAuto.length < 2}
+              className="flex items-center gap-2"
+            >
+              <Shuffle className="w-4 h-4" />
+              {isPending ? "Generando..." : `Sortear y Crear ${Math.floor(availablePlayersForAuto.length / 2)} Parejas`}
             </Button>
           </div>
         </div>
@@ -459,7 +669,7 @@ export default function AdminParejasPage() {
       <Modal
         isOpen={!!editing}
         onClose={() => setEditing(null)}
-        title="Editar Pareja"
+        title={`Editar Pareja ${editing ? (coupleNumberMap.get(editing.id) ?? "") : ""}`}
       >
         <div className="space-y-4">
           <Select
@@ -469,6 +679,15 @@ export default function AdminParejasPage() {
             value={formTorneo}
             onChange={(e) => handleTorneoChange(e.target.value)}
           />
+
+          {editing && (
+            <div className="p-3 bg-primary-500/10 border border-primary-500/30 rounded-xl flex items-center justify-between">
+              <span className="text-xs text-primary-300 font-medium">Identificador:</span>
+              <span className="px-2.5 py-0.5 rounded-md bg-primary-500/20 text-primary-300 font-black text-sm border border-primary-500/40">
+                Pareja {coupleNumberMap.get(editing.id) ?? "-"}
+              </span>
+            </div>
+          )}
 
           <div className="p-3 bg-dark-800/80 border border-dark-700 rounded-lg text-xs space-y-1">
             <div className="flex items-center justify-between">
@@ -520,9 +739,12 @@ export default function AdminParejasPage() {
         loading={isPending}
         title="Eliminar Pareja"
         message={`¿Estás seguro de eliminar la pareja ${
-          deleting ? `${getPlayerLabel(deleting.player1)} / ${getPlayerLabel(deleting.player2)}` : ""
+          deleting
+            ? `Pareja ${coupleNumberMap.get(deleting.id) ?? ""}: ${getPlayerLabel(deleting.player1)} / ${getPlayerLabel(deleting.player2)}`
+            : ""
         }? Al eliminarla, los jugadores volverán a estar disponibles para integrar nuevas parejas.`}
       />
     </div>
   );
 }
+

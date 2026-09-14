@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
 import { calculateRoundRobinStandings } from "@/lib/tournament/standings";
 import { calculateOptimalZones } from "@/lib/tournament/zones";
+import { getCoupleNumberMap, getCoupleLabelWithNumber } from "@/lib/tournament/couples";
 import ZoneCard from "@/components/tournament/ZoneCard";
 import {
   AlertCircle,
@@ -136,11 +137,15 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     loadData();
   }, [loadData]);
 
+  // Mapa de numeración correlativa por torneo (Pareja 1, Pareja 2, etc.)
+  const coupleNumberMap = useMemo(() => {
+    return getCoupleNumberMap(couples);
+  }, [couples]);
+
   const getCoupleLabel = (c?: Couple | null) => {
     if (!c) return "Por definir";
-    const p1 = c.player1 ? `${c.player1.first_name} ${c.player1.last_name}` : "Jugador 1";
-    const p2 = c.player2 ? `${c.player2.first_name} ${c.player2.last_name}` : "Jugador 2";
-    return `${p1} / ${p2}`;
+    const num = coupleNumberMap.get(c.id);
+    return getCoupleLabelWithNumber(c, num);
   };
 
   // Configuración interactiva de Zonas para el sorteo
@@ -433,6 +438,12 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
               </div>
 
               <div className="flex items-center gap-3">
+                <Link href={`/admin/parejas`}>
+                  <Button variant="secondary" size="sm" className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-primary-400" />
+                    Parejas ({couples.length})
+                  </Button>
+                </Link>
                 <Link href={`/torneo/${tournament.id}`} target="_blank">
                   <Button variant="secondary" size="sm" className="flex items-center gap-2">
                     <ExternalLink className="w-4 h-4" />
