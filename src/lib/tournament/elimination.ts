@@ -77,6 +77,123 @@ export function getStageName(stage: MatchStage): string {
 }
 
 /**
+ * Normaliza las etiquetas de etapas de partido (en inglés o español)
+ * a las constantes de tipo canónicas de MatchStage.
+ */
+export function normalizeStage(stage: MatchStage | string): MatchStage {
+  switch (stage) {
+    case "octavos":
+    case "round_of_16":
+      return "round_of_16";
+    case "cuartos":
+    case "quarter":
+      return "quarter";
+    case "semifinal":
+    case "semi":
+      return "semi";
+    case "final":
+      return "final";
+    default:
+      return stage as MatchStage;
+  }
+}
+
+/**
+ * Obtiene la etapa siguiente en el cuadro de eliminación directa.
+ * Retorna null si la etapa actual es la Final o una fase no eliminatoria.
+ */
+export function getNextStage(stage: MatchStage | string): MatchStage | null {
+  const norm = normalizeStage(stage);
+  switch (norm) {
+    case "round_of_16":
+      return "quarter";
+    case "quarter":
+      return "semi";
+    case "semi":
+      return "final";
+    default:
+      return null;
+  }
+}
+
+export interface NextPlayoffSlot {
+  targetMatchId: string;
+  slotField: "couple1_id" | "couple2_id";
+  targetStage: MatchStage;
+  targetMatchIndex: number;
+}
+
+/**
+ * Determina a qué partido y a qué slot (couple1_id o couple2_id) de la siguiente ronda
+ * debe avanzar la pareja ganadora de un partido de playoffs.
+ * 
+ * Regla Canónica de Cuadro Eliminatorio:
+ * - Ronda N (k partidos, índices 0 a k-1) alimenta a Ronda N+1 (k/2 partidos).
+ * - El ganador del partido i avanza al partido Math.floor(i / 2) de la siguiente ronda.
+ * - Si i es par (i % 2 === 0), ingresa como couple1_id.
+ * - Si i es impar (i % 2 === 1), ingresa como couple2_id.
+ */
+export function findNextPlayoffMatchSlot<
+  T extends {
+    id: string;
+    stage: MatchStage | string;
+    match_number?: number | null;
+    created_at?: string;
+  }
+>(
+  tournamentMatches: T[],
+  currentMatch: { id: string; stage: MatchStage | string }
+): NextPlayoffSlot | null {
+  const currentNormStage = normalizeStage(currentMatch.stage);
+  const nextStage = getNextStage(currentNormStage);
+  if (!nextStage) return null;
+
+  // Filtrar y ordenar partidos de la etapa actual
+  const currentStageMatches = tournamentMatches
+    .filter((m) => normalizeStage(m.stage) === currentNormStage)
+    .sort((a, b) => {
+      if (a.match_number != null && b.match_number != null && a.match_number !== b.match_number) {
+        return a.match_number - b.match_number;
+      }
+      if (a.created_at && b.created_at && a.created_at !== b.created_at) {
+        return a.created_at.localeCompare(b.created_at);
+      }
+      return (a.id || "").localeCompare(b.id || "");
+    });
+
+  const currentIndex = currentStageMatches.findIndex((m) => m.id === currentMatch.id);
+  if (currentIndex === -1) return null;
+
+  // Filtrar y ordenar partidos de la etapa siguiente
+  const nextStageMatches = tournamentMatches
+    .filter((m) => normalizeStage(m.stage) === nextStage)
+    .sort((a, b) => {
+      if (a.match_number != null && b.match_number != null && a.match_number !== b.match_number) {
+        return a.match_number - b.match_number;
+      }
+      if (a.created_at && b.created_at && a.created_at !== b.created_at) {
+        return a.created_at.localeCompare(b.created_at);
+      }
+      return (a.id || "").localeCompare(b.id || "");
+    });
+
+  if (nextStageMatches.length === 0) return null;
+
+  const targetIndex = Math.floor(currentIndex / 2);
+  if (targetIndex >= nextStageMatches.length) return null;
+
+  const targetMatch = nextStageMatches[targetIndex];
+  const slotField: "couple1_id" | "couple2_id" = currentIndex % 2 === 0 ? "couple1_id" : "couple2_id";
+
+  return {
+    targetMatchId: targetMatch.id,
+    slotField,
+    targetStage: nextStage,
+    targetMatchIndex: targetIndex,
+  };
+}
+
+/**
  * Cruce inteligente de Playoffs SPT:
  * - Clasificados ordenados por:
  *   1) Posición en zona (1°s primero, luego 2°s, luego 3°s).

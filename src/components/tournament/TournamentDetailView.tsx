@@ -171,7 +171,30 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
   });
 
   // Build bracket structure for playoffs tab
-  const playoffMatches = matches.filter((m) => m.stage !== "zone");
+  const STAGE_ORDER: Record<string, number> = {
+    round_of_16: 1,
+    octavos: 1,
+    quarter: 2,
+    cuartos: 2,
+    semi: 3,
+    semifinal: 3,
+    final: 4,
+    third_place: 5,
+    tercer_puesto: 5,
+  };
+
+  const playoffMatches = matches
+    .filter((m) => m.stage !== "zone")
+    .sort((a, b) => {
+      if (a.match_number != null && b.match_number != null && a.match_number !== b.match_number) {
+        return a.match_number - b.match_number;
+      }
+      if (a.created_at && b.created_at && a.created_at !== b.created_at) {
+        return a.created_at.localeCompare(b.created_at);
+      }
+      return a.id.localeCompare(b.id);
+    });
+
   const playoffRoundsMap: Record<string, { pair1: string; pair2: string; winner?: string; score?: string }[]> = {};
 
   playoffMatches.forEach((m) => {
@@ -186,10 +209,12 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
     });
   });
 
-  const bracketRounds = Object.entries(playoffRoundsMap).map(([round, roundMatches]) => ({
-    round,
-    matches: roundMatches,
-  }));
+  const bracketRounds = Object.entries(playoffRoundsMap)
+    .sort(([roundA], [roundB]) => (STAGE_ORDER[roundA] ?? 99) - (STAGE_ORDER[roundB] ?? 99))
+    .map(([round, roundMatches]) => ({
+      round,
+      matches: roundMatches,
+    }));
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

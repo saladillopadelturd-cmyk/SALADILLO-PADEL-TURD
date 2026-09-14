@@ -14,6 +14,7 @@ import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
 import { calculateRoundRobinStandings } from "@/lib/tournament/standings";
 import { calculateOptimalZones } from "@/lib/tournament/zones";
 import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel } from "@/lib/tournament/couples";
+import { findNextPlayoffMatchSlot } from "@/lib/tournament/elimination";
 import ZoneCard from "@/components/tournament/ZoneCard";
 import {
   AlertCircle,
@@ -144,10 +145,17 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     return getCoupleNumberMap(couples);
   }, [couples]);
 
-  const getCoupleLabel = (c?: Couple | null) => {
-    if (!c) return "Por definir";
-    const num = coupleNumberMap.get(c.id);
-    return getCoupleLabelWithNumber(c, num);
+  const getCoupleLabel = (c?: Couple | null, coupleId?: string | null) => {
+    const coupleObj = c || (coupleId ? couples.find((item) => item.id === coupleId) : null);
+    if (!coupleObj) return "Por definir";
+    const num = coupleNumberMap.get(coupleObj.id);
+    return getCoupleLabelWithNumber(coupleObj, num);
+  };
+
+  const getCouplePlayersLabel = (c?: Couple | null, coupleId?: string | null) => {
+    const coupleObj = c || (coupleId ? couples.find((item) => item.id === coupleId) : null);
+    if (!coupleObj) return "Por definir";
+    return getCouplePlayersShortLabel(coupleObj);
   };
 
   // Configuración interactiva de Zonas para el sorteo
@@ -344,9 +352,52 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
 
         if (error) throw error;
 
+        // En fase de eliminación directa (Playoffs), avanzar automáticamente a la pareja ganadora al siguiente cruce
+        let advancedToNextStage = false;
+        if (scoringMatch.stage !== "zone") {
+          const nextSlot = findNextPlayoffMatchSlot(matches, scoringMatch);
+          if (nextSlot) {
+            const targetMatch = matches.find((m) => m.id === nextSlot.targetMatchId);
+            const updatePayload: Record<string, unknown> = {
+              [nextSlot.slotField]: formWinnerCoupleId,
+              updated_at: new Date().toISOString(),
+            };
+
+            // Si se corrigió un ganador anterior y ya figuraba como ganador de la ronda siguiente, resetear ese resultado dependiente
+            if (
+              scoringMatch.winner_couple_id &&
+              scoringMatch.winner_couple_id !== formWinnerCoupleId &&
+              targetMatch &&
+              targetMatch.winner_couple_id === scoringMatch.winner_couple_id
+            ) {
+              updatePayload.winner_couple_id = null;
+              updatePayload.status = "pending";
+              updatePayload.score_set1 = null;
+              updatePayload.score_set2 = null;
+              updatePayload.score_super_tb = null;
+            }
+
+            const { error: nextError } = await supabase
+              .from("matches")
+              .update(updatePayload)
+              .eq("id", nextSlot.targetMatchId);
+
+            if (nextError) {
+              console.error("Error al avanzar pareja a la siguiente ronda:", nextError);
+            } else {
+              advancedToNextStage = true;
+            }
+          }
+        }
+
         await loadData();
         setScoringMatch(null);
-        setNotification({ type: "success", text: "Resultado guardado y posiciones actualizadas con éxito." });
+        setNotification({
+          type: "success",
+          text: advancedToNextStage
+            ? "Resultado guardado y pareja ganadora clasificada automáticamente a la siguiente fase del cuadro."
+            : "Resultado guardado y posiciones actualizadas con éxito.",
+        });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Error al guardar marcador";
         setNotification({ type: "error", text: msg });
@@ -837,11 +888,11 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                               </div>
                               <div className="text-sm font-semibold text-white">
                                 <span className={isP1Winner ? "text-emerald-400 font-bold" : "text-white"}>
-                                  {getCouplePlayersShortLabel(m.couple1)}
+                                  {getCouplePlayersLabel(m.couple1, m.couple1_id)}
                                 </span>
                                 <span className="text-dark-500 mx-2">vs</span>
                                 <span className={isP2Winner ? "text-emerald-400 font-bold" : "text-white"}>
-                                  {getCouplePlayersShortLabel(m.couple2)}
+                                  {getCouplePlayersLabel(m.couple2, m.couple2_id)}
                                 </span>
                               </div>
                               <div className="text-xs font-mono font-bold text-sky-400">
@@ -872,9 +923,9 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                               <span className="text-dark-400 text-xs">Partido #{m.match_number ?? "-"}</span>
                             </div>
                             <div className="text-sm font-semibold text-white">
-                              <span>{getCoupleLabel(m.couple1)}</span>
+                              <span>{getCoupleLabel(m.couple1, m.couple1_id)}</span>
                               <span className="text-primary-400 mx-2">vs</span>
-                              <span>{getCoupleLabel(m.couple2)}</span>
+                              <span>{getCoupleLabel(m.couple2, m.couple2_id)}</span>
                             </div>
                             <div className="flex items-center gap-3 text-xs text-dark-400">
                               <span className="flex items-center gap-1">
@@ -957,11 +1008,11 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                             </div>
                             <div className="text-sm font-semibold text-white">
                               <span className={m.winner_couple_id === m.couple1_id ? "text-emerald-400 font-bold" : ""}>
-                                {getCoupleLabel(m.couple1)}
+                                {getCoupleLabel(m.couple1, m.couple1_id)}
                               </span>
                               <span className="text-dark-500 mx-2">vs</span>
                               <span className={m.winner_couple_id === m.couple2_id ? "text-emerald-400 font-bold" : ""}>
-                                {getCoupleLabel(m.couple2)}
+                                {getCoupleLabel(m.couple2, m.couple2_id)}
                               </span>
                             </div>
                             {isCompleted && (
@@ -1049,9 +1100,9 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
             <div className="space-y-4">
               <div className="p-3 bg-dark-900 rounded-lg border border-dark-700 text-sm">
                 <div className="flex justify-between font-bold text-white mb-1">
-                  <span>{getCoupleLabel(scoringMatch?.couple1)}</span>
+                  <span>{getCoupleLabel(scoringMatch?.couple1, scoringMatch?.couple1_id)}</span>
                   <span className="text-dark-400">vs</span>
-                  <span>{getCoupleLabel(scoringMatch?.couple2)}</span>
+                  <span>{getCoupleLabel(scoringMatch?.couple2, scoringMatch?.couple2_id)}</span>
                 </div>
                 <p className="text-dark-400 text-xs">
                   Modalidad: {GAME_MODE_LABELS[tournament.game_mode] ?? tournament.game_mode}
@@ -1112,12 +1163,12 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                   <option value="">Seleccionar ganador</option>
                   {scoringMatch?.couple1_id && (
                     <option value={scoringMatch.couple1_id}>
-                      {getCoupleLabel(scoringMatch.couple1)}
+                      {getCoupleLabel(scoringMatch.couple1, scoringMatch.couple1_id)}
                     </option>
                   )}
                   {scoringMatch?.couple2_id && (
                     <option value={scoringMatch.couple2_id}>
-                      {getCoupleLabel(scoringMatch.couple2)}
+                      {getCoupleLabel(scoringMatch.couple2, scoringMatch.couple2_id)}
                     </option>
                   )}
                 </select>

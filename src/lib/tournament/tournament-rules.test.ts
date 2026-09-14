@@ -30,6 +30,9 @@ import {
   generateSeededPlayoffBracket,
   generateRoundRobinMatches,
   getNextPowerOf2,
+  findNextPlayoffMatchSlot,
+  getNextStage,
+  normalizeStage,
   type QualifiedPair,
 } from "./elimination";
 
@@ -768,6 +771,183 @@ export function runTournamentBusinessLogicTests(): TestResult {
   const customZones19 = calculateOptimalZones(19, 4, 5);
   assert(customZones19.isEqual === false, "19 parejas en 5 zonas no es igual");
   assert(customZones19.missingCouples === 1 && customZones19.missingPlayers === 2, "19 parejas en 5 zonas le faltan 2 jugadores");
+
+  // ==========================================================================
+  // 8. AVANCE AUTOMÁTICO DE GANADORES EN CUADRO DE PLAYOFFS
+  // ==========================================================================
+  // Test de normalización y secuencia de etapas
+  assert(normalizeStage("round_of_16") === "round_of_16", "Normaliza round_of_16");
+  assert(normalizeStage("octavos") === "round_of_16", "Normaliza octavos");
+  assert(normalizeStage("cuartos") === "quarter", "Normaliza cuartos");
+  assert(normalizeStage("semifinal") === "semi", "Normaliza semifinal");
+  assert(getNextStage("round_of_16") === "quarter", "Siguiente etapa a round_of_16 es quarter");
+  assert(getNextStage("octavos") === "quarter", "Siguiente etapa a octavos es quarter");
+  assert(getNextStage("quarter") === "semi", "Siguiente etapa a quarter es semi");
+  assert(getNextStage("cuartos") === "semi", "Siguiente etapa a cuartos es semi");
+  assert(getNextStage("semi") === "final", "Siguiente etapa a semi es final");
+  assert(getNextStage("semifinal") === "final", "Siguiente etapa a semifinal es final");
+  assert(getNextStage("final") === null, "Siguiente etapa a final es null");
+  assert(getNextStage("zone") === null, "Siguiente etapa a zone es null");
+
+  // Simulación de cuadro de 16 parejas (Octavos -> Cuartos -> Semis -> Final)
+  const r16Matches: Match[] = Array.from({ length: 8 }, (_, i) => ({
+    id: `m_oct_${i}`,
+    tournament_id: "t_playoff",
+    stage: "round_of_16",
+    match_number: 100 + i,
+    status: "pending" as const,
+    created_at: `2026-09-14T10:0${i}:00Z`,
+  }));
+
+  const qfMatches: Match[] = Array.from({ length: 4 }, (_, i) => ({
+    id: `m_qf_${i}`,
+    tournament_id: "t_playoff",
+    stage: "quarter",
+    match_number: 108 + i,
+    status: "pending" as const,
+    created_at: `2026-09-14T11:0${i}:00Z`,
+  }));
+
+  const sfMatches: Match[] = Array.from({ length: 2 }, (_, i) => ({
+    id: `m_sf_${i}`,
+    tournament_id: "t_playoff",
+    stage: "semi",
+    match_number: 112 + i,
+    status: "pending" as const,
+    created_at: `2026-09-14T12:0${i}:00Z`,
+  }));
+
+  const fMatch: Match = {
+    id: "m_final_0",
+    tournament_id: "t_playoff",
+    stage: "final",
+    match_number: 114,
+    status: "pending" as const,
+    created_at: "2026-09-14T13:00:00Z",
+  };
+
+  const allSimMatches = [...r16Matches, ...qfMatches, ...sfMatches, fMatch];
+
+  // 1. De Octavos a Cuartos
+  // Partido 0 de Octavos -> Cuartos 0 (couple1_id)
+  const slotOct0 = findNextPlayoffMatchSlot(allSimMatches, r16Matches[0]);
+  assert(slotOct0 !== null, "Octavos 0 encuentra slot en Cuartos");
+  assert(slotOct0?.targetMatchId === "m_qf_0", "Octavos 0 avanza a Cuartos 0");
+  assert(slotOct0?.slotField === "couple1_id", "Octavos 0 avanza a couple1_id (slot par)");
+
+  // Partido 1 de Octavos -> Cuartos 0 (couple2_id)
+  const slotOct1 = findNextPlayoffMatchSlot(allSimMatches, r16Matches[1]);
+  assert(slotOct1?.targetMatchId === "m_qf_0", "Octavos 1 avanza a Cuartos 0");
+  assert(slotOct1?.slotField === "couple2_id", "Octavos 1 avanza a couple2_id (slot impar)");
+
+  // Partido 2 de Octavos -> Cuartos 1 (couple1_id)
+  const slotOct2 = findNextPlayoffMatchSlot(allSimMatches, r16Matches[2]);
+  assert(slotOct2?.targetMatchId === "m_qf_1", "Octavos 2 avanza a Cuartos 1");
+  assert(slotOct2?.slotField === "couple1_id", "Octavos 2 avanza a couple1_id");
+
+  // Partido 3 de Octavos -> Cuartos 1 (couple2_id)
+  const slotOct3 = findNextPlayoffMatchSlot(allSimMatches, r16Matches[3]);
+  assert(slotOct3?.targetMatchId === "m_qf_1", "Octavos 3 avanza a Cuartos 1");
+  assert(slotOct3?.slotField === "couple2_id", "Octavos 3 avanza a couple2_id");
+
+  // Partido 6 de Octavos -> Cuartos 3 (couple1_id)
+  const slotOct6 = findNextPlayoffMatchSlot(allSimMatches, r16Matches[6]);
+  assert(slotOct6?.targetMatchId === "m_qf_3", "Octavos 6 avanza a Cuartos 3");
+  assert(slotOct6?.slotField === "couple1_id", "Octavos 6 avanza a couple1_id");
+
+  // Partido 7 de Octavos -> Cuartos 3 (couple2_id)
+  const slotOct7 = findNextPlayoffMatchSlot(allSimMatches, r16Matches[7]);
+  assert(slotOct7?.targetMatchId === "m_qf_3", "Octavos 7 avanza a Cuartos 3");
+  assert(slotOct7?.slotField === "couple2_id", "Octavos 7 avanza a couple2_id");
+
+  // 2. De Cuartos a Semifinales
+  const slotQf0 = findNextPlayoffMatchSlot(allSimMatches, qfMatches[0]);
+  assert(slotQf0?.targetMatchId === "m_sf_0", "Cuartos 0 avanza a Semifinal 0");
+  assert(slotQf0?.slotField === "couple1_id", "Cuartos 0 avanza a couple1_id");
+
+  const slotQf1 = findNextPlayoffMatchSlot(allSimMatches, qfMatches[1]);
+  assert(slotQf1?.targetMatchId === "m_sf_0", "Cuartos 1 avanza a Semifinal 0");
+  assert(slotQf1?.slotField === "couple2_id", "Cuartos 1 avanza a couple2_id");
+
+  const slotQf2 = findNextPlayoffMatchSlot(allSimMatches, qfMatches[2]);
+  assert(slotQf2?.targetMatchId === "m_sf_1", "Cuartos 2 avanza a Semifinal 1");
+  assert(slotQf2?.slotField === "couple1_id", "Cuartos 2 avanza a couple1_id");
+
+  const slotQf3 = findNextPlayoffMatchSlot(allSimMatches, qfMatches[3]);
+  assert(slotQf3?.targetMatchId === "m_sf_1", "Cuartos 3 avanza a Semifinal 1");
+  assert(slotQf3?.slotField === "couple2_id", "Cuartos 3 avanza a couple2_id");
+
+  // 3. De Semifinales a Gran Final
+  const slotSf0 = findNextPlayoffMatchSlot(allSimMatches, sfMatches[0]);
+  assert(slotSf0?.targetMatchId === "m_final_0", "Semifinal 0 avanza a la Gran Final");
+  assert(slotSf0?.slotField === "couple1_id", "Semifinal 0 avanza a couple1_id");
+
+  const slotSf1 = findNextPlayoffMatchSlot(allSimMatches, sfMatches[1]);
+  assert(slotSf1?.targetMatchId === "m_final_0", "Semifinal 1 avanza a la Gran Final");
+  assert(slotSf1?.slotField === "couple2_id", "Semifinal 1 avanza a couple2_id");
+
+  // 4. Gran Final no tiene etapa siguiente
+  const slotFinal = findNextPlayoffMatchSlot(allSimMatches, fMatch);
+  assert(slotFinal === null, "La Gran Final no tiene partido siguiente (termina el torneo)");
+
+  // 5. Partido de Zona no tiene avance directo mediante este helper
+  const zoneMatch: Match = {
+    id: "z_match",
+    tournament_id: "t_playoff",
+    stage: "zone",
+    status: "completed",
+    created_at: "",
+  };
+  const slotZone = findNextPlayoffMatchSlot(allSimMatches, zoneMatch);
+  assert(slotZone === null, "Partidos de zona no usan avance de playoff directo");
+
+  // 6. Simulación dinámica de avance paso a paso:
+  // Crear un estado mutable de partidos de playoffs y simular las victorias
+  const livePlayoffs: Record<string, { couple1_id?: string | null; couple2_id?: string | null; winner_couple_id?: string | null; status: string }> = {};
+  allSimMatches.forEach((m) => {
+    livePlayoffs[m.id] = { couple1_id: null, couple2_id: null, winner_couple_id: null, status: "pending" };
+  });
+
+  // Parejas en Cuartos (4 cruces):
+  // Q0: Pareja_A vs Pareja_B -> Gana Pareja_A
+  // Q1: Pareja_C vs Pareja_D -> Gana Pareja_C
+  // Q2: Pareja_E vs Pareja_F -> Gana Pareja_F
+  // Q3: Pareja_G vs Pareja_H -> Gana Pareja_G
+
+  const playMatch = (match: Match, winnerId: string) => {
+    const slot = findNextPlayoffMatchSlot(allSimMatches, match);
+    if (slot) {
+      if (slot.slotField === "couple1_id") {
+        livePlayoffs[slot.targetMatchId].couple1_id = winnerId;
+      } else {
+        livePlayoffs[slot.targetMatchId].couple2_id = winnerId;
+      }
+    }
+  };
+
+  playMatch(qfMatches[0], "Pareja_A");
+  playMatch(qfMatches[1], "Pareja_C");
+  playMatch(qfMatches[2], "Pareja_F");
+  playMatch(qfMatches[3], "Pareja_G");
+
+  // Verificar que la Semifinal 0 tiene a Pareja_A vs Pareja_C
+  assert(livePlayoffs["m_sf_0"].couple1_id === "Pareja_A", "Semis 0 tiene como couple1 a Pareja_A");
+  assert(livePlayoffs["m_sf_0"].couple2_id === "Pareja_C", "Semis 0 tiene como couple2 a Pareja_C");
+
+  // Verificar que la Semifinal 1 tiene a Pareja_F vs Pareja_G
+  assert(livePlayoffs["m_sf_1"].couple1_id === "Pareja_F", "Semis 1 tiene como couple1 a Pareja_F");
+  assert(livePlayoffs["m_sf_1"].couple2_id === "Pareja_G", "Semis 1 tiene como couple2 a Pareja_G");
+
+  // Jugar Semifinales:
+  // Semis 0: Pareja_A vs Pareja_C -> Gana Pareja_A
+  // Semis 1: Pareja_F vs Pareja_G -> Gana Pareja_G
+  playMatch(sfMatches[0], "Pareja_A");
+  playMatch(sfMatches[1], "Pareja_G");
+
+  // Verificar que la Gran Final tiene a Pareja_A vs Pareja_G
+  assert(livePlayoffs["m_final_0"].couple1_id === "Pareja_A", "Gran Final tiene a Pareja_A como couple1");
+  assert(livePlayoffs["m_final_0"].couple2_id === "Pareja_G", "Gran Final tiene a Pareja_G como couple2");
+
 
   return {
     passed,
