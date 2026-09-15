@@ -1,8 +1,15 @@
 /**
  * SPT (Saladillo Padel Tour) - Canvas Flyer Compositor
  * Renderiza composiciones vectoriales en formato HORIZONTAL (1920x1080 px - 16:9)
- * Diseñado específicamente para publicaciones, pantallas y banners oficiales de pádel.
+ * Soporta múltiples variaciones de estilo y paletas dinámicas para regeneración visual única.
  */
+
+export type FlyerTheme =
+  | "neon_emerald"
+  | "gold_luxury"
+  | "cyan_glacier"
+  | "fire_sunset"
+  | "cyber_violet";
 
 export interface FlyerRenderData {
   title: string;
@@ -11,7 +18,170 @@ export interface FlyerRenderData {
   location: string;
   prizes: string;
   sponsors: string[];
+  theme?: FlyerTheme;
 }
+
+interface ThemeConfig {
+  name: string;
+  badgeBg: string;
+  badgeBorder: string;
+  badgeText: string;
+  brandPrimaryText: string;
+  brandGradient: [string, string, string];
+  brandGlow: string;
+  catBadgeBg: string;
+  catBadgeBorder: string;
+  catBadgeText: string;
+  lineGradient: [string, string, string];
+  cardBg: string;
+  cardBorder: string;
+  cardBorderGlow: string;
+  cardHeadGradient: [string, string];
+  cardHeadText: string;
+  prizeGradient: [string, string];
+  ctaBg: string;
+  ctaBorder: string;
+  ctaText: string;
+  ctaLabel: string;
+  footerWebColor: string;
+  footerGlow: string;
+}
+
+export const THEMES: Record<FlyerTheme, ThemeConfig> = {
+  neon_emerald: {
+    name: "Neón Esmeralda (SPT Oficial)",
+    badgeBg: "rgba(16, 185, 129, 0.15)",
+    badgeBorder: "rgba(16, 185, 129, 0.6)",
+    badgeText: "#34d399",
+    brandPrimaryText: "#ffffff",
+    brandGradient: ["#38bdf8", "#00e676", "#a3e635"],
+    brandGlow: "rgba(0, 230, 118, 0.8)",
+    catBadgeBg: "rgba(30, 41, 59, 0.90)",
+    catBadgeBorder: "#38bdf8",
+    catBadgeText: "#38bdf8",
+    lineGradient: ["rgba(56, 189, 248, 1)", "rgba(0, 230, 118, 1)", "rgba(163, 230, 53, 0)"],
+    cardBg: "rgba(15, 23, 42, 0.86)",
+    cardBorder: "rgba(0, 230, 118, 0.55)",
+    cardBorderGlow: "rgba(0, 230, 118, 0.35)",
+    cardHeadGradient: ["rgba(0, 230, 118, 0.18)", "rgba(56, 189, 248, 0.08)"],
+    cardHeadText: "#00e676",
+    prizeGradient: ["#fbbf24", "#a3e635"],
+    ctaBg: "rgba(0, 230, 118, 0.12)",
+    ctaBorder: "rgba(0, 230, 118, 0.5)",
+    ctaText: "#34d399",
+    ctaLabel: "INSCRIPCIÓN ABIERTA  •  CUPOS LIMITADOS",
+    footerWebColor: "#00e676",
+    footerGlow: "rgba(0, 230, 118, 0.6)",
+  },
+  gold_luxury: {
+    name: "Oro Master Final",
+    badgeBg: "rgba(251, 191, 36, 0.15)",
+    badgeBorder: "rgba(251, 191, 36, 0.6)",
+    badgeText: "#fbbf24",
+    brandPrimaryText: "#ffffff",
+    brandGradient: ["#fef08a", "#f59e0b", "#d97706"],
+    brandGlow: "rgba(245, 158, 11, 0.8)",
+    catBadgeBg: "rgba(28, 25, 18, 0.92)",
+    catBadgeBorder: "#fbbf24",
+    catBadgeText: "#fef08a",
+    lineGradient: ["rgba(251, 191, 36, 1)", "rgba(245, 158, 11, 1)", "rgba(217, 119, 6, 0)"],
+    cardBg: "rgba(20, 17, 12, 0.88)",
+    cardBorder: "rgba(251, 191, 36, 0.65)",
+    cardBorderGlow: "rgba(251, 191, 36, 0.40)",
+    cardHeadGradient: ["rgba(251, 191, 36, 0.22)", "rgba(245, 158, 11, 0.10)"],
+    cardHeadText: "#fbbf24",
+    prizeGradient: ["#fef08a", "#f59e0b"],
+    ctaBg: "rgba(251, 191, 36, 0.15)",
+    ctaBorder: "rgba(251, 191, 36, 0.6)",
+    ctaText: "#fef08a",
+    ctaLabel: "GRAN FINAL DEL CIRCUITO  •  PUNTOS DOBLES",
+    footerWebColor: "#fbbf24",
+    footerGlow: "rgba(251, 191, 36, 0.6)",
+  },
+  cyan_glacier: {
+    name: "Azul Glaciar Pro",
+    badgeBg: "rgba(6, 182, 212, 0.15)",
+    badgeBorder: "rgba(6, 182, 212, 0.6)",
+    badgeText: "#22d3ee",
+    brandPrimaryText: "#ffffff",
+    brandGradient: ["#67e8f9", "#38bdf8", "#3b82f6"],
+    brandGlow: "rgba(56, 189, 248, 0.85)",
+    catBadgeBg: "rgba(15, 23, 42, 0.90)",
+    catBadgeBorder: "#38bdf8",
+    catBadgeText: "#38bdf8",
+    lineGradient: ["rgba(34, 211, 238, 1)", "rgba(59, 130, 246, 1)", "rgba(99, 102, 241, 0)"],
+    cardBg: "rgba(10, 18, 32, 0.88)",
+    cardBorder: "rgba(56, 189, 248, 0.60)",
+    cardBorderGlow: "rgba(56, 189, 248, 0.35)",
+    cardHeadGradient: ["rgba(56, 189, 248, 0.22)", "rgba(59, 130, 246, 0.10)"],
+    cardHeadText: "#38bdf8",
+    prizeGradient: ["#38bdf8", "#a3e635"],
+    ctaBg: "rgba(56, 189, 248, 0.12)",
+    ctaBorder: "rgba(56, 189, 248, 0.5)",
+    ctaText: "#38bdf8",
+    ctaLabel: "TORNEO OFICIAL  •  SEGUIMIENTO EN VIVO",
+    footerWebColor: "#38bdf8",
+    footerGlow: "rgba(56, 189, 248, 0.6)",
+  },
+  fire_sunset: {
+    name: "Fuego & Pasión",
+    badgeBg: "rgba(239, 68, 68, 0.15)",
+    badgeBorder: "rgba(239, 68, 68, 0.6)",
+    badgeText: "#f87171",
+    brandPrimaryText: "#ffffff",
+    brandGradient: ["#fde047", "#f97316", "#ef4444"],
+    brandGlow: "rgba(249, 115, 22, 0.85)",
+    catBadgeBg: "rgba(30, 15, 15, 0.92)",
+    catBadgeBorder: "#f97316",
+    catBadgeText: "#fdba74",
+    lineGradient: ["rgba(249, 115, 22, 1)", "rgba(239, 68, 68, 1)", "rgba(220, 38, 38, 0)"],
+    cardBg: "rgba(24, 14, 14, 0.90)",
+    cardBorder: "rgba(249, 115, 22, 0.65)",
+    cardBorderGlow: "rgba(249, 115, 22, 0.35)",
+    cardHeadGradient: ["rgba(249, 115, 22, 0.25)", "rgba(239, 68, 68, 0.10)"],
+    cardHeadText: "#fb923c",
+    prizeGradient: ["#fef08a", "#f97316"],
+    ctaBg: "rgba(239, 68, 68, 0.15)",
+    ctaBorder: "rgba(249, 115, 22, 0.5)",
+    ctaText: "#fdba74",
+    ctaLabel: "BATALLA DE TITANES  •  PUNTO DE ORO",
+    footerWebColor: "#fb923c",
+    footerGlow: "rgba(249, 115, 22, 0.6)",
+  },
+  cyber_violet: {
+    name: "Cyber Violet Night",
+    badgeBg: "rgba(168, 85, 247, 0.15)",
+    badgeBorder: "rgba(168, 85, 247, 0.6)",
+    badgeText: "#c084fc",
+    brandPrimaryText: "#ffffff",
+    brandGradient: ["#c084fc", "#a855f7", "#ec4899"],
+    brandGlow: "rgba(168, 85, 247, 0.85)",
+    catBadgeBg: "rgba(24, 16, 36, 0.92)",
+    catBadgeBorder: "#c084fc",
+    catBadgeText: "#e9d5ff",
+    lineGradient: ["rgba(192, 132, 252, 1)", "rgba(236, 72, 153, 1)", "rgba(168, 85, 247, 0)"],
+    cardBg: "rgba(19, 13, 30, 0.90)",
+    cardBorder: "rgba(168, 85, 247, 0.65)",
+    cardBorderGlow: "rgba(168, 85, 247, 0.35)",
+    cardHeadGradient: ["rgba(168, 85, 247, 0.25)", "rgba(236, 72, 153, 0.10)"],
+    cardHeadText: "#c084fc",
+    prizeGradient: ["#f472b6", "#fde047"],
+    ctaBg: "rgba(168, 85, 247, 0.15)",
+    ctaBorder: "rgba(168, 85, 247, 0.5)",
+    ctaText: "#e9d5ff",
+    ctaLabel: "EDICIÓN ESPECIAL NOCTURNA  •  SPT 2026",
+    footerWebColor: "#c084fc",
+    footerGlow: "rgba(168, 85, 247, 0.6)",
+  },
+};
+
+export const ALL_THEMES: FlyerTheme[] = [
+  "neon_emerald",
+  "gold_luxury",
+  "cyan_glacier",
+  "fire_sunset",
+  "cyber_violet",
+];
 
 /**
  * Dibuja un rectángulo con esquinas redondeadas
@@ -82,7 +252,7 @@ function wrapText(
 }
 
 /**
- * Renderiza el flyer horizontal completo (1920x1080 px)
+ * Renderiza el flyer horizontal completo (1920x1080 px) aplicando el tema visual
  */
 export function renderFlyerOnCanvas(
   canvas: HTMLCanvasElement,
@@ -97,7 +267,10 @@ export function renderFlyerOnCanvas(
   canvas.width = width;
   canvas.height = height;
 
-  // 1. DIBUJAR FONDO CON IA (COVER 16:9)
+  const activeThemeKey: FlyerTheme = data.theme || "neon_emerald";
+  const theme = THEMES[activeThemeKey] || THEMES.neon_emerald;
+
+  // 1. DIBUJAR FONDO LOCAL (COVER 16:9)
   if (bgImage && bgImage.complete && bgImage.naturalWidth > 0) {
     const imgRatio = bgImage.naturalWidth / bgImage.naturalHeight;
     const canvasRatio = width / height;
@@ -126,7 +299,6 @@ export function renderFlyerOnCanvas(
   }
 
   // 2. GRADIENTES DE CONTRASTE CINEMATOGRÁFICOS HORIZONTALES
-  // Degradado horizontal: Más oscuro a la izquierda para garantizar legibilidad del título
   const hGrad = ctx.createLinearGradient(0, 0, width, 0);
   hGrad.addColorStop(0.0, "rgba(5, 8, 18, 0.96)");
   hGrad.addColorStop(0.35, "rgba(5, 8, 18, 0.88)");
@@ -136,7 +308,6 @@ export function renderFlyerOnCanvas(
   ctx.fillStyle = hGrad;
   ctx.fillRect(0, 0, width, height);
 
-  // Degradado vertical inferior para la barra de sponsors
   const vGrad = ctx.createLinearGradient(0, 0, 0, height);
   vGrad.addColorStop(0.0, "rgba(5, 8, 18, 0.60)");
   vGrad.addColorStop(0.2, "rgba(5, 8, 18, 0.15)");
@@ -159,19 +330,19 @@ export function renderFlyerOnCanvas(
   ctx.save();
   const leftX = 110;
 
-  // Badge Superior: "CIRCUITO OFICIAL"
+  // Badge Superior
   const badgeY = 90;
-  ctx.fillStyle = "rgba(16, 185, 129, 0.15)";
+  ctx.fillStyle = theme.badgeBg;
   roundRect(ctx, leftX, badgeY, 340, 42, 21);
   ctx.fill();
-  ctx.strokeStyle = "rgba(16, 185, 129, 0.6)";
+  ctx.strokeStyle = theme.badgeBorder;
   ctx.lineWidth = 1.5;
   roundRect(ctx, leftX, badgeY, 340, 42, 21);
   ctx.stroke();
 
   ctx.font = "bold 18px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-  ctx.fillStyle = "#34d399";
-  ctx.shadowColor = "rgba(52, 211, 153, 0.6)";
+  ctx.fillStyle = theme.badgeText;
+  ctx.shadowColor = theme.badgeText;
   ctx.shadowBlur = 8;
   ctx.textAlign = "center";
   ctx.fillText("● CIRCUITO OFICIAL SPT 2026", leftX + 170, badgeY + 27);
@@ -181,18 +352,18 @@ export function renderFlyerOnCanvas(
   ctx.textAlign = "left";
   const brandY = 200;
   ctx.font = "900 48px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-  ctx.fillStyle = "#ffffff";
+  ctx.fillStyle = theme.brandPrimaryText;
   ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
   ctx.shadowBlur = 12;
   ctx.fillText("SALADILLO", leftX, brandY);
 
   ctx.font = "900 54px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-  const brandGrad = ctx.createLinearGradient(leftX, 0, leftX + 420, 0);
-  brandGrad.addColorStop(0, "#38bdf8"); // cyan
-  brandGrad.addColorStop(0.5, "#00e676"); // verde neón
-  brandGrad.addColorStop(1, "#a3e635"); // lima
+  const brandGrad = ctx.createLinearGradient(leftX, 0, leftX + 440, 0);
+  brandGrad.addColorStop(0, theme.brandGradient[0]);
+  brandGrad.addColorStop(0.5, theme.brandGradient[1]);
+  brandGrad.addColorStop(1, theme.brandGradient[2]);
   ctx.fillStyle = brandGrad;
-  ctx.shadowColor = "rgba(0, 230, 118, 0.8)";
+  ctx.shadowColor = theme.brandGlow;
   ctx.shadowBlur = 20;
   ctx.fillText("PADEL TOUR", leftX, brandY + 58);
   ctx.shadowBlur = 0;
@@ -203,18 +374,18 @@ export function renderFlyerOnCanvas(
   ctx.font = "800 26px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
   const catWidth = ctx.measureText(categoryText).width + 50;
 
-  ctx.fillStyle = "rgba(30, 41, 59, 0.90)";
+  ctx.fillStyle = theme.catBadgeBg;
   roundRect(ctx, leftX, catY, catWidth, 54, 27);
   ctx.fill();
-  ctx.strokeStyle = "#38bdf8";
+  ctx.strokeStyle = theme.catBadgeBorder;
   ctx.lineWidth = 2;
-  ctx.shadowColor = "rgba(56, 189, 248, 0.6)";
+  ctx.shadowColor = theme.catBadgeBorder;
   ctx.shadowBlur = 12;
   roundRect(ctx, leftX, catY, catWidth, 54, 27);
   ctx.stroke();
   ctx.shadowBlur = 0;
 
-  ctx.fillStyle = "#38bdf8";
+  ctx.fillStyle = theme.catBadgeText;
   ctx.textAlign = "center";
   ctx.fillText(categoryText, leftX + catWidth / 2, catY + 36);
 
@@ -239,12 +410,12 @@ export function renderFlyerOnCanvas(
   ctx.shadowBlur = 0;
   ctx.shadowOffsetY = 0;
 
-  // Línea luminosa divisoria con acento neón
+  // Línea luminosa divisoria con acento de tema
   const lineY = Math.max(lastTitleY + 30, 710);
   const lineGrad = ctx.createLinearGradient(leftX, 0, leftX + 780, 0);
-  lineGrad.addColorStop(0, "rgba(56, 189, 248, 1)");
-  lineGrad.addColorStop(0.5, "rgba(0, 230, 118, 1)");
-  lineGrad.addColorStop(1, "rgba(163, 230, 53, 0)");
+  lineGrad.addColorStop(0, theme.lineGradient[0]);
+  lineGrad.addColorStop(0.5, theme.lineGradient[1]);
+  lineGrad.addColorStop(1, theme.lineGradient[2]);
   ctx.strokeStyle = lineGrad;
   ctx.lineWidth = 3.5;
   ctx.beginPath();
@@ -271,15 +442,15 @@ export function renderFlyerOnCanvas(
   const cardH = 750;
 
   ctx.save();
-  // Fondo glassmorphism oscuro
-  ctx.fillStyle = "rgba(15, 23, 42, 0.86)";
+  // Fondo de tarjeta
+  ctx.fillStyle = theme.cardBg;
   roundRect(ctx, cardX, cardY, cardW, cardH, 32);
   ctx.fill();
 
-  // Borde verde neón (#00e676)
-  ctx.strokeStyle = "rgba(0, 230, 118, 0.55)";
+  // Borde temático
+  ctx.strokeStyle = theme.cardBorder;
   ctx.lineWidth = 2.5;
-  ctx.shadowColor = "rgba(0, 230, 118, 0.35)";
+  ctx.shadowColor = theme.cardBorderGlow;
   ctx.shadowBlur = 18;
   roundRect(ctx, cardX, cardY, cardW, cardH, 32);
   ctx.stroke();
@@ -287,15 +458,15 @@ export function renderFlyerOnCanvas(
 
   // Barra superior interna de la tarjeta
   const cardHeadGrad = ctx.createLinearGradient(cardX, 0, cardX + cardW, 0);
-  cardHeadGrad.addColorStop(0, "rgba(0, 230, 118, 0.18)");
-  cardHeadGrad.addColorStop(1, "rgba(56, 189, 248, 0.08)");
+  cardHeadGrad.addColorStop(0, theme.cardHeadGradient[0]);
+  cardHeadGrad.addColorStop(1, theme.cardHeadGradient[1]);
   ctx.fillStyle = cardHeadGrad;
   roundRect(ctx, cardX, cardY, cardW, 72, 32);
   ctx.fill();
 
   ctx.textAlign = "center";
   ctx.font = "900 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-  ctx.fillStyle = "#00e676";
+  ctx.fillStyle = theme.cardHeadText;
   ctx.fillText("INFORMACIÓN OFICIAL DEL EVENTO", cardX + cardW / 2, cardY + 45);
 
   ctx.textAlign = "left";
@@ -350,8 +521,8 @@ export function renderFlyerOnCanvas(
 
   ctx.font = "900 48px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
   const prizeGrad = ctx.createLinearGradient(cardX + 50, 0, cardX + 600, 0);
-  prizeGrad.addColorStop(0, "#fbbf24");
-  prizeGrad.addColorStop(1, "#a3e635");
+  prizeGrad.addColorStop(0, theme.prizeGradient[0]);
+  prizeGrad.addColorStop(1, theme.prizeGradient[1]);
   ctx.fillStyle = prizeGrad;
   ctx.shadowColor = "rgba(251, 191, 36, 0.6)";
   ctx.shadowBlur = 16;
@@ -366,20 +537,20 @@ export function renderFlyerOnCanvas(
   ctx.lineTo(cardX + cardW - 50, item3Y + 85);
   ctx.stroke();
 
-  // Badge inferior dentro de la tarjeta: "INSCRIPCIONES"
+  // Badge inferior dentro de la tarjeta
   const ctaCardY = item3Y + 115;
-  ctx.fillStyle = "rgba(0, 230, 118, 0.12)";
+  ctx.fillStyle = theme.ctaBg;
   roundRect(ctx, cardX + 50, ctaCardY, cardW - 100, 52, 26);
   ctx.fill();
-  ctx.strokeStyle = "rgba(0, 230, 118, 0.5)";
+  ctx.strokeStyle = theme.ctaBorder;
   ctx.lineWidth = 1.5;
   roundRect(ctx, cardX + 50, ctaCardY, cardW - 100, 52, 26);
   ctx.stroke();
 
   ctx.textAlign = "center";
   ctx.font = "bold 20px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-  ctx.fillStyle = "#34d399";
-  ctx.fillText("INSCRIPCIÓN ABIERTA  •  CUPOS LIMITADOS", cardX + cardW / 2, ctaCardY + 33);
+  ctx.fillStyle = theme.ctaText;
+  ctx.fillText(theme.ctaLabel, cardX + cardW / 2, ctaCardY + 33);
 
   ctx.restore();
 
@@ -390,11 +561,9 @@ export function renderFlyerOnCanvas(
   const footBarY = 910;
   const footBarH = 170;
 
-  // Fondo sutil para la barra de sponsors
   ctx.fillStyle = "rgba(3, 7, 18, 0.94)";
   ctx.fillRect(0, footBarY, width, footBarH);
 
-  // Línea divisoria superior de la barra
   ctx.strokeStyle = "rgba(51, 65, 85, 0.8)";
   ctx.lineWidth = 1.5;
   ctx.beginPath();
@@ -402,14 +571,12 @@ export function renderFlyerOnCanvas(
   ctx.lineTo(width, footBarY);
   ctx.stroke();
 
-  // Etiqueta Sponsors
   const spLabelY = footBarY + 38;
   ctx.textAlign = "left";
   ctx.font = "800 18px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
   ctx.fillStyle = "#64748b";
   ctx.fillText("SPONSORS & MARCAS ASOCIADAS:", 110, spLabelY);
 
-  // Pills de Sponsors
   const sponsorsList =
     data.sponsors.length > 0
       ? data.sponsors
@@ -427,7 +594,6 @@ export function renderFlyerOnCanvas(
     const textW = ctx.measureText(sponsor).width;
     const pillW = textW + pillPadding * 2;
 
-    // Solo dibujar si entra antes del bloque de la web
     if (curSpX + pillW < 1380) {
       ctx.fillStyle = "rgba(30, 41, 59, 0.85)";
       roundRect(ctx, curSpX, pillY, pillW, pillHeight, 22);
@@ -446,12 +612,11 @@ export function renderFlyerOnCanvas(
     }
   });
 
-  // Lado Derecho de la barra: Web Oficial y Seguimiento
   ctx.textAlign = "right";
   const webX = width - 110;
   ctx.font = "900 24px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-  ctx.fillStyle = "#00e676";
-  ctx.shadowColor = "rgba(0, 230, 118, 0.6)";
+  ctx.fillStyle = theme.footerWebColor;
+  ctx.shadowColor = theme.footerGlow;
   ctx.shadowBlur = 10;
   ctx.fillText("saladillo-padel-tour.vercel.app", webX, footBarY + 60);
   ctx.shadowBlur = 0;

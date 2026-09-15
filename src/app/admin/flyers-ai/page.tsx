@@ -6,10 +6,15 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { createClient } from "@/lib/supabase/client";
 import type { Tournament } from "@/types/tournament";
-import { renderFlyerOnCanvas, type FlyerRenderData } from "@/lib/canvas/flyerRenderer";
+import {
+  renderFlyerOnCanvas,
+  ALL_THEMES,
+  THEMES,
+  type FlyerRenderData,
+  type FlyerTheme,
+} from "@/lib/canvas/flyerRenderer";
 import {
   Download,
-  Shuffle,
   Share2,
   CheckCircle2,
   AlertCircle,
@@ -19,6 +24,8 @@ import {
   Maximize2,
   Layers,
   Check,
+  Sparkles,
+  Palette,
 } from "lucide-react";
 
 export interface LocalBackground {
@@ -141,7 +148,6 @@ export default function AdminFlyersPage() {
   const supabase = createClient();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
-  const [loadedBgSrc, setLoadedBgSrc] = useState<string>("");
 
   // Form State
   const [title, setTitle] = useState("TORNEO ABIERTO DE PÁDEL");
@@ -151,9 +157,10 @@ export default function AdminFlyersPage() {
   const [prizes, setPrizes] = useState("$200.000 EN PREMIOS");
   const [sponsorsText, setSponsorsText] = useState("Bullpadel, Head, Saladillo Deportes, Padel Pro, Nox");
 
-  // Background Selection Mode: 'random' | string (filename)
+  // Selection & Theme States
   const [selectedBackgroundId, setSelectedBackgroundId] = useState<string>("random");
   const [currentActiveFile, setCurrentActiveFile] = useState<string>(FONDOS_DISPONIBLES[0].filename);
+  const [currentTheme, setCurrentTheme] = useState<FlyerTheme>("neon_emerald");
 
   // System & UI State
   const [loadingBg, setLoadingBg] = useState(false);
@@ -203,12 +210,10 @@ export default function AdminFlyersPage() {
     img.crossOrigin = "anonymous";
     img.onload = () => {
       setBgImage(img);
-      setLoadedBgSrc(filepath);
       setLoadingBg(false);
     };
     img.onerror = () => {
       console.error(`Error al cargar el fondo local: ${filepath}`);
-      // Fallback intentando sin /assets/ si fuera necesario
       const fallbackPath = filepath.replace("/assets/fondos/", "/fondos/");
       if (fallbackPath !== filepath) {
         img.src = fallbackPath;
@@ -225,11 +230,11 @@ export default function AdminFlyersPage() {
       let chosenFile = FONDOS_DISPONIBLES[0].filename;
 
       if (targetId === "random" || forceNextRandom) {
-        // Elegir uno al azar diferente al actual si hay más de 1
         const available = FONDOS_DISPONIBLES.filter(
           (f) => forceNextRandom ? f.filename !== currentActiveFile : true
         );
-        const randomItem = available[Math.floor(Math.random() * available.length)] || FONDOS_DISPONIBLES[0];
+        const randomItem =
+          available[Math.floor(Math.random() * available.length)] || FONDOS_DISPONIBLES[0];
         chosenFile = randomItem.filename;
       } else {
         const found = FONDOS_DISPONIBLES.find((f) => f.id === targetId || f.filename === targetId);
@@ -242,27 +247,50 @@ export default function AdminFlyersPage() {
     [currentActiveFile, loadLocalImage]
   );
 
-  // Inicialización del fondo al montar el componente
+  // Inicialización al montar el componente
   useEffect(() => {
     applyBackground(selectedBackgroundId);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Manejar cambio en el selector de fondo
+  // Manejar cambio manual en el selector de fondo
   const handleBackgroundChange = (newVal: string) => {
     setSelectedBackgroundId(newVal);
     applyBackground(newVal);
   };
 
-  // Botón "Otro Fondo Al Azar"
-  const handleShuffleBackground = () => {
-    applyBackground("random", true);
+  /**
+   * REGENERAR FLYER:
+   * Diseñado por @spt-flyer-designer:
+   * 1. Selecciona un nuevo fondo de la carpeta local diferente del actual.
+   * 2. Diseña una variación visual completamente nueva alternando el tema/paleta cromática y tarjeta.
+   */
+  const handleRegenerateFlyer = () => {
+    // 1. Nuevo fondo diferente del actual
+    const availableFondos = FONDOS_DISPONIBLES.filter(
+      (f) => f.filename !== currentActiveFile
+    );
+    const nextFondo =
+      availableFondos[Math.floor(Math.random() * availableFondos.length)] ||
+      FONDOS_DISPONIBLES[0];
+
+    // 2. Nuevo estilo visual / paleta cromática diferente de la actual
+    const availableThemes = ALL_THEMES.filter((t) => t !== currentTheme);
+    const nextTheme =
+      availableThemes[Math.floor(Math.random() * availableThemes.length)] ||
+      ALL_THEMES[0];
+
+    setCurrentActiveFile(nextFondo.filename);
+    setSelectedBackgroundId(nextFondo.id);
+    setCurrentTheme(nextTheme);
+    loadLocalImage(`/assets/fondos/${nextFondo.filename}`);
+
     setStatusMsg({
       type: "success",
-      text: "Se cambió el fondo por otra imagen de la galería local.",
+      text: `✨ Flyer regenerado por @spt-flyer-designer: Fondo ${nextFondo.filename} • Estilo: ${THEMES[nextTheme].name}`,
     });
   };
 
-  // Re-dibujar el Canvas cada vez que cambien datos o imagen
+  // Re-dibujar el Canvas cada vez que cambien datos, imagen o tema
   const redrawCanvas = useCallback(() => {
     if (!canvasRef.current) return;
 
@@ -278,10 +306,11 @@ export default function AdminFlyersPage() {
       location,
       prizes,
       sponsors: sponsorsList,
+      theme: currentTheme,
     };
 
     renderFlyerOnCanvas(canvasRef.current, bgImage, renderData);
-  }, [title, category, date, location, prizes, sponsorsText, bgImage]);
+  }, [title, category, date, location, prizes, sponsorsText, bgImage, currentTheme]);
 
   useEffect(() => {
     redrawCanvas();
@@ -329,19 +358,16 @@ export default function AdminFlyersPage() {
         const fileName = `flyer-spt-${Date.now()}.png`;
         const filePath = `public/${fileName}`;
 
-        // Subir al bucket 'flyers'
         const { error: uploadError, data: uploadData } = await supabase.storage
           .from("flyers")
           .upload(filePath, blob, { contentType: "image/png", upsert: true });
 
         if (uploadError) throw uploadError;
 
-        // Obtener URL pública
         const {
           data: { publicUrl },
         } = supabase.storage.from("flyers").getPublicUrl(uploadData.path);
 
-        // Guardar en la tabla 'flyers'
         const { error: dbError } = await supabase.from("flyers").insert({
           title: `${title} - ${category}`,
           image_url: publicUrl,
@@ -354,7 +380,7 @@ export default function AdminFlyersPage() {
 
         setStatusMsg({
           type: "success",
-          text: "¡Flyer horizontal publicado con éxito en el Visor de Novedades de la Portada!",
+          text: "¡Flyer publicado con éxito en el Visor de Novedades de la Portada!",
         });
         setPublishing(false);
       }, "image/png");
@@ -372,26 +398,26 @@ export default function AdminFlyersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold mb-2">
-            <Layers className="w-3.5 h-3.5" />
-            <span>FORMATO HORIZONTAL 16:9 • GALERÍA LOCAL</span>
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>DISEÑADO POR @SPT-FLYER-DESIGNER • 1920 × 1080 PX</span>
           </div>
           <h1 className="text-3xl font-black text-white tracking-tight flex items-center gap-3">
             Generador de Flyers
           </h1>
           <p className="text-dark-400 mt-1 text-sm">
-            Diseña flyers horizontales oficiales (1920 × 1080 px) combinando fondos locales de pádel y gráficos vectoriales de alta definición.
+            Diseña flyers oficiales de pádel en formato horizontal (16:9) con fondos locales y composiciones dinámicas exclusivas.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <Button
             variant="secondary"
-            onClick={handleShuffleBackground}
+            onClick={handleRegenerateFlyer}
             disabled={loadingBg}
-            className="flex items-center gap-2 text-xs"
+            className="flex items-center gap-2 text-xs font-bold border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
           >
-            <Shuffle className="w-4 h-4" />
-            Otro Fondo Al Azar
+            <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse" />
+            REGENERAR FLYER
           </Button>
 
           <Button
@@ -425,14 +451,19 @@ export default function AdminFlyersPage() {
 
       {/* SECCIÓN 1: VISTA PREVIA DEL CANVAS HORIZONTAL EN VIVO (16:9) */}
       <Card className="p-4 sm:p-6 border-dark-800 bg-dark-900/90 shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <span className="text-xs font-bold text-dark-300 uppercase tracking-wider flex items-center gap-2">
             <Eye className="w-4 h-4 text-emerald-400" />
-            Vista Previa en Vivo • Resolución Nativa 1920 × 1080 px (16:9)
+            Vista Previa • Resolución 1920 × 1080 px (16:9)
           </span>
-          <div className="flex items-center gap-3">
+
+          <div className="flex items-center gap-2.5">
+            <span className="text-xs font-medium text-slate-300 bg-dark-800 px-3 py-1 rounded-lg border border-dark-700 flex items-center gap-1.5">
+              <Palette className="w-3.5 h-3.5 text-emerald-400" />
+              {THEMES[currentTheme].name}
+            </span>
             <span className="text-xs font-mono text-emerald-400/90 bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20">
-              Fondo activo: {currentActiveFile}
+              {currentActiveFile}
             </span>
             <Button
               variant="ghost"
@@ -454,9 +485,10 @@ export default function AdminFlyersPage() {
           />
 
           {loadingBg && (
-            <div className="absolute inset-0 bg-dark-950/60 backdrop-blur-sm flex items-center justify-center">
-              <span className="text-white text-sm font-semibold animate-pulse">
-                Cargando fondo local...
+            <div className="absolute inset-0 bg-dark-950/70 backdrop-blur-sm flex items-center justify-center">
+              <span className="text-white text-sm font-semibold animate-pulse flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-400 animate-spin" />
+                @spt-flyer-designer componiendo nuevo flyer...
               </span>
             </div>
           )}
@@ -468,13 +500,14 @@ export default function AdminFlyersPage() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={handleShuffleBackground}
+              onClick={handleRegenerateFlyer}
               disabled={loadingBg}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 text-xs py-2"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 text-xs py-2 border-emerald-500/40 text-emerald-400 font-bold hover:bg-emerald-500/10"
             >
-              <Shuffle className="w-3.5 h-3.5" />
-              <span>Cambiar Fondo Al Azar</span>
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+              <span>REGENERAR FLYER</span>
             </Button>
+
             <Button
               size="sm"
               onClick={handleDownload}
@@ -617,30 +650,49 @@ export default function AdminFlyersPage() {
           </Card>
         </div>
 
-        {/* Columna Derecha: Galería de Fondos Locales (5 columnas) */}
+        {/* Columna Derecha: Galería y Estilos (5 columnas) */}
         <div className="lg:col-span-5 space-y-6">
           <Card className="p-6 border-dark-800 space-y-4">
             <div className="border-b border-dark-800 pb-3 flex items-center justify-between">
               <h2 className="text-base font-bold text-white flex items-center gap-2">
                 <Layers className="w-4 h-4 text-emerald-400" />
-                Galería Local de Fondos (assets/fondos/)
+                Galería Local de Fondos ({FONDOS_DISPONIBLES.length})
               </h2>
-              <span className="text-[11px] text-dark-400">
-                {FONDOS_DISPONIBLES.length} disponibles
+              <span className="text-[11px] text-emerald-400 font-semibold">
+                @spt-flyer-designer
               </span>
             </div>
 
-            {/* Dropdown de Selección */}
+            {/* Selector de Estilo Visual */}
+            <div>
+              <label className="block text-xs font-medium text-dark-300 mb-1.5 flex items-center gap-1.5">
+                <Palette className="w-3.5 h-3.5 text-emerald-400" />
+                Estilo / Paleta Cromática:
+              </label>
+              <select
+                value={currentTheme}
+                onChange={(e) => setCurrentTheme(e.target.value as FlyerTheme)}
+                className="w-full bg-dark-900 border border-dark-700 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
+              >
+                {ALL_THEMES.map((th) => (
+                  <option key={th} value={th}>
+                    {THEMES[th].name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Dropdown de Fondos */}
             <div>
               <label className="block text-xs font-medium text-dark-300 mb-1.5">
-                Modo de Selección de Fondo:
+                Fondo Seleccionado:
               </label>
               <select
                 value={selectedBackgroundId}
                 onChange={(e) => handleBackgroundChange(e.target.value)}
                 className="w-full bg-dark-900 border border-dark-700 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
               >
-                <option value="random">🎲 Modo Aleatorio (Elegir al azar al generar)</option>
+                <option value="random">🎲 Modo Aleatorio (Elegir al azar al regenerar)</option>
                 <optgroup label="Fondos en carpeta local:">
                   {FONDOS_DISPONIBLES.map((f) => (
                     <option key={f.id} value={f.id}>
@@ -654,9 +706,9 @@ export default function AdminFlyersPage() {
             {/* Galería Visual de Miniaturas Clickeables */}
             <div className="space-y-2.5 pt-2">
               <span className="block text-xs font-medium text-dark-400">
-                O haz clic directamente en una miniatura para aplicarla:
+                O selecciona manualmente cualquier fondo:
               </span>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[480px] overflow-y-auto pr-1.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[440px] overflow-y-auto pr-1.5">
                 {FONDOS_DISPONIBLES.map((item) => {
                   const isActive = currentActiveFile === item.filename;
                   return (
@@ -697,12 +749,12 @@ export default function AdminFlyersPage() {
 
             <div className="pt-3">
               <Button
-                onClick={handleShuffleBackground}
+                onClick={handleRegenerateFlyer}
                 disabled={loadingBg}
-                className="w-full py-3 bg-dark-800 hover:bg-dark-700 text-white font-bold text-sm rounded-xl border border-dark-700 flex items-center justify-center gap-2"
+                className="w-full py-3 bg-gradient-to-r from-emerald-500 to-lime-500 text-dark-950 font-black text-sm rounded-xl hover:from-emerald-400 hover:to-lime-400 shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
               >
-                <Shuffle className="w-4 h-4 text-emerald-400" />
-                <span>Rotar Fondo Al Azar</span>
+                <Sparkles className="w-4 h-4" />
+                <span>REGENERAR FLYER</span>
               </Button>
             </div>
           </Card>
