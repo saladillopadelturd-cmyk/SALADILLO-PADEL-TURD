@@ -53,7 +53,24 @@ export default async function HomePage() {
     ]);
     
     if (tourRes.data) tournaments = tourRes.data;
-    if (flyersRes.data) flyers = flyersRes.data;
+    if (flyersRes.data && flyersRes.data.length > 0) {
+      flyers = flyersRes.data;
+    } else {
+      try {
+        const fs = await import("fs");
+        const path = await import("path");
+        const filePath = path.join(process.cwd(), "public", "confirmed_flyer.json");
+        if (fs.existsSync(filePath)) {
+          const fileData = fs.readFileSync(filePath, "utf-8");
+          const parsed = JSON.parse(fileData);
+          if (parsed && parsed.image_url) {
+            flyers = [parsed];
+          }
+        }
+      } catch (fsErr) {
+        console.warn("Could not load local confirmed flyer:", fsErr);
+      }
+    }
   } catch (e) {
     console.error("Error loading data on home:", e);
   }

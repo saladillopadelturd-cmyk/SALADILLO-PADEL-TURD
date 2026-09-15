@@ -423,6 +423,22 @@ export default function AdminFlyersPage() {
           } catch {}
         }
 
+        // 5. Enviar a /api/flyers para persistencia garantizada en disco/servidor
+        try {
+          await fetch("/api/flyers", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: flyerTitle,
+              image_url: finalImageUrl,
+              link_url: flyerLink,
+              raw_base64: dataUrl,
+            }),
+          });
+        } catch (apiErr) {
+          console.warn("API flyers sync error:", apiErr);
+        }
+
         setStatusMsg({
           type: "success",
           text: "✅ ¡Flyer Confirmado Definitivo! Ya fue colocado automáticamente en la aplicación para móviles justo debajo del header y arriba de los botones TORNEO EN VIVO y RANKINGS.",
