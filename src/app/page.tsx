@@ -103,9 +103,10 @@ export default async function HomePage() {
           <div>
             <h2 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-2.5">
               <Activity className="w-6 h-6 text-emerald-400" />
-              Torneos Activos y en Disputa
+              <span className="sm:hidden">Torneos Activos</span>
+              <span className="hidden sm:inline">Torneos Activos y en Disputa</span>
             </h2>
-            <p className="text-dark-400 text-sm mt-1">
+            <p className="hidden sm:block text-dark-400 text-sm mt-1">
               Fixture actualizado al instante con marcadores punto a punto y clasificaciones
             </p>
           </div>
