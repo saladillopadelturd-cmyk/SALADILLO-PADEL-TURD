@@ -8,7 +8,7 @@ const adminLinks = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/torneos", label: "Torneos", icon: Trophy },
   { href: "/admin/novedades", label: "Novedades (Flyers)", icon: ImageIcon },
-  { href: "/admin/flyers-ai", label: "Generador IA", icon: Sparkles },
+  { href: "/admin/flyers-ai", label: "Generador de Flyers", icon: Sparkles },
   { href: "/admin/jugadores", label: "Jugadores", icon: Users },
   { href: "/admin/parejas", label: "Parejas", icon: UserCheck },
   { href: "/admin/admins", label: "Administradores", icon: Shield },

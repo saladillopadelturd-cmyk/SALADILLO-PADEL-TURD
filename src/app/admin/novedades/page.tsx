@@ -169,7 +169,7 @@ export default function AdminNovedadesPage() {
               variant="secondary"
               className="flex items-center gap-2 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
             >
-              <Sparkles className="w-4 h-4" /> Generar con IA
+              <Sparkles className="w-4 h-4" /> Generador de Flyers
             </Button>
           </Link>
           <Button
