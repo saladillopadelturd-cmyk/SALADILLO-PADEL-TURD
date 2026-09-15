@@ -1,6 +1,7 @@
 /**
  * SPT (Saladillo Padel Tour) - Canvas Flyer Compositor
- * Renderiza composiciones vectoriales de alta definición en formato Historia (1080x1920 px)
+ * Renderiza composiciones vectoriales en formato HORIZONTAL (1920x1080 px - 16:9)
+ * Diseñado específicamente para publicaciones, pantallas y banners oficiales de pádel.
  */
 
 export interface FlyerRenderData {
@@ -64,7 +65,6 @@ function wrapText(
       currentY += lineHeight;
       lineCount++;
       if (lineCount >= maxLines - 1 && n < words.length - 1) {
-        // Añadir el resto con ellipsis si supera maxLines
         const remaining = words.slice(n).join(" ");
         let truncated = remaining;
         while (ctx.measureText(truncated + "...").width > maxWidth && truncated.length > 0) {
@@ -82,7 +82,7 @@ function wrapText(
 }
 
 /**
- * Renderiza el flyer completo sobre el elemento Canvas
+ * Renderiza el flyer horizontal completo (1920x1080 px)
  */
 export function renderFlyerOnCanvas(
   canvas: HTMLCanvasElement,
@@ -92,14 +92,13 @@ export function renderFlyerOnCanvas(
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-  const width = 1080;
-  const height = 1920;
+  const width = 1920;
+  const height = 1080;
   canvas.width = width;
   canvas.height = height;
 
-  // 1. DIBUJAR FONDO
+  // 1. DIBUJAR FONDO CON IA (COVER 16:9)
   if (bgImage && bgImage.complete && bgImage.naturalWidth > 0) {
-    // Escalar cover
     const imgRatio = bgImage.naturalWidth / bgImage.naturalHeight;
     const canvasRatio = width / height;
     let renderW = width;
@@ -117,285 +116,349 @@ export function renderFlyerOnCanvas(
 
     ctx.drawImage(bgImage, offsetX, offsetY, renderW, renderH);
   } else {
-    // Fondo fallback si aún no carga imagen
-    const bgGrad = ctx.createRadialGradient(540, 800, 100, 540, 960, 1100);
+    // Fondo fallback deportivo oscuro
+    const bgGrad = ctx.createRadialGradient(960, 540, 150, 960, 540, 1100);
     bgGrad.addColorStop(0, "#0f172a");
-    bgGrad.addColorStop(0.5, "#0b0f19");
+    bgGrad.addColorStop(0.6, "#0b0f19");
     bgGrad.addColorStop(1, "#020617");
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, width, height);
   }
 
-  // 2. GRADIENTES DE CONTRASTE CINEMATOGRÁFICOS
-  // Degradado vertical principal (oscurece arriba y abajo para asegurar legibilidad)
-  const grad = ctx.createLinearGradient(0, 0, 0, height);
-  grad.addColorStop(0.0, "rgba(5, 8, 15, 0.92)");
-  grad.addColorStop(0.15, "rgba(5, 8, 15, 0.50)");
-  grad.addColorStop(0.35, "rgba(5, 8, 15, 0.25)");
-  grad.addColorStop(0.55, "rgba(5, 8, 15, 0.40)");
-  grad.addColorStop(0.72, "rgba(5, 8, 15, 0.85)");
-  grad.addColorStop(0.92, "rgba(5, 8, 15, 0.98)");
-  grad.addColorStop(1.0, "rgba(5, 8, 15, 1.0)");
-  ctx.fillStyle = grad;
+  // 2. GRADIENTES DE CONTRASTE CINEMATOGRÁFICOS HORIZONTALES
+  // Degradado horizontal: Más oscuro a la izquierda para garantizar legibilidad del título
+  const hGrad = ctx.createLinearGradient(0, 0, width, 0);
+  hGrad.addColorStop(0.0, "rgba(5, 8, 18, 0.96)");
+  hGrad.addColorStop(0.35, "rgba(5, 8, 18, 0.88)");
+  hGrad.addColorStop(0.55, "rgba(5, 8, 18, 0.55)");
+  hGrad.addColorStop(0.75, "rgba(5, 8, 18, 0.45)");
+  hGrad.addColorStop(1.0, "rgba(5, 8, 18, 0.82)");
+  ctx.fillStyle = hGrad;
   ctx.fillRect(0, 0, width, height);
 
-  // Viñeta lateral sutil
-  const vignette = ctx.createRadialGradient(540, 960, 500, 540, 960, 1000);
+  // Degradado vertical inferior para la barra de sponsors
+  const vGrad = ctx.createLinearGradient(0, 0, 0, height);
+  vGrad.addColorStop(0.0, "rgba(5, 8, 18, 0.60)");
+  vGrad.addColorStop(0.2, "rgba(5, 8, 18, 0.15)");
+  vGrad.addColorStop(0.7, "rgba(5, 8, 18, 0.25)");
+  vGrad.addColorStop(0.85, "rgba(3, 7, 18, 0.90)");
+  vGrad.addColorStop(1.0, "rgba(3, 7, 18, 0.98)");
+  ctx.fillStyle = vGrad;
+  ctx.fillRect(0, 0, width, height);
+
+  // Viñeta periférica
+  const vignette = ctx.createRadialGradient(960, 540, 600, 960, 540, 1200);
   vignette.addColorStop(0, "rgba(0,0,0,0)");
-  vignette.addColorStop(1, "rgba(0, 0, 0, 0.65)");
+  vignette.addColorStop(1, "rgba(0, 0, 0, 0.60)");
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, width, height);
 
-  // 3. ENCABEZADO DE MARCA (BRANDING SPT)
+  // ==========================================
+  // 3. LADO IZQUIERDO: BRANDING, TÍTULO Y CATEGORÍA
+  // ==========================================
   ctx.save();
-  ctx.textAlign = "center";
+  const leftX = 110;
 
-  // Badge superior "CIRCUITO OFICIAL"
-  const topBadgeY = 120;
+  // Badge Superior: "CIRCUITO OFICIAL"
+  const badgeY = 90;
   ctx.fillStyle = "rgba(16, 185, 129, 0.15)";
-  roundRect(ctx, 540 - 200, topBadgeY, 400, 48, 24);
+  roundRect(ctx, leftX, badgeY, 340, 42, 21);
   ctx.fill();
-  ctx.strokeStyle = "rgba(16, 185, 129, 0.5)";
-  ctx.lineWidth = 2;
-  roundRect(ctx, 540 - 200, topBadgeY, 400, 48, 24);
+  ctx.strokeStyle = "rgba(16, 185, 129, 0.6)";
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, leftX, badgeY, 340, 42, 21);
   ctx.stroke();
 
-  ctx.font = "bold 20px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  ctx.font = "bold 18px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
   ctx.fillStyle = "#34d399";
   ctx.shadowColor = "rgba(52, 211, 153, 0.6)";
-  ctx.shadowBlur = 10;
-  ctx.fillText("● CIRCUITO OFICIAL SPT 2026", 540, topBadgeY + 31);
+  ctx.shadowBlur = 8;
+  ctx.textAlign = "center";
+  ctx.fillText("● CIRCUITO OFICIAL SPT 2026", leftX + 170, badgeY + 27);
   ctx.shadowBlur = 0;
 
   // Marca Principal: "SALADILLO PADEL TOUR"
-  const brandY = 230;
-  ctx.font = "900 60px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  ctx.textAlign = "left";
+  const brandY = 200;
+  ctx.font = "900 48px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
   ctx.fillStyle = "#ffffff";
   ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
-  ctx.shadowBlur = 15;
-  ctx.fillText("SALADILLO", 540, brandY);
+  ctx.shadowBlur = 12;
+  ctx.fillText("SALADILLO", leftX, brandY);
 
-  ctx.font = "900 64px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-  const brandGrad = ctx.createLinearGradient(300, 0, 780, 0);
+  ctx.font = "900 54px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  const brandGrad = ctx.createLinearGradient(leftX, 0, leftX + 420, 0);
   brandGrad.addColorStop(0, "#38bdf8"); // cyan
-  brandGrad.addColorStop(0.5, "#34d399"); // emerald
-  brandGrad.addColorStop(1, "#a3e635"); // lime
+  brandGrad.addColorStop(0.5, "#00e676"); // verde neón
+  brandGrad.addColorStop(1, "#a3e635"); // lima
   ctx.fillStyle = brandGrad;
-  ctx.shadowColor = "rgba(52, 211, 153, 0.8)";
-  ctx.shadowBlur = 25;
-  ctx.fillText("PADEL TOUR", 540, brandY + 68);
+  ctx.shadowColor = "rgba(0, 230, 118, 0.8)";
+  ctx.shadowBlur = 20;
+  ctx.fillText("PADEL TOUR", leftX, brandY + 58);
   ctx.shadowBlur = 0;
-  ctx.restore();
-
-  // 4. CUERPO CENTRAL (CATEGORÍA & TÍTULO DEL TORNEO)
-  ctx.save();
-  ctx.textAlign = "center";
 
   // Badge de Categoría
-  const categoryText = (data.category || "CATEGORÍA LIBRE").toUpperCase();
-  const catY = 460;
-  ctx.font = "800 32px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-  const catWidth = Math.min(ctx.measureText(categoryText).width + 60, 800);
+  const categoryText = (data.category || "5TA LIBRES").toUpperCase();
+  const catY = 325;
+  ctx.font = "800 26px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  const catWidth = ctx.measureText(categoryText).width + 50;
 
-  ctx.fillStyle = "rgba(30, 41, 59, 0.85)";
-  roundRect(ctx, 540 - catWidth / 2, catY, catWidth, 64, 32);
+  ctx.fillStyle = "rgba(30, 41, 59, 0.90)";
+  roundRect(ctx, leftX, catY, catWidth, 54, 27);
   ctx.fill();
   ctx.strokeStyle = "#38bdf8";
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = 2;
   ctx.shadowColor = "rgba(56, 189, 248, 0.6)";
-  ctx.shadowBlur = 15;
-  roundRect(ctx, 540 - catWidth / 2, catY, catWidth, 64, 32);
+  ctx.shadowBlur = 12;
+  roundRect(ctx, leftX, catY, catWidth, 54, 27);
   ctx.stroke();
   ctx.shadowBlur = 0;
 
   ctx.fillStyle = "#38bdf8";
-  ctx.fillText(categoryText, 540, catY + 44);
+  ctx.textAlign = "center";
+  ctx.fillText(categoryText, leftX + catWidth / 2, catY + 36);
 
-  // Título del Torneo
-  const titleY = 600;
-  ctx.font = "900 76px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  // Título del Torneo (Multi-línea de alto impacto)
+  ctx.textAlign = "left";
+  const titleY = 460;
+  ctx.font = "900 70px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
   ctx.fillStyle = "#ffffff";
-  ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
-  ctx.shadowBlur = 20;
+  ctx.shadowColor = "rgba(0, 0, 0, 0.95)";
+  ctx.shadowBlur = 24;
   ctx.shadowOffsetX = 0;
   ctx.shadowOffsetY = 6;
-  wrapText(ctx, (data.title || "GRAN TORNEO DE PÁDEL").toUpperCase(), 540, titleY, 940, 88, 3);
+  const lastTitleY = wrapText(
+    ctx,
+    (data.title || "TORNEO ABIERTO DE PÁDEL").toUpperCase(),
+    leftX,
+    titleY,
+    880,
+    82,
+    3
+  );
   ctx.shadowBlur = 0;
   ctx.shadowOffsetY = 0;
 
-  // Línea divisoria luminosa
-  const lineY = 820;
-  const lineGrad = ctx.createLinearGradient(200, 0, 880, 0);
-  lineGrad.addColorStop(0, "rgba(56, 189, 248, 0)");
-  lineGrad.addColorStop(0.2, "rgba(56, 189, 248, 0.8)");
-  lineGrad.addColorStop(0.5, "rgba(52, 211, 153, 1)");
-  lineGrad.addColorStop(0.8, "rgba(163, 230, 53, 0.8)");
+  // Línea luminosa divisoria con acento neón
+  const lineY = Math.max(lastTitleY + 30, 710);
+  const lineGrad = ctx.createLinearGradient(leftX, 0, leftX + 780, 0);
+  lineGrad.addColorStop(0, "rgba(56, 189, 248, 1)");
+  lineGrad.addColorStop(0.5, "rgba(0, 230, 118, 1)");
   lineGrad.addColorStop(1, "rgba(163, 230, 53, 0)");
   ctx.strokeStyle = lineGrad;
-  ctx.lineWidth = 4;
+  ctx.lineWidth = 3.5;
   ctx.beginPath();
-  ctx.moveTo(200, lineY);
-  ctx.lineTo(880, lineY);
+  ctx.moveTo(leftX, lineY);
+  ctx.lineTo(leftX + 780, lineY);
   ctx.stroke();
+
+  // Sub-etiqueta de Reglas
+  ctx.font = "bold 20px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  ctx.fillStyle = "#94a3b8";
+  ctx.fillText(
+    "★ SISTEMA AMERICANO  •  PUNTO DE ORO  •  RANKING OFICIAL SPT",
+    leftX,
+    lineY + 45
+  );
   ctx.restore();
 
-  // 5. CAJA DE INFORMACIÓN (TARJETA SEMI-TRANSPARENTE)
-  const cardX = 90;
-  const cardY = 880;
-  const cardW = 900;
-  const cardH = 580;
+  // ==========================================
+  // 4. LADO DERECHO: CAJA DE DATOS CON GLASSMORPHISM
+  // ==========================================
+  const cardX = 1080;
+  const cardY = 85;
+  const cardW = 730;
+  const cardH = 750;
 
   ctx.save();
-  // Fondo de tarjeta con glassmorphism
-  ctx.fillStyle = "rgba(15, 23, 42, 0.82)";
-  roundRect(ctx, cardX, cardY, cardW, cardH, 36);
+  // Fondo glassmorphism oscuro
+  ctx.fillStyle = "rgba(15, 23, 42, 0.86)";
+  roundRect(ctx, cardX, cardY, cardW, cardH, 32);
   ctx.fill();
 
-  ctx.strokeStyle = "rgba(51, 65, 85, 0.7)";
-  ctx.lineWidth = 2;
-  roundRect(ctx, cardX, cardY, cardW, cardH, 36);
+  // Borde verde neón (#00e676)
+  ctx.strokeStyle = "rgba(0, 230, 118, 0.55)";
+  ctx.lineWidth = 2.5;
+  ctx.shadowColor = "rgba(0, 230, 118, 0.35)";
+  ctx.shadowBlur = 18;
+  roundRect(ctx, cardX, cardY, cardW, cardH, 32);
   ctx.stroke();
-
-  // Borde resplandor superior
-  ctx.strokeStyle = "rgba(52, 211, 153, 0.35)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(cardX + 36, cardY);
-  ctx.lineTo(cardX + cardW - 36, cardY);
-  ctx.stroke();
-
-  // --- Item 1: FECHA ---
-  const item1Y = cardY + 70;
-  ctx.textAlign = "left";
-  ctx.font = "bold 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-  ctx.fillStyle = "#94a3b8";
-  ctx.fillText("📅 FECHA DEL EVENTO", cardX + 60, item1Y);
-
-  ctx.font = "800 40px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-  ctx.fillStyle = "#ffffff";
-  ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
-  ctx.shadowBlur = 8;
-  ctx.fillText(data.date || "Próximamente", cardX + 60, item1Y + 50);
   ctx.shadowBlur = 0;
 
-  // Separador interno 1
-  ctx.strokeStyle = "rgba(51, 65, 85, 0.5)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(cardX + 60, item1Y + 80);
-  ctx.lineTo(cardX + cardW - 60, item1Y + 80);
-  ctx.stroke();
+  // Barra superior interna de la tarjeta
+  const cardHeadGrad = ctx.createLinearGradient(cardX, 0, cardX + cardW, 0);
+  cardHeadGrad.addColorStop(0, "rgba(0, 230, 118, 0.18)");
+  cardHeadGrad.addColorStop(1, "rgba(56, 189, 248, 0.08)");
+  ctx.fillStyle = cardHeadGrad;
+  roundRect(ctx, cardX, cardY, cardW, 72, 32);
+  ctx.fill();
 
-  // --- Item 2: LUGAR / SEDE ---
-  const item2Y = item1Y + 130;
-  ctx.font = "bold 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  ctx.textAlign = "center";
+  ctx.font = "900 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  ctx.fillStyle = "#00e676";
+  ctx.fillText("INFORMACIÓN OFICIAL DEL EVENTO", cardX + cardW / 2, cardY + 45);
+
+  ctx.textAlign = "left";
+
+  // --- ITEM 1: FECHA ---
+  const item1Y = cardY + 140;
+  ctx.font = "bold 20px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
   ctx.fillStyle = "#94a3b8";
-  ctx.fillText("📍 SEDE / CLUB", cardX + 60, item2Y);
+  ctx.fillText("📅 FECHA Y CRONOGRAMA", cardX + 50, item1Y);
 
   ctx.font = "800 38px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
   ctx.fillStyle = "#ffffff";
-  ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+  ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
   ctx.shadowBlur = 8;
-  ctx.fillText(data.location || "Saladillo Padel Club", cardX + 60, item2Y + 48);
+  ctx.fillText((data.date || "Próximamente").toUpperCase(), cardX + 50, item1Y + 48);
+  ctx.shadowBlur = 0;
+
+  // Separador interno 1
+  ctx.strokeStyle = "rgba(51, 65, 85, 0.6)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cardX + 50, item1Y + 75);
+  ctx.lineTo(cardX + cardW - 50, item1Y + 75);
+  ctx.stroke();
+
+  // --- ITEM 2: LUGAR / SEDE ---
+  const item2Y = item1Y + 130;
+  ctx.font = "bold 20px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  ctx.fillStyle = "#94a3b8";
+  ctx.fillText("📍 SEDE Y CANCHAS", cardX + 50, item2Y);
+
+  ctx.font = "800 36px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  ctx.fillStyle = "#ffffff";
+  ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
+  ctx.shadowBlur = 8;
+  ctx.fillText((data.location || "Saladillo Padel Club").toUpperCase(), cardX + 50, item2Y + 46);
   ctx.shadowBlur = 0;
 
   // Separador interno 2
-  ctx.strokeStyle = "rgba(51, 65, 85, 0.5)";
+  ctx.strokeStyle = "rgba(51, 65, 85, 0.6)";
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(cardX + 60, item2Y + 80);
-  ctx.lineTo(cardX + cardW - 60, item2Y + 80);
+  ctx.moveTo(cardX + 50, item2Y + 75);
+  ctx.lineTo(cardX + cardW - 50, item2Y + 75);
   ctx.stroke();
 
-  // --- Item 3: PREMIOS ---
+  // --- ITEM 3: PREMIOS ---
   const item3Y = item2Y + 130;
-  ctx.font = "bold 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  ctx.font = "bold 20px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
   ctx.fillStyle = "#fbbf24";
-  ctx.fillText("🏆 PREMIOS Y TROFEOS", cardX + 60, item3Y);
+  ctx.fillText("🏆 PREMIOS Y RECONOCIMIENTOS", cardX + 50, item3Y);
 
   ctx.font = "900 48px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-  const prizeGrad = ctx.createLinearGradient(cardX + 60, 0, cardX + 600, 0);
-  prizeGrad.addColorStop(0, "#fbbf24"); // amber
-  prizeGrad.addColorStop(1, "#a3e635"); // lime
+  const prizeGrad = ctx.createLinearGradient(cardX + 50, 0, cardX + 600, 0);
+  prizeGrad.addColorStop(0, "#fbbf24");
+  prizeGrad.addColorStop(1, "#a3e635");
   ctx.fillStyle = prizeGrad;
-  ctx.shadowColor = "rgba(251, 191, 36, 0.5)";
-  ctx.shadowBlur = 15;
-  ctx.fillText(data.prizes || "$200.000 EN PREMIOS", cardX + 60, item3Y + 54);
+  ctx.shadowColor = "rgba(251, 191, 36, 0.6)";
+  ctx.shadowBlur = 16;
+  ctx.fillText((data.prizes || "$200.000 EN PREMIOS").toUpperCase(), cardX + 50, item3Y + 54);
   ctx.shadowBlur = 0;
 
-  // Badge inferior dentro de la tarjeta: Reglas
-  const subRuleY = cardY + cardH - 45;
+  // Separador interno 3
+  ctx.strokeStyle = "rgba(51, 65, 85, 0.6)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cardX + 50, item3Y + 85);
+  ctx.lineTo(cardX + cardW - 50, item3Y + 85);
+  ctx.stroke();
+
+  // Badge inferior dentro de la tarjeta: "INSCRIPCIONES"
+  const ctaCardY = item3Y + 115;
+  ctx.fillStyle = "rgba(0, 230, 118, 0.12)";
+  roundRect(ctx, cardX + 50, ctaCardY, cardW - 100, 52, 26);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(0, 230, 118, 0.5)";
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, cardX + 50, ctaCardY, cardW - 100, 52, 26);
+  ctx.stroke();
+
   ctx.textAlign = "center";
-  ctx.font = "700 20px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-  ctx.fillStyle = "#64748b";
-  ctx.fillText("SISTEMA AMERICANO  •  PUNTO DE ORO  •  RANKING OFICIAL", 540, subRuleY);
+  ctx.font = "bold 20px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  ctx.fillStyle = "#34d399";
+  ctx.fillText("INSCRIPCIÓN ABIERTA  •  CUPOS LIMITADOS", cardX + cardW / 2, ctaCardY + 33);
+
   ctx.restore();
 
-  // 6. PIE (SPONSORS Y REDES SOCIALES)
+  // ==========================================
+  // 5. BARRA INFERIOR: SPONSORS Y ENLACE WEB OFICIAL
+  // ==========================================
   ctx.save();
-  ctx.textAlign = "center";
+  const footBarY = 910;
+  const footBarH = 170;
 
-  // Título Sponsors
-  const sponsorsLabelY = 1520;
-  ctx.font = "800 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  // Fondo sutil para la barra de sponsors
+  ctx.fillStyle = "rgba(3, 7, 18, 0.94)";
+  ctx.fillRect(0, footBarY, width, footBarH);
+
+  // Línea divisoria superior de la barra
+  ctx.strokeStyle = "rgba(51, 65, 85, 0.8)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, footBarY);
+  ctx.lineTo(width, footBarY);
+  ctx.stroke();
+
+  // Etiqueta Sponsors
+  const spLabelY = footBarY + 38;
+  ctx.textAlign = "left";
+  ctx.font = "800 18px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
   ctx.fillStyle = "#64748b";
-  ctx.fillText("APOYAN ESTE TORNEO", 540, sponsorsLabelY);
+  ctx.fillText("SPONSORS & MARCAS ASOCIADAS:", 110, spLabelY);
 
-  // Lista de Sponsors (Pills modernas)
-  const sponsorsList = data.sponsors.length > 0 ? data.sponsors : ["SPT Oficial", "Saladillo Deportes", "Padel Pro"];
-  const spY = 1580;
+  // Pills de Sponsors
+  const sponsorsList =
+    data.sponsors.length > 0
+      ? data.sponsors
+      : ["SPT Oficial", "Saladillo Deportes", "Padel Pro", "Bullpadel"];
 
-  // Calculamos ancho total para centrar
-  let currentSpX = 540;
-  const pillHeight = 46;
-
-  // Dibuja sponsors centrados
-  ctx.font = "bold 24px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-  const pillPaddings = 36;
+  const pillY = footBarY + 68;
+  const pillHeight = 44;
+  const pillPadding = 32;
   const pillGap = 16;
+  let curSpX = 110;
 
-  const measuredPills = sponsorsList.map((sp) => ({
-    name: sp,
-    width: ctx.measureText(sp).width + pillPaddings * 2,
-  }));
+  ctx.font = "bold 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
-  const totalPillsWidth = measuredPills.reduce((acc, p) => acc + p.width, 0) + (measuredPills.length - 1) * pillGap;
+  sponsorsList.forEach((sponsor) => {
+    const textW = ctx.measureText(sponsor).width;
+    const pillW = textW + pillPadding * 2;
 
-  let startX = 540 - totalPillsWidth / 2;
-  // Si supera el ancho, repartir en 2 filas si es necesario
-  if (totalPillsWidth > 960) {
-    startX = 100;
-  }
+    // Solo dibujar si entra antes del bloque de la web
+    if (curSpX + pillW < 1380) {
+      ctx.fillStyle = "rgba(30, 41, 59, 0.85)";
+      roundRect(ctx, curSpX, pillY, pillW, pillHeight, 22);
+      ctx.fill();
 
-  measuredPills.forEach((pill) => {
-    ctx.fillStyle = "rgba(30, 41, 59, 0.75)";
-    roundRect(ctx, startX, spY, pill.width, pillHeight, 23);
-    ctx.fill();
+      ctx.strokeStyle = "rgba(71, 85, 105, 0.7)";
+      ctx.lineWidth = 1.5;
+      roundRect(ctx, curSpX, pillY, pillW, pillHeight, 22);
+      ctx.stroke();
 
-    ctx.strokeStyle = "rgba(71, 85, 105, 0.6)";
-    ctx.lineWidth = 1.5;
-    roundRect(ctx, startX, spY, pill.width, pillHeight, 23);
-    ctx.stroke();
+      ctx.fillStyle = "#e2e8f0";
+      ctx.textAlign = "center";
+      ctx.fillText(sponsor, curSpX + pillW / 2, pillY + 30);
 
-    ctx.fillStyle = "#e2e8f0";
-    ctx.textAlign = "center";
-    ctx.fillText(pill.name, startX + pill.width / 2, spY + 31);
-
-    startX += pill.width + pillGap;
+      curSpX += pillW + pillGap;
+    }
   });
 
-  // Footer: Web y Redes
-  const footerY = 1780;
-  ctx.font = "bold 24px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-  ctx.fillStyle = "#34d399";
-  ctx.shadowColor = "rgba(52, 211, 153, 0.6)";
+  // Lado Derecho de la barra: Web Oficial y Seguimiento
+  ctx.textAlign = "right";
+  const webX = width - 110;
+  ctx.font = "900 24px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  ctx.fillStyle = "#00e676";
+  ctx.shadowColor = "rgba(0, 230, 118, 0.6)";
   ctx.shadowBlur = 10;
-  ctx.fillText("saladillo-padel-tour.vercel.app", 540, footerY);
+  ctx.fillText("saladillo-padel-tour.vercel.app", webX, footBarY + 60);
   ctx.shadowBlur = 0;
 
-  ctx.font = "500 20px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  ctx.font = "bold 17px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
   ctx.fillStyle = "#64748b";
-  ctx.fillText("SEGUIMIENTO EN TIEMPO REAL  •  FIXTURES Y TABLAS EN VIVO", 540, footerY + 36);
+  ctx.fillText("FIXTURES, RESULTADOS Y RANKINGS EN TIEMPO REAL", webX, footBarY + 95);
 
   ctx.restore();
 }
