@@ -58,6 +58,83 @@ export const FONDOS_DISPONIBLES: LocalBackground[] = [
     description: "Tomas de acción a nivel de red con líneas perimetrales neón",
     src: "/assets/fondos/fondo_4.jpg",
   },
+  {
+    id: "fondo_5",
+    filename: "fondo_5.jpg",
+    title: "Pista Profesional #5",
+    description: "Fondo de pádel de alta definición",
+    src: "/assets/fondos/fondo_5.jpg",
+  },
+  {
+    id: "fondo_6",
+    filename: "fondo_6.jpg",
+    title: "Pista Profesional #6",
+    description: "Fondo de pádel de alta definición",
+    src: "/assets/fondos/fondo_6.jpg",
+  },
+  {
+    id: "fondo_7",
+    filename: "fondo_7.jpg",
+    title: "Pista Profesional #7",
+    description: "Fondo de pádel de alta definición",
+    src: "/assets/fondos/fondo_7.jpg",
+  },
+  {
+    id: "fondo_8",
+    filename: "fondo_8.jpg",
+    title: "Pista Profesional #8",
+    description: "Fondo de pádel de alta definición",
+    src: "/assets/fondos/fondo_8.jpg",
+  },
+  {
+    id: "fondo_9",
+    filename: "fondo_9.jpg",
+    title: "Pista Profesional #9",
+    description: "Fondo de pádel de alta definición",
+    src: "/assets/fondos/fondo_9.jpg",
+  },
+  {
+    id: "fondo_10",
+    filename: "fondo_10.jpg",
+    title: "Pista Profesional #10",
+    description: "Fondo de pádel de alta definición",
+    src: "/assets/fondos/fondo_10.jpg",
+  },
+  {
+    id: "fondo_11",
+    filename: "fondo_11.jpg",
+    title: "Pista Profesional #11",
+    description: "Fondo de pádel de alta definición",
+    src: "/assets/fondos/fondo_11.jpg",
+  },
+  {
+    id: "fondo_12",
+    filename: "fondo_12.jpg",
+    title: "Pista Profesional #12",
+    description: "Fondo de pádel de alta definición",
+    src: "/assets/fondos/fondo_12.jpg",
+  },
+  {
+    id: "fondo_13",
+    filename: "fondo_13.jpg",
+    title: "Pista Profesional #13",
+    description: "Fondo de pádel de alta definición",
+    src: "/assets/fondos/fondo_13.jpg",
+  },
+  {
+    id: "fondo_14",
+    filename: "fondo_14.jpg",
+    title: "Pista Profesional #14",
+    description: "Fondo de pádel de alta definición",
+    src: "/assets/fondos/fondo_14.jpg",
+  },
+  {
+    id: "fondo_15",
+    filename: "fondo_15.jpg",
+    title: "Pista Profesional #15",
+    description: "Fondo de pádel de alta definición",
+    src: "/assets/fondos/fondo_15.jpg",
+  },
 ];
 
 export default function AdminFlyersPage() {
@@ -579,7 +656,7 @@ export default function AdminFlyersPage() {
               <span className="block text-xs font-medium text-dark-400">
                 O haz clic directamente en una miniatura para aplicarla:
               </span>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[480px] overflow-y-auto pr-1.5">
                 {FONDOS_DISPONIBLES.map((item) => {
                   const isActive = currentActiveFile === item.filename;
                   return (
@@ -597,19 +674,19 @@ export default function AdminFlyersPage() {
                         alt={item.title}
                         fill
                         className="object-cover"
-                        sizes="(max-width: 768px) 50vw, 25vw"
+                        sizes="(max-width: 768px) 33vw, 20vw"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-2">
-                        <span className="text-[11px] font-bold text-white truncate">
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent flex flex-col justify-end p-1.5">
+                        <span className="text-[10px] font-bold text-white truncate leading-tight">
                           {item.title}
                         </span>
-                        <span className="text-[9px] font-mono text-dark-300">
+                        <span className="text-[8px] font-mono text-dark-300">
                           {item.filename}
                         </span>
                       </div>
                       {isActive && (
-                        <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-emerald-500 text-dark-950 flex items-center justify-center shadow">
-                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-emerald-500 text-dark-950 flex items-center justify-center shadow">
+                          <Check className="w-2.5 h-2.5 stroke-[3]" />
                         </div>
                       )}
                     </div>
