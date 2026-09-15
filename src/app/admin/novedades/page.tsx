@@ -7,7 +7,8 @@ import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { createClient } from "@/lib/supabase/client";
 import type { Flyer } from "@/types/flyer";
-import { Plus, Trash2, Edit2, Image as ImageIcon, Link as LinkIcon, CheckCircle2, AlertCircle } from "lucide-react";
+import Link from "next/link";
+import { Plus, Trash2, Edit2, Image as ImageIcon, Link as LinkIcon, CheckCircle2, AlertCircle, Sparkles } from "lucide-react";
 
 export default function AdminNovedadesPage() {
   const [flyers, setFlyers] = useState<Flyer[]>([]);
@@ -162,15 +163,25 @@ export default function AdminNovedadesPage() {
             Gestiona los flyers que se muestran en el carrusel de la página principal.
           </p>
         </div>
-        <Button
-          onClick={() => {
-            resetForm();
-            setIsModalOpen(true);
-          }}
-          className="flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" /> Nuevo Flyer
-        </Button>
+        <div className="flex items-center gap-3">
+          <Link href="/admin/flyers-ai">
+            <Button
+              variant="secondary"
+              className="flex items-center gap-2 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
+            >
+              <Sparkles className="w-4 h-4" /> Generar con IA
+            </Button>
+          </Link>
+          <Button
+            onClick={() => {
+              resetForm();
+              setIsModalOpen(true);
+            }}
+            className="flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" /> Subir Flyer Manual
+          </Button>
+        </div>
       </div>
 
       {statusMsg && (
