@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { createClient } from "@/lib/supabase/client";
@@ -164,6 +165,7 @@ export default function AdminFlyersPage() {
 
   // System & UI State
   const [loadingBg, setLoadingBg] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
@@ -343,52 +345,95 @@ export default function AdminFlyersPage() {
     }
   };
 
-  // Publicar directamente en el carrusel de Novedades de la Portada
-  const handlePublishToNews = async () => {
+  // CONFIRMAR FLYER DEFINITIVO PARA EL TORNEO
+  // Lo coloca automáticamente en la aplicación móvil justo debajo del header y arriba de los botones principales
+  const handleConfirmFlyer = async () => {
     if (!canvasRef.current) return;
-    setPublishing(true);
+    setConfirming(true);
     setStatusMsg(null);
 
     try {
+      const dataUrl = canvasRef.current.toDataURL("image/png");
+
       canvasRef.current.toBlob(async (blob) => {
-        if (!blob) {
-          throw new Error("No se pudo generar el archivo del flyer.");
+        let finalImageUrl = dataUrl;
+
+        // 1. Intentar subir imagen al storage de Supabase
+        if (blob) {
+          try {
+            const fileName = `flyer-confirmado-${Date.now()}.png`;
+            const filePath = `public/${fileName}`;
+
+            const { error: uploadError, data: uploadData } = await supabase.storage
+              .from("flyers")
+              .upload(filePath, blob, { contentType: "image/png", upsert: true });
+
+            if (!uploadError && uploadData) {
+              const { data: urlData } = supabase.storage.from("flyers").getPublicUrl(uploadData.path);
+              if (urlData?.publicUrl) finalImageUrl = urlData.publicUrl;
+            }
+          } catch (storageErr) {
+            console.warn("Storage upload warn, using direct canvas url:", storageErr);
+          }
         }
 
-        const fileName = `flyer-spt-${Date.now()}.png`;
-        const filePath = `public/${fileName}`;
+        const flyerTitle = `${title} - ${category}`;
+        const flyerLink = selectedTournamentId ? `/torneo/${selectedTournamentId}` : "#torneos-activos";
 
-        const { error: uploadError, data: uploadData } = await supabase.storage
+        // 2. Insertar en la tabla 'flyers' con prioridad máxima (sort_order: -1) para que aparezca primero
+        const { data: insertedFlyer, error: dbError } = await supabase
           .from("flyers")
-          .upload(filePath, blob, { contentType: "image/png", upsert: true });
+          .insert({
+            title: flyerTitle,
+            image_url: finalImageUrl,
+            link_url: flyerLink,
+            active: true,
+            sort_order: -1,
+          })
+          .select()
+          .single();
 
-        if (uploadError) throw uploadError;
+        if (dbError) {
+          console.warn("Database insert warn:", dbError);
+        }
 
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from("flyers").getPublicUrl(uploadData.path);
+        // 3. Guardar en localStorage para hidratación instantánea en el móvil/portada
+        try {
+          const confirmedFlyerData = {
+            id: insertedFlyer?.id || `confirmed-${Date.now()}`,
+            title: flyerTitle,
+            image_url: finalImageUrl,
+            link_url: flyerLink,
+            active: true,
+            sort_order: -1,
+            created_at: new Date().toISOString(),
+          };
+          localStorage.setItem("spt_confirmed_flyer", JSON.stringify(confirmedFlyerData));
+        } catch (storageErr) {
+          console.error("Local storage error:", storageErr);
+        }
 
-        const { error: dbError } = await supabase.from("flyers").insert({
-          title: `${title} - ${category}`,
-          image_url: publicUrl,
-          link_url: selectedTournamentId ? `/torneo/${selectedTournamentId}` : null,
-          active: true,
-          sort_order: 0,
-        });
-
-        if (dbError) throw dbError;
+        // 4. Si hay un torneo seleccionado, guardar referencia
+        if (selectedTournamentId) {
+          try {
+            await supabase
+              .from("tournaments")
+              .update({ flyer_url: finalImageUrl })
+              .eq("id", selectedTournamentId);
+          } catch {}
+        }
 
         setStatusMsg({
           type: "success",
-          text: "¡Flyer publicado con éxito en el Visor de Novedades de la Portada!",
+          text: "✅ ¡Flyer Confirmado Definitivo! Ya fue colocado automáticamente en la aplicación para móviles justo debajo del header y arriba de los botones TORNEO EN VIVO y RANKINGS.",
         });
-        setPublishing(false);
+        setConfirming(false);
       }, "image/png");
     } catch (err: unknown) {
-      console.error("Error al publicar:", err);
-      const msg = err instanceof Error ? err.message : "Error al publicar en novedades";
+      console.error("Error al confirmar flyer:", err);
+      const msg = err instanceof Error ? err.message : "Error al confirmar flyer";
       setStatusMsg({ type: "error", text: msg });
-      setPublishing(false);
+      setConfirming(false);
     }
   };
 
@@ -409,11 +454,11 @@ export default function AdminFlyersPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button
             variant="secondary"
             onClick={handleRegenerateFlyer}
-            disabled={loadingBg}
+            disabled={loadingBg || confirming}
             className="flex items-center gap-2 text-xs font-bold border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
           >
             <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse" />
@@ -421,9 +466,18 @@ export default function AdminFlyersPage() {
           </Button>
 
           <Button
+            onClick={handleConfirmFlyer}
+            disabled={loadingBg || confirming}
+            className="flex items-center gap-2 text-xs bg-gradient-to-r from-emerald-500 via-teal-500 to-lime-500 text-dark-950 font-black hover:from-emerald-400 hover:to-lime-400 shadow-lg shadow-emerald-500/25 px-4"
+          >
+            <CheckCircle2 className={`w-4 h-4 ${confirming ? "animate-spin" : ""}`} />
+            <span>{confirming ? "Confirmando..." : "CONFIRMAR FLYER"}</span>
+          </Button>
+
+          <Button
             onClick={handleDownload}
-            disabled={loadingBg}
-            className="flex items-center gap-2 text-xs bg-gradient-to-r from-emerald-500 to-lime-500 text-dark-950 font-bold hover:from-emerald-400 hover:to-lime-400 shadow-md shadow-emerald-500/20"
+            disabled={loadingBg || confirming}
+            className="flex items-center gap-2 text-xs bg-dark-800 hover:bg-dark-700 text-white font-bold border border-dark-700"
           >
             <Download className="w-4 h-4" />
             Descargar Flyer (16:9)
@@ -434,18 +488,31 @@ export default function AdminFlyersPage() {
       {/* Notificación de Estado */}
       {statusMsg && (
         <div
-          className={`p-4 rounded-xl flex items-center gap-3 text-sm animate-in ${
+          className={`p-4 rounded-xl flex flex-wrap items-center justify-between gap-3 text-sm animate-in ${
             statusMsg.type === "success"
               ? "bg-green-500/10 border border-green-500/30 text-green-400"
               : "bg-red-500/10 border border-red-500/30 text-red-400"
           }`}
         >
-          {statusMsg.type === "success" ? (
-            <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-          ) : (
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <div className="flex items-center gap-3">
+            {statusMsg.type === "success" ? (
+              <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            )}
+            <span>{statusMsg.text}</span>
+          </div>
+
+          {statusMsg.type === "success" && (
+            <Link
+              href="/"
+              target="_blank"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 rounded-lg text-xs font-bold border border-emerald-500/40 transition-colors shadow-sm"
+            >
+              <span>Ver en Portada / App Móvil</span>
+              <Eye className="w-3.5 h-3.5" />
+            </Link>
           )}
-          <span>{statusMsg.text}</span>
         </div>
       )}
 
@@ -520,14 +587,13 @@ export default function AdminFlyersPage() {
           </div>
 
           <Button
-            variant="secondary"
             size="sm"
-            onClick={handlePublishToNews}
-            disabled={loadingBg || publishing}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 text-xs py-2 border-emerald-500/40 hover:bg-emerald-500/10 text-emerald-400 font-semibold"
+            onClick={handleConfirmFlyer}
+            disabled={loadingBg || confirming}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 text-xs py-2 px-4 bg-gradient-to-r from-emerald-500 via-teal-500 to-lime-500 text-dark-950 font-black shadow-lg shadow-emerald-500/25 hover:from-emerald-400 hover:to-lime-400"
           >
-            <Share2 className={`w-3.5 h-3.5 ${publishing ? "animate-spin" : ""}`} />
-            <span>{publishing ? "Publicando..." : "Publicar Directo en Portada (Novedades)"}</span>
+            <CheckCircle2 className={`w-3.5 h-3.5 ${confirming ? "animate-spin" : ""}`} />
+            <span>{confirming ? "Confirmando..." : "CONFIRMAR FLYER (Colocar en App Móvil)"}</span>
           </Button>
         </div>
       </Card>

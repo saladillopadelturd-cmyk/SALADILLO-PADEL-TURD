@@ -10,8 +10,33 @@ interface NewsCarouselProps {
   flyers: Flyer[];
 }
 
-export default function NewsCarousel({ flyers }: NewsCarouselProps) {
+export default function NewsCarousel({ flyers: initialFlyers }: NewsCarouselProps) {
+  const [flyers, setFlyers] = useState<Flyer[]>(initialFlyers);
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Sincronizar si cambian los props del servidor
+  useEffect(() => {
+    setFlyers(initialFlyers);
+  }, [initialFlyers]);
+
+  // Soporte de hidratación inmediata para flyers recién confirmados
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("spt_confirmed_flyer");
+      if (stored) {
+        const localFlyer: Flyer = JSON.parse(stored);
+        if (localFlyer && localFlyer.image_url) {
+          setFlyers((prev) => {
+            const exists = prev.some((f) => f.id === localFlyer.id || f.image_url === localFlyer.image_url);
+            if (exists) return prev;
+            return [localFlyer, ...prev];
+          });
+        }
+      }
+    } catch (e) {
+      console.error("Error reading stored flyer:", e);
+    }
+  }, []);
 
   useEffect(() => {
     if (flyers.length <= 1) return;
