@@ -234,6 +234,8 @@ export default function AdminAdminsPage() {
             ? `¿Deseas otorgar permisos de Administrador a ${targetUser?.email}? Podrá crear torneos, modificar fixture y cargar resultados.`
             : `¿Deseas quitar los permisos de Administrador a ${targetUser?.email}? Pasará a tener rol de usuario general.`
         }
+        confirmLabel={actionType === "promote" ? "Confirmar" : "Revocar"}
+        variant={actionType === "promote" ? "primary" : "danger"}
       />
     </div>
   );
