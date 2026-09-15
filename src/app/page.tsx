@@ -60,38 +60,38 @@ export default async function HomePage() {
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           {/* Circuit Badge */}
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-dark-900/90 border border-emerald-500/30 text-emerald-400 text-xs font-bold mb-6 shadow-lg shadow-emerald-500/10">
+          <div className="hidden sm:inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-dark-900/90 border border-emerald-500/30 text-emerald-400 text-xs font-bold mb-6 shadow-lg shadow-emerald-500/10">
             <Flame className="w-4 h-4 text-emerald-400 animate-pulse" />
             <span>CIRCUITO OFICIAL DE PÁDEL 2026</span>
           </div>
 
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black text-white tracking-tight leading-tight">
+          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black text-white tracking-tight leading-tight -mt-4 sm:mt-0">
             Saladillo{" "}
             <span className="bg-gradient-to-r from-blue-400 via-emerald-400 to-lime-300 bg-clip-text text-transparent">
               Padel Tour
             </span>
           </h1>
 
-          <p className="mt-4 text-sm sm:text-lg text-slate-300 max-w-2xl mx-auto font-medium leading-relaxed">
+          <p className="mt-3 sm:mt-4 text-sm sm:text-lg text-slate-300 max-w-2xl mx-auto font-medium leading-relaxed px-2">
             Viví el pádel con seguimiento en tiempo real: marcadores en vivo con punto de oro,
             tablas de posiciones de zonas, cuadros de playoffs y rankings acumulados.
           </p>
 
           {/* Quick Action CTA */}
-          <div className="mt-8 flex flex-col sm:flex-row gap-3.5 justify-center max-w-md mx-auto sm:max-w-none">
+          <div className="mt-6 sm:mt-8 flex flex-row gap-3 justify-center w-full mx-auto sm:max-w-none">
             <Link
               href="#torneos-activos"
-              className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-emerald-500 to-lime-500 text-dark-950 font-black text-sm rounded-xl hover:from-emerald-400 hover:to-lime-400 active:scale-95 transition-all shadow-lg shadow-emerald-500/25 cursor-pointer min-h-[48px]"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-6 py-3 bg-gradient-to-r from-emerald-500 to-lime-500 text-dark-950 font-black text-xs sm:text-sm rounded-xl hover:from-emerald-400 hover:to-lime-400 active:scale-95 transition-all shadow-lg shadow-emerald-500/25 cursor-pointer min-h-[44px] sm:min-h-[48px]"
             >
               <Activity className="w-4 h-4 stroke-[2.5]" />
-              <span>Ver Torneos en Vivo</span>
+              <span>TORNEO EN VIVO</span>
             </Link>
             <Link
               href="/rankings"
-              className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-dark-900/90 hover:bg-dark-850 text-white font-bold text-sm rounded-xl transition-all border border-dark-700/80 active:scale-95 shadow-md cursor-pointer min-h-[48px]"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-6 py-3 bg-dark-900/90 hover:bg-dark-850 text-white font-bold text-xs sm:text-sm rounded-xl transition-all border border-dark-700/80 active:scale-95 shadow-md cursor-pointer min-h-[44px] sm:min-h-[48px]"
             >
               <Trophy className="w-4 h-4 text-amber-400" />
-              <span>Tabla de Rankings</span>
+              <span>RANKINGS</span>
             </Link>
           </div>
         </div>
