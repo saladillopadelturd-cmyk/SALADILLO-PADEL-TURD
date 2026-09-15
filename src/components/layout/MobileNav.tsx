@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Trophy, Users, UserCheck, Shield } from "lucide-react";
+import { LayoutDashboard, Trophy, Users, UserCheck, Shield, Image as ImageIcon } from "lucide-react";
 
 const mobileLinks = [
   { href: "/admin", label: "Panel", icon: LayoutDashboard },
   { href: "/admin/torneos", label: "Torneos", icon: Trophy },
+  { href: "/admin/novedades", label: "Novedades", icon: ImageIcon },
   { href: "/admin/jugadores", label: "Jugadores", icon: Users },
   { href: "/admin/parejas", label: "Parejas", icon: UserCheck },
   { href: "/admin/admins", label: "Admins", icon: Shield },

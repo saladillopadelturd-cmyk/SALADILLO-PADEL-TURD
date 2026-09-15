@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import type { Tournament } from "@/types/tournament";
 import { Trophy, Calendar, MapPin, ArrowRight, ShieldCheck, Clock, Users, Activity, Sparkles, Flame } from "lucide-react";
 import RulesSection from "@/components/home/RulesSection";
+import NewsCarousel from "@/components/home/NewsCarousel";
+import type { Flyer } from "@/types/flyer";
 
 export const revalidate = 0; // Fresh tournament data on each load
 
@@ -34,14 +36,26 @@ export default async function HomePage() {
   const supabase = await createClient();
 
   let tournaments: Tournament[] = [];
+  let flyers: Flyer[] = [];
+  
   try {
-    const { data } = await supabase
-      .from("tournaments")
-      .select("*")
-      .order("date", { ascending: false });
-    if (data) tournaments = data;
+    const [tourRes, flyersRes] = await Promise.all([
+      supabase
+        .from("tournaments")
+        .select("*")
+        .order("date", { ascending: false }),
+      supabase
+        .from("flyers")
+        .select("*")
+        .eq("active", true)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: false })
+    ]);
+    
+    if (tourRes.data) tournaments = tourRes.data;
+    if (flyersRes.data) flyers = flyersRes.data;
   } catch (e) {
-    console.error("Error loading tournaments on home:", e);
+    console.error("Error loading data on home:", e);
   }
 
   const activeTournaments = tournaments.filter(
@@ -76,6 +90,8 @@ export default async function HomePage() {
             Viví el pádel con seguimiento en tiempo real: marcadores en vivo con punto de oro,
             tablas de posiciones de zonas, cuadros de playoffs y rankings acumulados.
           </p>
+
+          <NewsCarousel flyers={flyers} />
 
           {/* Quick Action CTA */}
           <div className="mt-2 sm:mt-8 flex flex-row gap-3 justify-center w-full mx-auto sm:max-w-none">
