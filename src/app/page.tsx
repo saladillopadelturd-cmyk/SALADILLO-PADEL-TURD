@@ -56,23 +56,68 @@ export default async function HomePage() {
     if (flyersRes.data && flyersRes.data.length > 0) {
       flyers = flyersRes.data;
     } else {
+      // 1. Intentar consultar Supabase Storage público
       try {
-        const fs = await import("fs");
-        const path = await import("path");
-        const filePath = path.join(process.cwd(), "public", "confirmed_flyer.json");
-        if (fs.existsSync(filePath)) {
-          const fileData = fs.readFileSync(filePath, "utf-8");
-          const parsed = JSON.parse(fileData);
-          if (parsed && parsed.image_url) {
-            flyers = [parsed];
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hrediohisjcjykaranzx.supabase.co";
+        const storageRes = await fetch(`${supabaseUrl}/storage/v1/object/public/flyers/confirmed_flyer.json`, {
+          cache: "no-store",
+        });
+        if (storageRes.ok) {
+          const storageData = await storageRes.json();
+          if (storageData && storageData.image_url) {
+            flyers = [storageData];
           }
         }
-      } catch (fsErr) {
-        console.warn("Could not load local confirmed flyer:", fsErr);
+      } catch (storageErr) {
+        console.warn("Storage confirmed flyer fetch error on page:", storageErr);
+      }
+
+      // 2. Fallback a archivo en disco si no se obtuvo de storage
+      if (flyers.length === 0) {
+        try {
+          const fs = await import("fs");
+          const path = await import("path");
+          const filePath = path.join(process.cwd(), "public", "confirmed_flyer.json");
+          if (fs.existsSync(filePath)) {
+            const fileData = fs.readFileSync(filePath, "utf-8");
+            const parsed = JSON.parse(fileData);
+            if (parsed && parsed.image_url) {
+              flyers = [parsed];
+            }
+          }
+        } catch (fsErr) {
+          console.warn("Could not load local confirmed flyer:", fsErr);
+        }
+      }
+
+      // 3. Fallback garantizado para que nunca esté vacío en móviles
+      if (flyers.length === 0) {
+        flyers = [
+          {
+            id: "oficial-spt-2026",
+            title: "TORNEO ABIERTO DE PÁDEL - 5TA LIBRES",
+            image_url: "/assets/fondos/fondo_1.jpg",
+            link_url: "#torneos-activos",
+            active: true,
+            sort_order: -1,
+            created_at: new Date().toISOString(),
+          },
+        ];
       }
     }
   } catch (e) {
     console.error("Error loading data on home:", e);
+    flyers = [
+      {
+        id: "oficial-spt-2026",
+        title: "TORNEO ABIERTO DE PÁDEL - 5TA LIBRES",
+        image_url: "/assets/fondos/fondo_1.jpg",
+        link_url: "#torneos-activos",
+        active: true,
+        sort_order: -1,
+        created_at: new Date().toISOString(),
+      },
+    ];
   }
 
   const activeTournaments = tournaments.filter(
@@ -85,7 +130,7 @@ export default async function HomePage() {
   return (
     <div className="min-h-screen bg-dark-950">
       {/* Hero Section - Premier Padel Aesthetic */}
-      <section className="relative overflow-hidden py-6 sm:py-24 border-b border-dark-800/80">
+      <section className="relative overflow-hidden pt-2 pb-6 sm:py-20 border-b border-dark-800/80">
         {/* Subtle Sports Mesh Glow */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-gradient-to-b from-blue-600/15 via-emerald-500/10 to-transparent blur-3xl pointer-events-none" />
 

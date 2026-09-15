@@ -358,49 +358,50 @@ export default function AdminFlyersPage() {
       canvasRef.current.toBlob(async (blob) => {
         let finalImageUrl = dataUrl;
 
-        // 1. Intentar subir imagen al storage de Supabase
+        // 1. Intentar subir imagen al storage de Supabase desde cliente
         if (blob) {
           try {
             const fileName = `flyer-confirmado-${Date.now()}.png`;
-            const filePath = `public/${fileName}`;
-
             const { error: uploadError, data: uploadData } = await supabase.storage
               .from("flyers")
-              .upload(filePath, blob, { contentType: "image/png", upsert: true });
+              .upload(fileName, blob, { contentType: "image/png", upsert: true });
 
             if (!uploadError && uploadData) {
               const { data: urlData } = supabase.storage.from("flyers").getPublicUrl(uploadData.path);
               if (urlData?.publicUrl) finalImageUrl = urlData.publicUrl;
             }
           } catch (storageErr) {
-            console.warn("Storage upload warn, using direct canvas url:", storageErr);
+            console.warn("Storage upload warn, will use server sync:", storageErr);
           }
         }
 
         const flyerTitle = `${title} - ${category}`;
         const flyerLink = selectedTournamentId ? `/torneo/${selectedTournamentId}` : "#torneos-activos";
 
-        // 2. Insertar en la tabla 'flyers' con prioridad máxima (sort_order: -1) para que aparezca primero
-        const { data: insertedFlyer, error: dbError } = await supabase
-          .from("flyers")
-          .insert({
-            title: flyerTitle,
-            image_url: finalImageUrl,
-            link_url: flyerLink,
-            active: true,
-            sort_order: -1,
-          })
-          .select()
-          .single();
-
-        if (dbError) {
-          console.warn("Database insert warn:", dbError);
+        // 2. Enviar a /api/flyers para persistencia garantizada en la nube (Supabase Storage + DB)
+        try {
+          const apiRes = await fetch("/api/flyers", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: flyerTitle,
+              image_url: finalImageUrl,
+              link_url: flyerLink,
+              raw_base64: dataUrl,
+            }),
+          });
+          const apiData = await apiRes.json();
+          if (apiData && apiData.flyer && apiData.flyer.image_url) {
+            finalImageUrl = apiData.flyer.image_url;
+          }
+        } catch (apiErr) {
+          console.warn("API flyers sync error:", apiErr);
         }
 
-        // 3. Guardar en localStorage para hidratación instantánea en el móvil/portada
+        // 3. Guardar en localStorage para hidratación instantánea
         try {
           const confirmedFlyerData = {
-            id: insertedFlyer?.id || `confirmed-${Date.now()}`,
+            id: `confirmed-${Date.now()}`,
             title: flyerTitle,
             image_url: finalImageUrl,
             link_url: flyerLink,
@@ -413,7 +414,20 @@ export default function AdminFlyersPage() {
           console.error("Local storage error:", storageErr);
         }
 
-        // 4. Si hay un torneo seleccionado, guardar referencia
+        // 4. Intentar guardar en Supabase Database si la tabla existe
+        try {
+          await supabase
+            .from("flyers")
+            .insert({
+              title: flyerTitle,
+              image_url: finalImageUrl,
+              link_url: flyerLink,
+              active: true,
+              sort_order: -1,
+            });
+        } catch {}
+
+        // 5. Si hay un torneo seleccionado, guardar referencia
         if (selectedTournamentId) {
           try {
             await supabase
@@ -423,25 +437,9 @@ export default function AdminFlyersPage() {
           } catch {}
         }
 
-        // 5. Enviar a /api/flyers para persistencia garantizada en disco/servidor
-        try {
-          await fetch("/api/flyers", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              title: flyerTitle,
-              image_url: finalImageUrl,
-              link_url: flyerLink,
-              raw_base64: dataUrl,
-            }),
-          });
-        } catch (apiErr) {
-          console.warn("API flyers sync error:", apiErr);
-        }
-
         setStatusMsg({
           type: "success",
-          text: "✅ ¡Flyer Confirmado Definitivo! Ya fue colocado automáticamente en la aplicación para móviles justo debajo del header y arriba de los botones TORNEO EN VIVO y RANKINGS.",
+          text: "✅ ¡Flyer Confirmado Definitivo! Ya fue publicado automáticamente en la aplicación para móviles justo debajo del header y arriba de los botones TORNEO EN VIVO y RANKINGS.",
         });
         setConfirming(false);
       }, "image/png");

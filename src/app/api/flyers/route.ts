@@ -5,10 +5,36 @@ import path from "path";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  let flyers = [];
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hrediohisjcjykaranzx.supabase.co";
+const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
-  // 1. Intentar consultar Supabase
+const DEFAULT_FLYER = {
+  id: "oficial-spt-2026",
+  title: "TORNEO ABIERTO DE PÁDEL - 5TA LIBRES",
+  image_url: "/assets/fondos/fondo_1.jpg",
+  link_url: "#torneos-activos",
+  active: true,
+  sort_order: -1,
+  created_at: "2026-09-15T00:00:00.000Z",
+};
+
+export async function GET() {
+  // 1. Consultar Supabase Storage público (disponible en todos los dispositivos y Vercel)
+  try {
+    const storageRes = await fetch(`${SUPABASE_URL}/storage/v1/object/public/flyers/confirmed_flyer.json`, {
+      cache: "no-store",
+    });
+    if (storageRes.ok) {
+      const data = await storageRes.json();
+      if (data && data.image_url) {
+        return NextResponse.json({ flyers: [data] });
+      }
+    }
+  } catch (storageErr) {
+    console.warn("Storage confirmed flyer fetch error:", storageErr);
+  }
+
+  // 2. Intentar consultar tabla 'flyers' en Supabase si existe
   try {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -19,14 +45,13 @@ export async function GET() {
       .order("created_at", { ascending: false });
 
     if (!error && data && data.length > 0) {
-      flyers = data;
-      return NextResponse.json({ flyers });
+      return NextResponse.json({ flyers: data });
     }
   } catch (err) {
     console.warn("Supabase flyers fetch warning:", err);
   }
 
-  // 2. Fallback local desde public/confirmed_flyer.json
+  // 3. Fallback local desde public/confirmed_flyer.json (entorno de desarrollo local)
   try {
     const filePath = path.join(process.cwd(), "public", "confirmed_flyer.json");
     if (fs.existsSync(filePath)) {
@@ -37,10 +62,11 @@ export async function GET() {
       }
     }
   } catch (err) {
-    console.error("Local file fallback error:", err);
+    console.warn("Local file fallback error:", err);
   }
 
-  return NextResponse.json({ flyers: [] });
+  // 4. Flyer por defecto oficial para que nunca quede vacío en el móvil
+  return NextResponse.json({ flyers: [DEFAULT_FLYER] });
 }
 
 export async function POST(req: Request) {
@@ -50,24 +76,47 @@ export async function POST(req: Request) {
 
     let finalImageUrl = image_url;
 
-    // Si viene base64 crudo, guardarlo como asset estático en el servidor
+    // 1. Si viene base64 crudo, subir la imagen a Supabase Storage bucket 'flyers'
     if (raw_base64 && typeof raw_base64 === "string" && raw_base64.startsWith("data:image")) {
       try {
         const base64Data = raw_base64.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, "base64");
         const fileName = `flyer_confirmado_${Date.now()}.png`;
-        const localSavePath = path.join(process.cwd(), "public", "assets", "fondos", fileName);
-        
-        fs.writeFileSync(localSavePath, buffer);
-        finalImageUrl = `/assets/fondos/${fileName}`;
+
+        // Subir a Supabase Storage con Service Key
+        if (SUPABASE_KEY) {
+          const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/flyers/${fileName}`, {
+            method: "POST",
+            headers: {
+              apikey: SUPABASE_KEY,
+              Authorization: `Bearer ${SUPABASE_KEY}`,
+              "Content-Type": "image/png",
+              "x-upsert": "true",
+            },
+            body: buffer,
+          });
+
+          if (uploadRes.ok) {
+            finalImageUrl = `${SUPABASE_URL}/storage/v1/object/public/flyers/${fileName}`;
+          }
+        }
+
+        // Guardado local opcional en disco (solo funciona en dev local)
+        try {
+          const localSavePath = path.join(process.cwd(), "public", "assets", "fondos", fileName);
+          fs.writeFileSync(localSavePath, buffer);
+          if (!finalImageUrl || finalImageUrl.startsWith("data:")) {
+            finalImageUrl = `/assets/fondos/${fileName}`;
+          }
+        } catch {}
       } catch (saveErr) {
-        console.warn("Could not save image buffer to disk:", saveErr);
+        console.warn("Could not save image buffer:", saveErr);
       }
     }
 
     const confirmedFlyer = {
       id: `confirmed-${Date.now()}`,
-      title: title || "Torneo SPT",
+      title: title || "Torneo Saladillo Padel Tour",
       image_url: finalImageUrl,
       link_url: link_url || "#torneos-activos",
       active: true,
@@ -75,15 +124,31 @@ export async function POST(req: Request) {
       created_at: new Date().toISOString(),
     };
 
-    // 1. Guardar en public/confirmed_flyer.json para persistencia garantizada
+    // 2. Guardar confirmed_flyer.json en Supabase Storage (disponible para todos los móviles)
+    if (SUPABASE_KEY) {
+      try {
+        await fetch(`${SUPABASE_URL}/storage/v1/object/flyers/confirmed_flyer.json`, {
+          method: "POST",
+          headers: {
+            apikey: SUPABASE_KEY,
+            Authorization: `Bearer ${SUPABASE_KEY}`,
+            "Content-Type": "application/json",
+            "x-upsert": "true",
+          },
+          body: JSON.stringify(confirmedFlyer, null, 2),
+        });
+      } catch (storageErr) {
+        console.warn("Storage upload confirmed_flyer.json warning:", storageErr);
+      }
+    }
+
+    // 3. Guardar en public/confirmed_flyer.json para entorno local
     try {
       const filePath = path.join(process.cwd(), "public", "confirmed_flyer.json");
       fs.writeFileSync(filePath, JSON.stringify(confirmedFlyer, null, 2), "utf-8");
-    } catch (fsErr) {
-      console.warn("Could not write confirmed_flyer.json:", fsErr);
-    }
+    } catch {}
 
-    // 2. Intentar guardar en Supabase si está disponible
+    // 4. Intentar guardar en Supabase Database si la tabla 'flyers' existe
     try {
       const supabase = await createClient();
       await supabase.from("flyers").insert({
@@ -93,9 +158,7 @@ export async function POST(req: Request) {
         active: true,
         sort_order: -1,
       });
-    } catch (dbErr) {
-      console.warn("Supabase insert fallback:", dbErr);
-    }
+    } catch {}
 
     return NextResponse.json({ success: true, flyer: confirmedFlyer });
   } catch (error) {
