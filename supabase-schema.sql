@@ -61,6 +61,9 @@ CREATE TABLE public.players (
   last_name TEXT NOT NULL,
   phone TEXT,
   email TEXT,
+  gender TEXT NOT NULL DEFAULT 'Masculino' CHECK (gender IN ('Masculino', 'Femenino')),
+  category TEXT NOT NULL DEFAULT '5ta',
+  is_observed BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

@@ -150,10 +150,14 @@ export default function AdminParejasPage() {
       editing?.id,
       formJugador2 || null
     );
-    return available.map((p) => ({
-      value: p.id,
-      label: `${p.first_name} ${p.last_name}`,
-    }));
+    return available.map((p) => {
+      const cat = p.category ? ` (${p.category})` : "";
+      const obs = p.is_observed ? " 👁️ [Observado]" : "";
+      return {
+        value: p.id,
+        label: `${p.first_name} ${p.last_name}${cat}${obs}`,
+      };
+    });
   }, [players, couples, formTorneo, editing, formJugador2]);
 
   // Opciones para Jugador 2: excluye los ya asignados y al Jugador 1 (si fue seleccionado)
@@ -165,10 +169,14 @@ export default function AdminParejasPage() {
       editing?.id,
       formJugador1 || null
     );
-    return available.map((p) => ({
-      value: p.id,
-      label: `${p.first_name} ${p.last_name}`,
-    }));
+    return available.map((p) => {
+      const cat = p.category ? ` (${p.category})` : "";
+      const obs = p.is_observed ? " 👁️ [Observado]" : "";
+      return {
+        value: p.id,
+        label: `${p.first_name} ${p.last_name}${cat}${obs}`,
+      };
+    });
   }, [players, couples, formTorneo, editing, formJugador1]);
 
   // Filtrar parejas en la lista según el torneo seleccionado en el filtro

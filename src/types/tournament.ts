@@ -49,6 +49,8 @@ export interface Zone {
   created_at: string;
 }
 
+export type PlayerGender = "Masculino" | "Femenino";
+
 export interface Player {
   id: string;
   user_id?: string | null;
@@ -56,6 +58,9 @@ export interface Player {
   last_name: string;
   phone?: string | null;
   email?: string | null;
+  gender?: PlayerGender | string | null;
+  category?: string | null;
+  is_observed?: boolean | null;
   created_at: string;
 }
 

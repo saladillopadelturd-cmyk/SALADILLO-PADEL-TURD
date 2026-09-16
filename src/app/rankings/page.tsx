@@ -26,6 +26,7 @@ interface IndividualRankingItem {
   points: number;
   matchesWon: number;
   matchesLost: number;
+  isObserved?: boolean;
 }
 
 export default async function RankingsPage({
@@ -103,6 +104,7 @@ export default async function RankingsPage({
             points: r.points,
             matchesWon: r.matches_won,
             matchesLost: r.matches_lost,
+            isObserved: !!p?.is_observed,
           };
         });
     }
@@ -305,7 +307,19 @@ export default async function RankingsPage({
                             {i === 0 && <Medal className="w-4 h-4 text-amber-400 hidden sm:inline" />}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-white font-bold text-sm sm:text-base">{p.name}</td>
+                        <td className="px-6 py-4 text-white font-bold text-sm sm:text-base">
+                          <div className="flex items-center gap-2">
+                            <span>{p.name}</span>
+                            {p.isObserved && (
+                              <span
+                                title="Jugador en observación para ascenso de categoría"
+                                className="text-amber-400 text-[11px] inline-flex items-center gap-1 font-semibold bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30"
+                              >
+                                👁️ Observado
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-4 py-4 text-center text-xs font-semibold text-emerald-400">{p.category}</td>
                         <td className="px-4 py-4 text-center text-slate-300 scoreboard-digit">{p.tournaments}</td>
                         <td className="px-4 py-4 text-center text-xs scoreboard-digit">
