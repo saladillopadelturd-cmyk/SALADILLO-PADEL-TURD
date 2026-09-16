@@ -497,45 +497,78 @@ export function generateRandomCouples(
   const result = [];
   let currentNum = startingNumber;
 
-  // Si es torneo SUMA, emparejar inteligentemente de forma que cumplan con la suma
+  // Si es torneo SUMA, emparejar inteligentemente de forma que cumplan con la suma y maximicen parejas válidas
   if (tournament && isSumaCategory(tournament.category)) {
-    const matched = new Set<string>();
+    let bestPairs: [Player, Player][] = [];
+    const maxPossiblePairs = Math.floor(availablePlayers.length / 2);
 
-    for (let i = 0; i < pool.length; i++) {
-      const p1 = pool[i];
-      if (matched.has(p1.id)) continue;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const trialPool = [...availablePlayers];
+      // Shuffle aleatorio
+      for (let i = trialPool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [trialPool[i], trialPool[j]] = [trialPool[j], trialPool[i]];
+      }
 
-      // Buscar un compañero disponible que cumpla la suma requerida
-      let partnerIndex = -1;
-      for (let j = i + 1; j < pool.length; j++) {
-        const p2 = pool[j];
-        if (matched.has(p2.id)) continue;
+      // Ordenar por nivel (los jugadores más avanzados primero para asegurarles compañero compatible)
+      trialPool.sort((a, b) => {
+        const la = getEffectivePlayerLevelForTournament(a, tournament);
+        const lb = getEffectivePlayerLevelForTournament(b, tournament);
+        return la - lb;
+      });
 
-        const check = validateCoupleCategorySuma(p1, p2, tournament);
-        if (check.isValid) {
-          partnerIndex = j;
-          break;
+      const trialMatched = new Set<string>();
+      const trialPairs: [Player, Player][] = [];
+
+      for (let i = 0; i < trialPool.length; i++) {
+        const p1 = trialPool[i];
+        if (trialMatched.has(p1.id)) continue;
+
+        const validCandidates: number[] = [];
+        for (let j = i + 1; j < trialPool.length; j++) {
+          const p2 = trialPool[j];
+          if (trialMatched.has(p2.id)) continue;
+          if (validateCoupleCategorySuma(p1, p2, tournament).isValid) {
+            validCandidates.push(j);
+          }
+        }
+
+        if (validCandidates.length > 0) {
+          const chosenIdx = validCandidates[Math.floor(Math.random() * validCandidates.length)];
+          const p2 = trialPool[chosenIdx];
+          trialMatched.add(p1.id);
+          trialMatched.add(p2.id);
+          trialPairs.push([p1, p2]);
         }
       }
 
-      if (partnerIndex !== -1) {
-        const p2 = pool[partnerIndex];
-        matched.add(p1.id);
-        matched.add(p2.id);
-
-        const num = currentNum++;
-        const p1Short = formatPlayerShortName(p1);
-        const p2Short = formatPlayerShortName(p2);
-        result.push({
-          tournament_id: tournamentId,
-          player1_id: p1.id,
-          player2_id: p2.id,
-          couple_number: num,
-          player1: p1,
-          player2: p2,
-          label: `Pareja ${num}: ${p1Short} / ${p2Short}`,
-        });
+      if (trialPairs.length > bestPairs.length) {
+        bestPairs = trialPairs;
       }
+      if (bestPairs.length === maxPossiblePairs) {
+        break;
+      }
+    }
+
+    // Mezclar el orden de las parejas sorteadas para asignar números correlativos imparciales
+    for (let i = bestPairs.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [bestPairs[i], bestPairs[j]] = [bestPairs[j], bestPairs[i]];
+    }
+
+    for (const [p1, p2] of bestPairs) {
+      const num = currentNum++;
+      const p1Short = formatPlayerShortName(p1);
+      const p2Short = formatPlayerShortName(p2);
+      result.push({
+        tournament_id: tournamentId,
+        player1_id: p1.id,
+        player2_id: p2.id,
+        couple_number: num,
+        player1: p1,
+        player2: p2,
+        label: `Pareja ${num}: ${p1Short} / ${p2Short}`,
+      });
     }
 
     return result;
