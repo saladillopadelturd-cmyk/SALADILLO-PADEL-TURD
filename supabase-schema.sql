@@ -74,7 +74,8 @@ CREATE TABLE public.tournaments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   date DATE NOT NULL,
-  category TEXT NOT NULL DEFAULT '4ta',
+  category TEXT NOT NULL DEFAULT '5ta',
+  gender TEXT NOT NULL DEFAULT 'Masculino' CHECK (gender IN ('Masculino', 'Femenino')),
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'zones', 'playoffs', 'finished')),
   game_mode TEXT NOT NULL DEFAULT 'american_9games' CHECK (game_mode IN (
     'round_robin_diff', -- Todos contra todos por diferencia de games

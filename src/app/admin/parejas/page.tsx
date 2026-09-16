@@ -14,6 +14,7 @@ import {
   validateCoupleFormation,
   getCoupleNumberMap,
   generateRandomCouples,
+  isPlayerEligibleForTournament,
 } from "@/lib/tournament/couples";
 import { calculateOptimalZones } from "@/lib/tournament/zones";
 import { AlertCircle, AlertTriangle, CheckCircle2, Users, Filter, Plus, Shuffle, Sparkles, Trophy } from "lucide-react";
@@ -44,15 +45,15 @@ export default function AdminParejasPage() {
       const [couplesRes, tournamentsRes, playersRes] = await Promise.all([
         supabase
           .from("couples")
-          .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*), tournament:tournaments(name)")
+          .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*), tournament:tournaments(name, gender, category)")
           .order("created_at", { ascending: false }),
         supabase
           .from("tournaments")
-          .select("id, name")
+          .select("id, name, date, gender, category, zone_size, num_zones")
           .order("created_at", { ascending: false }),
         supabase
           .from("players")
-          .select("id, first_name, last_name")
+          .select("id, first_name, last_name, gender, category, is_observed")
           .order("first_name", { ascending: true }),
       ]);
 
@@ -117,8 +118,16 @@ export default function AdminParejasPage() {
 
   const tournamentOptions = tournaments.map((t) => ({
     value: t.id,
-    label: t.name,
+    label: `${t.name} (${t.gender || "Masculino"} - Cat. ${t.category || "6ta"})`,
   }));
+
+  const selectedTournament = useMemo(() => {
+    return tournaments.find((t) => t.id === formTorneo) || null;
+  }, [tournaments, formTorneo]);
+
+  const autoSelectedTournament = useMemo(() => {
+    return tournaments.find((t) => t.id === autoTorneo) || null;
+  }, [tournaments, autoTorneo]);
 
   // Siguiente número de pareja que se asignará en el torneo seleccionado
   const nextCoupleNumber = useMemo(() => {
@@ -132,10 +141,18 @@ export default function AdminParejasPage() {
     return getAvailablePlayersForTournament(players, couples, formTorneo, editing?.id);
   }, [players, couples, formTorneo, editing]);
 
-  // Jugadores disponibles para generación automática en autoTorneo
+  // Jugadores disponibles para generación automática en autoTorneo (filtrados estrictamente por elegibilidad)
   const availablePlayersForAuto = useMemo(() => {
-    return getAvailablePlayersForTournament(players, couples, autoTorneo);
-  }, [players, couples, autoTorneo]);
+    return getAvailablePlayersForTournament(
+      players,
+      couples,
+      autoTorneo,
+      null,
+      null,
+      autoSelectedTournament,
+      true
+    );
+  }, [players, couples, autoTorneo, autoSelectedTournament]);
 
   const existingCountInAutoTorneo = useMemo(() => {
     return couples.filter((c) => c.tournament_id === autoTorneo).length;
@@ -152,13 +169,26 @@ export default function AdminParejasPage() {
     );
     return available.map((p) => {
       const cat = p.category ? ` (${p.category})` : "";
+      const sex = p.gender ? ` [${p.gender}]` : "";
       const obs = p.is_observed ? " 👁️ [Observado]" : "";
+      let eligibilityNote = "";
+      let isDisabled = false;
+
+      if (selectedTournament) {
+        const check = isPlayerEligibleForTournament(p, selectedTournament);
+        if (!check.eligible) {
+          eligibilityNote = " 🚫 (No elegible)";
+          isDisabled = true;
+        }
+      }
+
       return {
         value: p.id,
-        label: `${p.first_name} ${p.last_name}${cat}${obs}`,
+        label: `${p.first_name} ${p.last_name}${sex}${cat}${obs}${eligibilityNote}`,
+        disabled: isDisabled,
       };
     });
-  }, [players, couples, formTorneo, editing, formJugador2]);
+  }, [players, couples, formTorneo, editing, formJugador2, selectedTournament]);
 
   // Opciones para Jugador 2: excluye los ya asignados y al Jugador 1 (si fue seleccionado)
   const player2Options = useMemo(() => {
@@ -171,13 +201,26 @@ export default function AdminParejasPage() {
     );
     return available.map((p) => {
       const cat = p.category ? ` (${p.category})` : "";
+      const sex = p.gender ? ` [${p.gender}]` : "";
       const obs = p.is_observed ? " 👁️ [Observado]" : "";
+      let eligibilityNote = "";
+      let isDisabled = false;
+
+      if (selectedTournament) {
+        const check = isPlayerEligibleForTournament(p, selectedTournament);
+        if (!check.eligible) {
+          eligibilityNote = " 🚫 (No elegible)";
+          isDisabled = true;
+        }
+      }
+
       return {
         value: p.id,
-        label: `${p.first_name} ${p.last_name}${cat}${obs}`,
+        label: `${p.first_name} ${p.last_name}${sex}${cat}${obs}${eligibilityNote}`,
+        disabled: isDisabled,
       };
     });
-  }, [players, couples, formTorneo, editing, formJugador1]);
+  }, [players, couples, formTorneo, editing, formJugador1, selectedTournament]);
 
   // Filtrar parejas en la lista según el torneo seleccionado en el filtro
   const filteredCouples = useMemo(() => {
@@ -195,7 +238,15 @@ export default function AdminParejasPage() {
   }, [filterTorneo, couples, tournaments]);
 
   const handleCreate = async () => {
-    const validation = validateCoupleFormation(formTorneo, formJugador1, formJugador2, couples);
+    const validation = validateCoupleFormation(
+      formTorneo,
+      formJugador1,
+      formJugador2,
+      couples,
+      null,
+      selectedTournament,
+      players
+    );
     if (!validation.isValid) {
       setNotification({ type: "error", text: validation.error || "Datos inválidos para formar la pareja." });
       return;
@@ -214,7 +265,7 @@ export default function AdminParejasPage() {
         const { data, error } = await supabase
           .from("couples")
           .insert(payload)
-          .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*), tournament:tournaments(name)")
+          .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*), tournament:tournaments(name, gender, category)")
           .single();
 
         if (error) throw error;
@@ -258,7 +309,7 @@ export default function AdminParejasPage() {
         const { data, error } = await supabase
           .from("couples")
           .insert(payloads)
-          .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*), tournament:tournaments(name)");
+          .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*), tournament:tournaments(name, gender, category)");
 
         if (error) throw error;
         if (data) {
@@ -278,7 +329,15 @@ export default function AdminParejasPage() {
 
   const handleEdit = async () => {
     if (!editing) return;
-    const validation = validateCoupleFormation(formTorneo, formJugador1, formJugador2, couples, editing.id);
+    const validation = validateCoupleFormation(
+      formTorneo,
+      formJugador1,
+      formJugador2,
+      couples,
+      editing.id,
+      selectedTournament,
+      players
+    );
     if (!validation.isValid) {
       setNotification({ type: "error", text: validation.error || "Datos inválidos para editar la pareja." });
       return;
@@ -296,7 +355,7 @@ export default function AdminParejasPage() {
           .from("couples")
           .update(payload)
           .eq("id", editing.id)
-          .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*), tournament:tournaments(name)")
+          .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*), tournament:tournaments(name, gender, category)")
           .single();
 
         if (error) throw error;
@@ -411,7 +470,7 @@ export default function AdminParejasPage() {
             const count = couples.filter((c) => c.tournament_id === t.id).length;
             return (
               <option key={t.id} value={t.id}>
-                {t.name} ({count} parejas)
+                {t.name} ({t.gender || "Masculino"} - Cat. {t.category || "6ta"}) ({count} parejas)
               </option>
             );
           })}
@@ -502,6 +561,7 @@ export default function AdminParejasPage() {
               <tbody className="divide-y divide-dark-700">
                 {filteredCouples.map((pair) => {
                   const num = coupleNumberMap.get(pair.id) ?? 1;
+                  const tourData = (pair as any).tournament;
                   return (
                     <tr key={pair.id} className="bg-dark-800 hover:bg-dark-700/50 transition-colors">
                       <td className="px-6 py-4">
@@ -516,7 +576,24 @@ export default function AdminParejasPage() {
                         {getPlayerLabel(pair.player2)}
                       </td>
                       <td className="px-6 py-4 text-dark-300">
-                        {(pair as unknown as { tournament?: { name: string } }).tournament?.name ?? "Torneo"}
+                        <div className="flex flex-col">
+                          <span className="text-white font-medium">
+                            {tourData?.name ?? "Torneo"}
+                          </span>
+                          {(tourData?.gender || tourData?.category) && (
+                            <div className="flex items-center gap-1.5 mt-0.5 text-xs">
+                              <span className={
+                                tourData?.gender === "Femenino" ? "text-pink-400 font-semibold" : "text-blue-400 font-semibold"
+                              }>
+                                {tourData?.gender === "Femenino" ? "♀ Femenino" : "♂ Masculino"}
+                              </span>
+                              <span className="text-dark-600">•</span>
+                              <span className="text-primary-400 font-medium">
+                                Cat. {tourData?.category || "6ta"}
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-dark-300">
                         {pair.seed ? `Cabeza de serie #${pair.seed}` : "-"}
@@ -559,6 +636,28 @@ export default function AdminParejasPage() {
             value={formTorneo}
             onChange={(e) => handleTorneoChange(e.target.value)}
           />
+
+          {selectedTournament && (
+            <div className="p-3 bg-dark-800/90 border border-dark-700 rounded-xl text-xs space-y-1.5 text-dark-300">
+              <div className="flex items-center gap-2">
+                <span className={`px-2 py-0.5 rounded-full font-semibold ${
+                  selectedTournament.gender === "Femenino"
+                    ? "bg-pink-500/10 text-pink-400 border border-pink-500/30"
+                    : "bg-blue-500/10 text-blue-400 border border-blue-500/30"
+                }`}>
+                  {selectedTournament.gender === "Femenino" ? "♀ Femenino" : "♂ Masculino"}
+                </span>
+                <span className="px-2 py-0.5 rounded-full font-semibold bg-primary-500/10 text-primary-400 border border-primary-500/30">
+                  Categoría {selectedTournament.category || "6ta"}
+                </span>
+              </div>
+              <p className="text-dark-400 text-[11px]">
+                {selectedTournament.gender === "Femenino"
+                  ? "Torneo Femenino: Solo jugadoras mujeres de igual o menor categoría. Jugadores masculinos o de categoría superior están inhabilitados."
+                  : `Torneo Masculino: Hombres de ${selectedTournament.category || "6ta"} o inferior, y mujeres de hasta 1 categoría superior permitidas. Jugadores de nivel superior están inhabilitados.`}
+              </p>
+            </div>
+          )}
 
           {/* Indicador de número correlativo asignado */}
           {formTorneo && (
@@ -737,6 +836,28 @@ export default function AdminParejasPage() {
             value={formTorneo}
             onChange={(e) => handleTorneoChange(e.target.value)}
           />
+
+          {selectedTournament && (
+            <div className="p-3 bg-dark-800/90 border border-dark-700 rounded-xl text-xs space-y-1.5 text-dark-300">
+              <div className="flex items-center gap-2">
+                <span className={`px-2 py-0.5 rounded-full font-semibold ${
+                  selectedTournament.gender === "Femenino"
+                    ? "bg-pink-500/10 text-pink-400 border border-pink-500/30"
+                    : "bg-blue-500/10 text-blue-400 border border-blue-500/30"
+                }`}>
+                  {selectedTournament.gender === "Femenino" ? "♀ Femenino" : "♂ Masculino"}
+                </span>
+                <span className="px-2 py-0.5 rounded-full font-semibold bg-primary-500/10 text-primary-400 border border-primary-500/30">
+                  Categoría {selectedTournament.category || "6ta"}
+                </span>
+              </div>
+              <p className="text-dark-400 text-[11px]">
+                {selectedTournament.gender === "Femenino"
+                  ? "Torneo Femenino: Solo jugadoras mujeres de igual o menor categoría. Jugadores masculinos o de categoría superior están inhabilitados."
+                  : `Torneo Masculino: Hombres de ${selectedTournament.category || "6ta"} o inferior, y mujeres de hasta 1 categoría superior permitidas. Jugadores de nivel superior están inhabilitados.`}
+              </p>
+            </div>
+          )}
 
           {editing && (
             <div className="p-3 bg-primary-500/10 border border-primary-500/30 rounded-xl flex items-center justify-between">

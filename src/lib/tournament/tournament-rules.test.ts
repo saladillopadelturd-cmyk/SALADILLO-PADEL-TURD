@@ -55,6 +55,8 @@ import {
   getCoupleLabelWithNumber,
   formatPlayerShortName,
   generateRandomCouples,
+  isPlayerEligibleForTournament,
+  parseCategoryLevel,
 } from "./couples";
 
 import { calculateOptimalZones } from "./zones";
@@ -1078,6 +1080,84 @@ export function runTournamentBusinessLogicTests(): TestResult {
   assert((qfMatch as any)?.couple1?.id === "c1", "Cuartos fixture hidrata objeto couple1");
   assert((qfMatch as any)?.couple2?.id === "c4", "Cuartos fixture hidrata objeto couple2");
 
+  // =========================================================================
+  // 14. REGLAS DE ELEGIBILIDAD POR GÉNERO Y CATEGORÍA
+  // =========================================================================
+  const tourMasc6ta = {
+    id: "tour_masc_6ta",
+    name: "Torneo Masculino 6ta",
+    category: "6ta",
+    gender: "Masculino",
+    date: "2026-10-01",
+    status: "active",
+  } as any;
+
+  const tourFem6ta = {
+    id: "tour_fem_6ta",
+    name: "Torneo Femenino 6ta",
+    category: "6ta",
+    gender: "Femenino",
+    date: "2026-10-01",
+    status: "active",
+  } as any;
+
+  const playerH5ta: Player = { id: "ph5", first_name: "Hombre", last_name: "5ta", gender: "Masculino", category: "5ta", created_at: "" };
+  const playerH6ta: Player = { id: "ph6", first_name: "Hombre", last_name: "6ta", gender: "Masculino", category: "6ta", created_at: "" };
+  const playerH7ma: Player = { id: "ph7", first_name: "Hombre", last_name: "7ma", gender: "Masculino", category: "7ma", created_at: "" };
+  const playerM4ta: Player = { id: "pm4", first_name: "Mujer", last_name: "4ta", gender: "Femenino", category: "4ta", created_at: "" };
+  const playerM5ta: Player = { id: "pm5", first_name: "Mujer", last_name: "5ta", gender: "Femenino", category: "5ta", created_at: "" };
+  const playerM6ta: Player = { id: "pm6", first_name: "Mujer", last_name: "6ta", gender: "Femenino", category: "6ta", created_at: "" };
+
+  // a) Torneo Masculino 6ta:
+  // - Hombre 5ta NO puede jugar en torneo de categoría inferior (6ta)
+  const elH5 = isPlayerEligibleForTournament(playerH5ta, tourMasc6ta);
+  assert(elH5.eligible === false, "Hombre 5ta NO es elegible para Torneo Masculino 6ta (no jugar en categoría inferior)");
+
+  // - Hombre 6ta y 7ma SÍ pueden jugar
+  const elH6 = isPlayerEligibleForTournament(playerH6ta, tourMasc6ta);
+  assert(elH6.eligible === true, "Hombre 6ta SÍ es elegible para Torneo Masculino 6ta");
+  const elH7 = isPlayerEligibleForTournament(playerH7ma, tourMasc6ta);
+  assert(elH7.eligible === true, "Hombre 7ma SÍ es elegible para Torneo Masculino 6ta");
+
+  // - Mujer 5ta SÍ puede jugar en Torneo Masculino 6ta (regla especial de hasta una categoría superior)
+  const elM5 = isPlayerEligibleForTournament(playerM5ta, tourMasc6ta);
+  assert(elM5.eligible === true, "Mujer 5ta SÍ es elegible para Torneo Masculino 6ta (permite hasta 1 cat superior)");
+
+  // - Mujer 4ta NO puede jugar en Torneo Masculino 6ta (2 categorías superiores)
+  const elM4 = isPlayerEligibleForTournament(playerM4ta, tourMasc6ta);
+  assert(elM4.eligible === false, "Mujer 4ta NO es elegible para Torneo Masculino 6ta (supera el límite de 1 cat)");
+
+  // - Mujer 6ta SÍ puede jugar en Torneo Masculino 6ta
+  const elM6 = isPlayerEligibleForTournament(playerM6ta, tourMasc6ta);
+  assert(elM6.eligible === true, "Mujer 6ta SÍ es elegible para Torneo Masculino 6ta");
+
+  // b) Torneo Femenino 6ta:
+  // - Hombre NO puede inscribirse en Torneo Femenino
+  const elHEnFem = isPlayerEligibleForTournament(playerH6ta, tourFem6ta);
+  assert(elHEnFem.eligible === false, "Hombre NO es elegible para Torneo Femenino");
+
+  // - Mujer 5ta NO puede jugar en Torneo Femenino de categoría inferior (6ta)
+  const elM5EnFem = isPlayerEligibleForTournament(playerM5ta, tourFem6ta);
+  assert(elM5EnFem.eligible === false, "Mujer 5ta NO es elegible para Torneo Femenino 6ta (no jugar en categoría inferior)");
+
+  // - Mujer 6ta SÍ puede jugar en Torneo Femenino 6ta
+  const elM6EnFem = isPlayerEligibleForTournament(playerM6ta, tourFem6ta);
+  assert(elM6EnFem.eligible === true, "Mujer 6ta SÍ es elegible para Torneo Femenino 6ta");
+
+  // c) validateCoupleFormation con validación de torneo
+  const allTestPlayers = [playerH5ta, playerH6ta, playerH7ma, playerM4ta, playerM5ta, playerM6ta];
+
+  // Pareja válida: Hombre 6ta + Mujer 5ta en Torneo Masculino 6ta
+  const validMix = validateCoupleFormation("tour_masc_6ta", "ph6", "pm5", [], null, tourMasc6ta, allTestPlayers);
+  assert(validMix.isValid === true, "Pareja Hombre 6ta + Mujer 5ta es válida en Torneo Masculino 6ta");
+
+  // Pareja inválida: Hombre 5ta + Hombre 6ta en Torneo Masculino 6ta (H5 no puede)
+  const invalidH5 = validateCoupleFormation("tour_masc_6ta", "ph5", "ph6", [], null, tourMasc6ta, allTestPlayers);
+  assert(invalidH5.isValid === false && invalidH5.error?.includes("categoría inferior") === true, "Rechaza pareja con Hombre 5ta en Torneo 6ta");
+
+  // Pareja inválida: Hombre 6ta en Torneo Femenino 6ta
+  const invalidManInFem = validateCoupleFormation("tour_fem_6ta", "pm6", "ph6", [], null, tourFem6ta, allTestPlayers);
+  assert(invalidManInFem.isValid === false && invalidManInFem.error?.includes("Femenino") === true, "Rechaza hombre en Torneo Femenino");
 
   return {
     passed,

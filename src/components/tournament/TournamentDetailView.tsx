@@ -305,8 +305,15 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
               <Badge variant={STATUS_VARIANTS[tournament.status] ?? "info"} pulse={tournament.status === "active"}>
                 {STATUS_LABELS[tournament.status] ?? tournament.status}
               </Badge>
+              <span className={`px-3 py-0.5 rounded-full text-xs font-black border tracking-wider ${
+                tournament.gender === "Femenino"
+                  ? "bg-pink-500/10 text-pink-400 border-pink-500/30"
+                  : "bg-blue-500/10 text-blue-400 border-blue-500/30"
+              }`}>
+                {tournament.gender === "Femenino" ? "♀ Femenino" : "♂ Masculino"}
+              </span>
               <span className="px-3 py-0.5 rounded-full text-xs font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 tracking-wider">
-                Categoría {tournament.category}
+                Categoría {tournament.category || "6ta"}
               </span>
               {tournament.golden_point && (
                 <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-amber-400/15 text-amber-300 border border-amber-400/35 flex items-center gap-1 shadow-sm shadow-amber-400/10">

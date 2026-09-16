@@ -36,6 +36,7 @@ export interface Tournament {
   num_zones: number;
   golden_point: boolean;
   location?: string | null;
+  gender?: "Masculino" | "Femenino" | string | null;
   created_by?: string | null;
   created_at: string;
   updated_at?: string;

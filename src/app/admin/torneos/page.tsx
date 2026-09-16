@@ -58,6 +58,24 @@ const GAME_MODE_LABELS: Record<string, string> = {
   american_2sets: "2 sets a 3 games + super tie-break",
 };
 
+import { parseCategoryLevel } from "@/lib/tournament/couples";
+
+const GENDER_OPTIONS = [
+  { value: "Masculino", label: "Masculino" },
+  { value: "Femenino", label: "Femenino" },
+];
+
+const CATEGORY_OPTIONS = [
+  { value: "8va", label: "8va Categoría" },
+  { value: "7ma", label: "7ma Categoría" },
+  { value: "6ta", label: "6ta Categoría" },
+  { value: "5ta", label: "5ta Categoría" },
+  { value: "4ta", label: "4ta Categoría" },
+  { value: "3ra", label: "3ra Categoría" },
+  { value: "2da", label: "2da Categoría" },
+  { value: "1ra", label: "1ra Categoría" },
+];
+
 export default function AdminTorneosPage() {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +88,8 @@ export default function AdminTorneosPage() {
   const [formNombre, setFormNombre] = useState("");
   const [formFecha, setFormFecha] = useState("");
   const [formLugar, setFormLugar] = useState("");
+  const [formSexo, setFormSexo] = useState<string>("Masculino");
+  const [formCategoria, setFormCategoria] = useState<string>("5ta");
   const [formModalidad, setFormModalidad] = useState("american_9games");
   const [formParejasZona, setFormParejasZona] = useState("4");
   const [formNumZonas, setFormNumZonas] = useState("2");
@@ -103,6 +123,8 @@ export default function AdminTorneosPage() {
     setFormNombre("");
     setFormFecha(new Date().toISOString().split("T")[0]);
     setFormLugar("");
+    setFormSexo("Masculino");
+    setFormCategoria("5ta");
     setFormModalidad("american_9games");
     setFormParejasZona("4");
     setFormNumZonas("2");
@@ -113,6 +135,8 @@ export default function AdminTorneosPage() {
     setFormNombre(t.name);
     setFormFecha(t.date ? t.date.split("T")[0] : "");
     setFormLugar(t.location ?? "");
+    setFormSexo(t.gender || "Masculino");
+    setFormCategoria(t.category || "5ta");
     setFormModalidad(t.game_mode);
     setFormParejasZona(String(t.zone_size));
     setFormNumZonas(String(t.num_zones));
@@ -142,7 +166,8 @@ export default function AdminTorneosPage() {
         const payload = {
           name: formNombre.trim(),
           date: formFecha || new Date().toISOString().split("T")[0],
-          category: "5ta",
+          category: formCategoria,
+          gender: formSexo,
           golden_point: true,
           location: formLugar.trim() || null,
           game_mode: formModalidad,
@@ -151,17 +176,42 @@ export default function AdminTorneosPage() {
           status: "draft",
         };
 
-        const { data, error } = await supabase
+        let result = await supabase
           .from("tournaments")
           .insert(payload)
           .select()
           .single();
 
-        if (error) throw error;
-        if (data) {
-          setTournaments((prev) => [data, ...prev]);
+        // Resiliencia: si la columna 'gender' no fue migrada aún en Supabase remoto
+        if (result.error && (result.error.message.includes("gender") || result.error.code === "PGRST204")) {
+          console.warn("Columna gender aún no migrada en Supabase, guardando campos base:", result.error);
+          const fallbackPayload = { ...payload };
+          delete (fallbackPayload as any).gender;
+          result = await supabase
+            .from("tournaments")
+            .insert(fallbackPayload)
+            .select()
+            .single();
+
+          if (result.error) throw result.error;
+          const localData = { ...result.data, gender: formSexo, category: formCategoria };
+          setTournaments((prev) => [localData, ...prev]);
           setShowCreate(false);
-          setNotification({ type: "success", text: `Torneo "${data.name}" creado con éxito.` });
+          setNotification({
+            type: "success",
+            text: `Torneo "${localData.name}" (${formSexo} - ${formCategoria}) creado con éxito.`,
+          });
+          return;
+        }
+
+        if (result.error) throw result.error;
+        if (result.data) {
+          setTournaments((prev) => [result.data, ...prev]);
+          setShowCreate(false);
+          setNotification({
+            type: "success",
+            text: `Torneo "${result.data.name}" (${formSexo} - ${formCategoria}) creado con éxito.`,
+          });
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Error al crear el torneo";
@@ -178,26 +228,48 @@ export default function AdminTorneosPage() {
         const payload = {
           name: formNombre.trim(),
           date: formFecha || editing.date,
+          category: formCategoria,
+          gender: formSexo,
           location: formLugar.trim() || null,
           game_mode: formModalidad as Tournament["game_mode"],
           zone_size: Number(formParejasZona),
           num_zones: Number(formNumZonas),
         };
 
-        const { data, error } = await supabase
+        let result = await supabase
           .from("tournaments")
           .update(payload)
           .eq("id", editing.id)
           .select()
           .single();
 
-        if (error) throw error;
-        if (data) {
+        // Resiliencia si la columna 'gender' no existe aún en Supabase remoto
+        if (result.error && (result.error.message.includes("gender") || result.error.code === "PGRST204")) {
+          console.warn("Columna gender no migrada aún en Supabase, actualizando campos base:", result.error);
+          const fallbackPayload = { ...payload };
+          delete (fallbackPayload as any).gender;
+          result = await supabase
+            .from("tournaments")
+            .update(fallbackPayload)
+            .eq("id", editing.id)
+            .select()
+            .single();
+
+          if (result.error) throw result.error;
+          const localData = { ...result.data, gender: formSexo, category: formCategoria };
+          setTournaments((prev) => prev.map((t) => (t.id === editing.id ? localData : t)));
+          setEditing(null);
+          setNotification({ type: "success", text: `Torneo "${localData.name}" actualizado con éxito.` });
+          return;
+        }
+
+        if (result.error) throw result.error;
+        if (result.data) {
           setTournaments((prev) =>
-            prev.map((t) => (t.id === editing.id ? data : t))
+            prev.map((t) => (t.id === editing.id ? result.data : t))
           );
           setEditing(null);
-          setNotification({ type: "success", text: `Torneo "${data.name}" actualizado con éxito.` });
+          setNotification({ type: "success", text: `Torneo "${result.data.name}" actualizado con éxito.` });
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Error al actualizar el torneo";
@@ -289,7 +361,20 @@ export default function AdminTorneosPage() {
                       {tournament.name}
                     </h3>
                   </Link>
-                  <p className="text-dark-400 text-sm">{formatDate(tournament.date)}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-dark-400 text-sm">{formatDate(tournament.date)}</p>
+                    <span className="text-dark-600">•</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                      tournament.gender === "Femenino"
+                        ? "bg-pink-500/10 text-pink-400 border border-pink-500/30"
+                        : "bg-blue-500/10 text-blue-400 border border-blue-500/30"
+                    }`}>
+                      {tournament.gender === "Femenino" ? "♀ Femenino" : "♂ Masculino"}
+                    </span>
+                    <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-primary-500/10 text-primary-400 border border-primary-500/30">
+                      Cat. {tournament.category || "5ta"}
+                    </span>
+                  </div>
                 </div>
                 <Badge variant={STATUS_VARIANTS[tournament.status] ?? "default"}>
                   {STATUS_LABELS[tournament.status] ?? tournament.status}
@@ -358,12 +443,39 @@ export default function AdminTorneosPage() {
             </p>
           </div>
 
+          <div className="p-3 bg-dark-800/80 border border-dark-700 rounded-xl text-xs space-y-1 text-dark-300">
+            <span className="text-primary-400 font-semibold block">
+              ⚖️ Reglas de Categoría y Sexo SPT:
+            </span>
+            <ul className="list-disc pl-4 space-y-0.5 text-[11px]">
+              <li><b>Torneo Femenino:</b> Sólo pueden inscribirse jugadoras mujeres de la categoría del torneo o categoría inferior (ej. en 6ta Femenino pueden jugar mujeres de 6ta, 7ma u 8va; no pueden jugar hombres).</li>
+              <li><b>Torneo Masculino:</b> Pueden inscribirse hombres de la categoría o inferior, y <b>mujeres de hasta 1 categoría superior</b> (ej. en 6ta Masculino pueden jugar mujeres de 5ta, 6ta, 7ma, etc.).</li>
+              <li><b>Restricción estricta:</b> Ningún jugador puede anotarse en un torneo de categoría inferior a su nivel de juego.</li>
+            </ul>
+          </div>
+
           <Input
             label="Nombre del Torneo"
             placeholder="Ej: Torneo Apertura 2026"
             value={formNombre}
             onChange={(e) => setFormNombre(e.target.value)}
           />
+
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="Sexo del Torneo"
+              value={formSexo}
+              onChange={(e) => setFormSexo(e.target.value)}
+              options={GENDER_OPTIONS}
+            />
+            <Select
+              label="Categoría del Torneo"
+              value={formCategoria}
+              onChange={(e) => setFormCategoria(e.target.value)}
+              options={CATEGORY_OPTIONS}
+            />
+          </div>
+
           <Input
             label="Fecha"
             type="date"
@@ -429,6 +541,22 @@ export default function AdminTorneosPage() {
             value={formNombre}
             onChange={(e) => setFormNombre(e.target.value)}
           />
+
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="Sexo del Torneo"
+              value={formSexo}
+              onChange={(e) => setFormSexo(e.target.value)}
+              options={GENDER_OPTIONS}
+            />
+            <Select
+              label="Categoría del Torneo"
+              value={formCategoria}
+              onChange={(e) => setFormCategoria(e.target.value)}
+              options={CATEGORY_OPTIONS}
+            />
+          </div>
+
           <Input
             label="Fecha"
             type="date"

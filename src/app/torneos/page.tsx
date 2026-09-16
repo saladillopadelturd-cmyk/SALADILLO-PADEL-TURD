@@ -86,9 +86,18 @@ export default async function TorneosPage() {
                       >
                         {STATUS_LABELS[tour.status] ?? tour.status}
                       </Badge>
-                      <span className="text-xs font-black px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
-                        Cat. {tour.category}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-xs font-black px-2 py-0.5 rounded-lg border ${
+                          tour.gender === "Femenino"
+                            ? "bg-pink-500/10 text-pink-400 border-pink-500/30"
+                            : "bg-blue-500/10 text-blue-400 border-blue-500/30"
+                        }`}>
+                          {tour.gender === "Femenino" ? "♀ Femenino" : "♂ Masculino"}
+                        </span>
+                        <span className="text-xs font-black px-2.5 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                          Cat. {tour.category || "6ta"}
+                        </span>
+                      </div>
                     </div>
 
                     <h3 className="text-xl font-black text-white group-hover:text-emerald-400 transition-colors mb-3">

@@ -6,7 +6,99 @@
  * - El jugador que ya integra una pareja no se verá en la lista de jugadores disponibles para formar parejas.
  */
 
-import type { Couple, Player } from "@/types/tournament";
+import type { Couple, Player, Tournament } from "@/types/tournament";
+
+/**
+ * Convierte una categoría a su nivel numérico estándar de pádel:
+ * 1ra = 1 (mayor nivel deportivo / profesional)
+ * 2da = 2
+ * 3ra = 3
+ * 4ta = 4
+ * 5ta = 5 (mejor que 6ta)
+ * 6ta = 6
+ * 7ma = 7
+ * 8va = 8 (menor nivel deportivo / principiantes)
+ * 
+ * Regla clave: Un número menor indica un nivel de juego superior (5ta < 6ta en valor numérico, pero mejor en nivel).
+ */
+export function parseCategoryLevel(category?: string | null): number {
+  if (!category) return 5; // Valor por defecto: 5ta
+  const match = category.match(/\b([1-8])(?:ra|da|ta|ma|va)?\b/i);
+  if (match) {
+    return parseInt(match[1], 10);
+  }
+  return 5;
+}
+
+/**
+ * Valida si un jugador es elegible para participar en un torneo específico según las reglas de Saladillo Padel Tour:
+ * 
+ * 1. Torneos Femeninos:
+ *    - Solo pueden inscribirse jugadoras Femeninas.
+ *    - No se permite que una jugadora se anote en un torneo de categoría inferior (ej: jugadora de 5ta en torneo femenino de 6ta -> RECHAZADA).
+ * 
+ * 2. Torneos Masculinos:
+ *    - Jugadores Masculinos: No pueden anotarse en un torneo de categoría inferior (ej: hombre de 5ta en torneo de 6ta -> RECHAZADO).
+ *    - Jugadoras Femeninas: Se permite una bonificación reglamentaria de HASTA UNA CATEGORÍA SUPERIOR a la del torneo.
+ *      (Ejemplo: en un torneo Masculino de 6ta categoría pueden inscribirse mujeres de 5ta categoría. Mujeres de 4ta o superior -> RECHAZADAS).
+ */
+export function isPlayerEligibleForTournament(
+  player: Player,
+  tournament: Tournament
+): { eligible: boolean; reason?: string } {
+  const tourGender = (tournament.gender || "Masculino").toLowerCase();
+  const playerGender = (player.gender || "Masculino").toLowerCase();
+  const isTourFemale = tourGender === "femenino";
+  const isPlayerFemale = playerGender === "femenino";
+
+  const tourLevel = parseCategoryLevel(tournament.category);
+  const playerLevel = parseCategoryLevel(player.category);
+
+  // 1. Torneo Femenino
+  if (isTourFemale) {
+    if (!isPlayerFemale) {
+      return {
+        eligible: false,
+        reason: `El torneo es Femenino. No se permiten jugadores masculinos (${player.first_name} ${player.last_name}).`,
+      };
+    }
+
+    // En torneo femenino, una jugadora de categoría superior (ej: 5ta, nivel 5) no puede jugar en torneo inferior (ej: 6ta, nivel 6)
+    if (playerLevel < tourLevel) {
+      return {
+        eligible: false,
+        reason: `La jugadora ${player.first_name} ${player.last_name} es de ${player.category || "categoría superior"} y no puede anotarse en un torneo de categoría inferior (${tournament.category || "6ta"}).`,
+      };
+    }
+
+    return { eligible: true };
+  }
+
+  // 2. Torneo Masculino
+  if (isPlayerFemale) {
+    // Regla especial: Mujeres pueden tener hasta una categoría superior a la del torneo
+    // Ejemplo: Torneo 6ta (nivel 6) -> Se permiten mujeres de 5ta (nivel 5) o inferiores (6ta, 7ma, 8va).
+    const maxAllowedFemaleLevel = tourLevel - 1; // 6 - 1 = 5 (nivel 5 = 5ta)
+    if (playerLevel < maxAllowedFemaleLevel) {
+      return {
+        eligible: false,
+        reason: `La jugadora ${player.first_name} ${player.last_name} es de ${player.category || "4ta"} y supera el límite para un torneo Masculino de ${tournament.category || "6ta"} (máximo permitido: mujeres hasta ${maxAllowedFemaleLevel}ta categoría).`,
+      };
+    }
+    return { eligible: true };
+  }
+
+  // Jugador Masculino en Torneo Masculino:
+  // No permitir que un jugador se anote en un torneo de una categoría inferior (playerLevel < tourLevel es superior)
+  if (playerLevel < tourLevel) {
+    return {
+      eligible: false,
+      reason: `El jugador ${player.first_name} ${player.last_name} es de ${player.category || "categoría superior"} y no puede anotarse en un torneo de categoría inferior (${tournament.category || "6ta"}).`,
+    };
+  }
+
+  return { eligible: true };
+}
 
 /**
  * Obtiene el conjunto de IDs de jugadores que ya forman parte de una pareja en un torneo específico.
@@ -36,19 +128,16 @@ export function getAssignedPlayerIdsInTournament(
  * Obtiene la lista de jugadores disponibles para seleccionar en un torneo determinado.
  * Filtra a todos aquellos que ya integran una pareja en ese torneo y, opcionalmente,
  * al jugador seleccionado en la otra posición de la pareja para evitar auto-parejas.
- * 
- * @param allPlayers Lista completa de jugadores registrados en el sistema
- * @param couples Lista de parejas registradas
- * @param tournamentId ID del torneo seleccionado
- * @param excludeCoupleId Opcional: ID de la pareja que se está editando
- * @param excludePlayerId Opcional: ID del jugador ya elegido (Jugador 1 o Jugador 2)
+ * Si se especifica el torneo y `filterByEligibility = true`, también descarta jugadores no elegibles.
  */
 export function getAvailablePlayersForTournament(
   allPlayers: Player[],
   couples: Couple[],
   tournamentId: string,
   excludeCoupleId?: string | null,
-  excludePlayerId?: string | null
+  excludePlayerId?: string | null,
+  tournament?: Tournament | null,
+  filterByEligibility: boolean = false
 ): Player[] {
   if (!tournamentId) return [];
 
@@ -59,6 +148,11 @@ export function getAvailablePlayersForTournament(
     if (assigned.has(player.id)) return false;
     // Si ya fue seleccionado como el compañero en la misma pareja, no está disponible
     if (excludePlayerId && player.id === excludePlayerId) return false;
+    // Si se requiere filtrado estricto por elegibilidad de torneo
+    if (tournament && filterByEligibility) {
+      const { eligible } = isPlayerEligibleForTournament(player, tournament);
+      if (!eligible) return false;
+    }
     return true;
   });
 }
@@ -69,13 +163,16 @@ export function getAvailablePlayersForTournament(
  * 2. Ambos jugadores seleccionados.
  * 3. Jugadores diferentes (no puede ser la misma persona).
  * 4. Ninguno de los dos jugadores puede integrar ya otra pareja en el mismo torneo.
+ * 5. Ambos jugadores deben ser elegibles para el torneo por Género y Categoría.
  */
 export function validateCoupleFormation(
   tournamentId: string,
   player1Id: string,
   player2Id: string,
   couples: Couple[],
-  excludeCoupleId?: string | null
+  excludeCoupleId?: string | null,
+  tournament?: Tournament | null,
+  allPlayers?: Player[]
 ): { isValid: boolean; error?: string } {
   if (!tournamentId || tournamentId.trim() === "") {
     return { isValid: false, error: "Debes seleccionar un torneo." };
@@ -106,6 +203,26 @@ export function validateCoupleFormation(
       isValid: false,
       error: "El Jugador 2 ya integra una pareja en este torneo. Un jugador no puede formar más de una pareja.",
     };
+  }
+
+  // 5. Validación de elegibilidad por género y categoría
+  if (tournament && allPlayers && allPlayers.length > 0) {
+    const p1 = allPlayers.find((p) => p.id === player1Id);
+    const p2 = allPlayers.find((p) => p.id === player2Id);
+
+    if (p1) {
+      const el1 = isPlayerEligibleForTournament(p1, tournament);
+      if (!el1.eligible) {
+        return { isValid: false, error: el1.reason || "El Jugador 1 no cumple con los requisitos del torneo." };
+      }
+    }
+
+    if (p2) {
+      const el2 = isPlayerEligibleForTournament(p2, tournament);
+      if (!el2.eligible) {
+        return { isValid: false, error: el2.reason || "El Jugador 2 no cumple con los requisitos del torneo." };
+      }
+    }
   }
 
   return { isValid: true };
