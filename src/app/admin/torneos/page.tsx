@@ -58,7 +58,7 @@ const GAME_MODE_LABELS: Record<string, string> = {
   american_2sets: "2 sets a 3 games + super tie-break",
 };
 
-import { parseCategoryLevel } from "@/lib/tournament/couples";
+import { parseCategoryLevel, isSumaCategory } from "@/lib/tournament/couples";
 
 const GENDER_OPTIONS = [
   { value: "Masculino", label: "Masculino" },
@@ -66,6 +66,7 @@ const GENDER_OPTIONS = [
 ];
 
 const CATEGORY_OPTIONS = [
+  // Categorías Tradicionales
   { value: "8va", label: "8va Categoría" },
   { value: "7ma", label: "7ma Categoría" },
   { value: "6ta", label: "6ta Categoría" },
@@ -74,6 +75,15 @@ const CATEGORY_OPTIONS = [
   { value: "3ra", label: "3ra Categoría" },
   { value: "2da", label: "2da Categoría" },
   { value: "1ra", label: "1ra Categoría" },
+  // Torneos SUMA de Categorías
+  { value: "Suma 7", label: "∑ Suma 7" },
+  { value: "Suma 8", label: "∑ Suma 8" },
+  { value: "Suma 9", label: "∑ Suma 9" },
+  { value: "Suma 10", label: "∑ Suma 10 (ej: 5ta+5ta, 4ta+6ta)" },
+  { value: "Suma 11", label: "∑ Suma 11" },
+  { value: "Suma 12", label: "∑ Suma 12" },
+  { value: "Suma 13", label: "∑ Suma 13" },
+  { value: "Suma 14", label: "∑ Suma 14" },
 ];
 
 export default function AdminTorneosPage() {
@@ -371,9 +381,15 @@ export default function AdminTorneosPage() {
                     }`}>
                       {tournament.gender === "Femenino" ? "♀ Femenino" : "♂ Masculino"}
                     </span>
-                    <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-primary-500/10 text-primary-400 border border-primary-500/30">
-                      Cat. {tournament.category || "5ta"}
-                    </span>
+                    {isSumaCategory(tournament.category) ? (
+                      <span className="text-xs px-2.5 py-0.5 rounded-full font-black bg-amber-500/15 text-amber-300 border border-amber-500/35 flex items-center gap-1 shadow-sm">
+                        ∑ {tournament.category}
+                      </span>
+                    ) : (
+                      <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-primary-500/10 text-primary-400 border border-primary-500/30">
+                        Cat. {tournament.category || "5ta"}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <Badge variant={STATUS_VARIANTS[tournament.status] ?? "default"}>
@@ -443,14 +459,15 @@ export default function AdminTorneosPage() {
             </p>
           </div>
 
-          <div className="p-3 bg-dark-800/80 border border-dark-700 rounded-xl text-xs space-y-1 text-dark-300">
+          <div className="p-3 bg-dark-800/80 border border-dark-700 rounded-xl text-xs space-y-1.5 text-dark-300">
             <span className="text-primary-400 font-semibold block">
-              ⚖️ Reglas de Categoría y Sexo SPT:
+              ⚖️ Reglas de Categorías Tradicionales y SUMA:
             </span>
-            <ul className="list-disc pl-4 space-y-0.5 text-[11px]">
-              <li><b>Torneo Femenino:</b> Sólo pueden inscribirse jugadoras mujeres de la categoría del torneo o categoría inferior (ej. en 6ta Femenino pueden jugar mujeres de 6ta, 7ma u 8va; no pueden jugar hombres).</li>
-              <li><b>Torneo Masculino:</b> Pueden inscribirse hombres de la categoría o inferior, y <b>mujeres de hasta 1 categoría superior</b> (ej. en 6ta Masculino pueden jugar mujeres de 5ta, 6ta, 7ma, etc.).</li>
-              <li><b>Restricción estricta:</b> Ningún jugador puede anotarse en un torneo de categoría inferior a su nivel de juego.</li>
+            <ul className="list-disc pl-4 space-y-1 text-[11px]">
+              <li><b>Torneos SUMA (ej: Suma 10):</b> Se suman las categorías de ambos integrantes (ej. 5ta + 5ta = 10, 4ta + 6ta = 10). La suma debe ser igual o superior al número del torneo (no pueden sumar menos de 10). En torneos masculinos, las mujeres computan con +1 de beneficio en la suma (ej. mujer de 5ta computa 6).</li>
+              <li><b>Torneo Femenino Tradicional:</b> Sólo mujeres de la categoría del torneo o categoría inferior.</li>
+              <li><b>Torneo Masculino Tradicional:</b> Hombres de la categoría o inferior, y mujeres de hasta 1 categoría superior.</li>
+              <li><b>Restricción de nivel:</b> Ningún jugador puede competir en un torneo o suma que supere su nivel de juego permitido.</li>
             </ul>
           </div>
 
@@ -535,6 +552,18 @@ export default function AdminTorneosPage() {
         size="lg"
       >
         <div className="space-y-4">
+          <div className="p-3 bg-dark-800/80 border border-dark-700 rounded-xl text-xs space-y-1.5 text-dark-300">
+            <span className="text-primary-400 font-semibold block">
+              ⚖️ Reglas de Categorías Tradicionales y SUMA:
+            </span>
+            <ul className="list-disc pl-4 space-y-1 text-[11px]">
+              <li><b>Torneos SUMA (ej: Suma 10):</b> Se suman las categorías de ambos integrantes (ej. 5ta + 5ta = 10, 4ta + 6ta = 10). La suma debe ser igual o superior al número del torneo (no pueden sumar menos de 10). En torneos masculinos, las mujeres computan con +1 de beneficio en la suma (ej. mujer de 5ta computa 6).</li>
+              <li><b>Torneo Femenino Tradicional:</b> Sólo mujeres de la categoría del torneo o categoría inferior.</li>
+              <li><b>Torneo Masculino Tradicional:</b> Hombres de la categoría o inferior, y mujeres de hasta 1 categoría superior.</li>
+              <li><b>Restricción de nivel:</b> Ningún jugador puede competir en un torneo o suma que supere su nivel de juego permitido.</li>
+            </ul>
+          </div>
+
           <Input
             label="Nombre del Torneo"
             placeholder="Ej: Torneo Apertura 2026"

@@ -8,7 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/Tabs";
 import { createClient } from "@/lib/supabase/client";
 import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
 import { calculateRoundRobinStandings } from "@/lib/tournament/standings";
-import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel } from "@/lib/tournament/couples";
+import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel, isSumaCategory } from "@/lib/tournament/couples";
 import { propagatePlayoffWinners, getStageName } from "@/lib/tournament/elimination";
 import Bracket from "@/components/tournament/Bracket";
 import { Calendar, MapPin, Trophy, Clock, ArrowLeft, Users } from "lucide-react";
@@ -312,9 +312,15 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
               }`}>
                 {tournament.gender === "Femenino" ? "♀ Femenino" : "♂ Masculino"}
               </span>
-              <span className="px-3 py-0.5 rounded-full text-xs font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 tracking-wider">
-                Categoría {tournament.category || "6ta"}
-              </span>
+              {isSumaCategory(tournament.category) ? (
+                <span className="px-3 py-0.5 rounded-full text-xs font-black bg-amber-500/15 text-amber-300 border border-amber-500/35 tracking-wider">
+                  ∑ {tournament.category}
+                </span>
+              ) : (
+                <span className="px-3 py-0.5 rounded-full text-xs font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 tracking-wider">
+                  Categoría {tournament.category || "6ta"}
+                </span>
+              )}
               {tournament.golden_point && (
                 <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-amber-400/15 text-amber-300 border border-amber-400/35 flex items-center gap-1 shadow-sm shadow-amber-400/10">
                   ⭐ Punto de Oro (40-40)

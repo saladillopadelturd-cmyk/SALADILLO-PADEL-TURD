@@ -31,16 +31,130 @@ export function parseCategoryLevel(category?: string | null): number {
 }
 
 /**
+ * Determina si la categoría de un torneo corresponde al formato "SUMA" (ej: "Suma 10", "SUMA 11", "Suma 8").
+ */
+export function isSumaCategory(category?: string | null): boolean {
+  if (!category) return false;
+  return /suma\s*\d+/i.test(category);
+}
+
+/**
+ * Extrae el valor numérico objetivo de un torneo SUMA (ej: "Suma 10" -> 10, "Suma 8" -> 8).
+ * Retorna null si no es un formato SUMA.
+ */
+export function parseSumaTarget(category?: string | null): number | null {
+  if (!category) return null;
+  const match = category.match(/suma\s*(\d+)/i);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+/**
+ * Calcula el nivel numérico efectivo de un jugador para un torneo específico,
+ * aplicando las bonificaciones reglamentarias de género (ej: mujeres en torneos masculinos).
+ * 
+ * Regla oficial SPT:
+ * - En torneos Femeninos: nivel directo del jugador (1 a 8).
+ * - En torneos Masculinos:
+ *   - Jugadores masculinos: nivel directo (1 a 8).
+ *   - Jugadoras femeninas: bonificación de +1 en su categoría (ej: mujer de 5ta computa como nivel 6).
+ */
+export function getEffectivePlayerLevelForTournament(
+  player: Player,
+  tournament: Tournament
+): number {
+  const baseLevel = parseCategoryLevel(player.category);
+  const tourGender = (tournament.gender || "Masculino").toLowerCase();
+  const playerGender = (player.gender || "Masculino").toLowerCase();
+
+  // En torneo masculino, si el jugador es mujer tiene bonificación de +1 en el cómputo
+  if (tourGender === "masculino" && playerGender === "femenino") {
+    return baseLevel + 1;
+  }
+
+  return baseLevel;
+}
+
+/**
+ * Valida si una dupla de jugadores cumple la condición de suma en un torneo formato "SUMA".
+ * 
+ * En pádel federado:
+ * - Un torneo "Suma 10" establece el techo de nivel deportivo: la suma de categorías debe ser >= 10.
+ * - Una pareja 5ta + 5ta suma 10 (Válido).
+ * - Una pareja 4ta + 6ta suma 10 (Válido).
+ * - Una pareja 5ta + 6ta suma 11 (Válido: menor nivel deportivo, no genera ventaja ilícita).
+ * - Una pareja 4ta + 5ta suma 9 (Rechazada: supera el nivel permitido por tener suma menor).
+ */
+export function validateCoupleCategorySuma(
+  player1: Player,
+  player2: Player,
+  tournament: Tournament
+): { isValid: boolean; error?: string; sum: number; target: number } {
+  const target = parseSumaTarget(tournament.category);
+  if (target === null) {
+    return { isValid: true, sum: 0, target: 0 };
+  }
+
+  const tourGender = (tournament.gender || "Masculino").toLowerCase();
+  const p1Gender = (player1.gender || "Masculino").toLowerCase();
+  const p2Gender = (player2.gender || "Masculino").toLowerCase();
+
+  // En torneo femenino, ambos deben ser de sexo femenino
+  if (tourGender === "femenino") {
+    if (p1Gender !== "femenino") {
+      return {
+        isValid: false,
+        error: `El torneo es Femenino. El Jugador 1 (${player1.first_name} ${player1.last_name}) es masculino.`,
+        sum: 0,
+        target,
+      };
+    }
+    if (p2Gender !== "femenino") {
+      return {
+        isValid: false,
+        error: `El torneo es Femenino. El Jugador 2 (${player2.first_name} ${player2.last_name}) es masculino.`,
+        sum: 0,
+        target,
+      };
+    }
+  }
+
+  const level1 = getEffectivePlayerLevelForTournament(player1, tournament);
+  const level2 = getEffectivePlayerLevelForTournament(player2, tournament);
+  const sum = level1 + level2;
+
+  if (sum < target) {
+    const p1Desc = `${player1.first_name} ${player1.last_name} (${player1.category || "5ta"}${
+      tourGender === "masculino" && p1Gender === "femenino" ? " -> computa " + level1 : ""
+    })`;
+    const p2Desc = `${player2.first_name} ${player2.last_name} (${player2.category || "5ta"}${
+      tourGender === "masculino" && p2Gender === "femenino" ? " -> computa " + level2 : ""
+    })`;
+
+    return {
+      isValid: false,
+      error: `La pareja suma ${sum} [${p1Desc} + ${p2Desc}] y supera el nivel permitido para un torneo Suma ${target} (la suma debe ser como mínimo ${target}).`,
+      sum,
+      target,
+    };
+  }
+
+  return { isValid: true, sum, target };
+}
+
+/**
  * Valida si un jugador es elegible para participar en un torneo específico según las reglas de Saladillo Padel Tour:
  * 
- * 1. Torneos Femeninos:
- *    - Solo pueden inscribirse jugadoras Femeninas.
- *    - No se permite que una jugadora se anote en un torneo de categoría inferior (ej: jugadora de 5ta en torneo femenino de 6ta -> RECHAZADA).
+ * 1. Torneos SUMA:
+ *    - Si el torneo es Femenino, el jugador debe ser Femenino.
+ *    - El jugador debe poder alcanzar la suma con algún compañero reglamentario (categoría hasta 8va).
  * 
- * 2. Torneos Masculinos:
- *    - Jugadores Masculinos: No pueden anotarse en un torneo de categoría inferior (ej: hombre de 5ta en torneo de 6ta -> RECHAZADO).
- *    - Jugadoras Femeninas: Se permite una bonificación reglamentaria de HASTA UNA CATEGORÍA SUPERIOR a la del torneo.
- *      (Ejemplo: en un torneo Masculino de 6ta categoría pueden inscribirse mujeres de 5ta categoría. Mujeres de 4ta o superior -> RECHAZADAS).
+ * 2. Torneos Tradicionales Femeninos:
+ *    - Solo pueden inscribirse jugadoras Femeninas.
+ *    - No se permite que una jugadora se anote en un torneo de categoría inferior.
+ * 
+ * 3. Torneos Tradicionales Masculinos:
+ *    - Jugadores Masculinos: No pueden anotarse en un torneo de categoría inferior.
+ *    - Jugadoras Femeninas: Se permite bonificación de HASTA UNA CATEGORÍA SUPERIOR al torneo.
  */
 export function isPlayerEligibleForTournament(
   player: Player,
@@ -51,33 +165,47 @@ export function isPlayerEligibleForTournament(
   const isTourFemale = tourGender === "femenino";
   const isPlayerFemale = playerGender === "femenino";
 
-  const tourLevel = parseCategoryLevel(tournament.category);
-  const playerLevel = parseCategoryLevel(player.category);
+  // En torneo femenino, ningún hombre puede participar
+  if (isTourFemale && !isPlayerFemale) {
+    return {
+      eligible: false,
+      reason: `El torneo es Femenino. No se permiten jugadores masculinos (${player.first_name} ${player.last_name}).`,
+    };
+  }
 
-  // 1. Torneo Femenino
-  if (isTourFemale) {
-    if (!isPlayerFemale) {
+  // 1. Torneo Formato SUMA
+  if (isSumaCategory(tournament.category)) {
+    const target = parseSumaTarget(tournament.category) ?? 10;
+    const effectiveLevel = getEffectivePlayerLevelForTournament(player, tournament);
+    
+    // Nivel máximo posible para un compañero es 8va (8), o 9 si es mujer en torneo masculino
+    const maxPartnerLevel = tourGender === "masculino" ? 9 : 8;
+    if (effectiveLevel + maxPartnerLevel < target) {
       return {
         eligible: false,
-        reason: `El torneo es Femenino. No se permiten jugadores masculinos (${player.first_name} ${player.last_name}).`,
-      };
-    }
-
-    // En torneo femenino, una jugadora de categoría superior (ej: 5ta, nivel 5) no puede jugar en torneo inferior (ej: 6ta, nivel 6)
-    if (playerLevel < tourLevel) {
-      return {
-        eligible: false,
-        reason: `La jugadora ${player.first_name} ${player.last_name} es de ${player.category || "categoría superior"} y no puede anotarse en un torneo de categoría inferior (${tournament.category || "6ta"}).`,
+        reason: `El jugador ${player.first_name} ${player.last_name} (${player.category || "1ra"}) no puede alcanzar la Suma ${target} ni siquiera acompañado por un jugador de menor categoría.`,
       };
     }
 
     return { eligible: true };
   }
 
-  // 2. Torneo Masculino
+  // 2. Torneo Tradicional (1ra a 8va)
+  const tourLevel = parseCategoryLevel(tournament.category);
+  const playerLevel = parseCategoryLevel(player.category);
+
+  if (isTourFemale) {
+    if (playerLevel < tourLevel) {
+      return {
+        eligible: false,
+        reason: `La jugadora ${player.first_name} ${player.last_name} es de ${player.category || "categoría superior"} y no puede anotarse en un torneo de categoría inferior (${tournament.category || "6ta"}).`,
+      };
+    }
+    return { eligible: true };
+  }
+
+  // Torneo Masculino Tradicional
   if (isPlayerFemale) {
-    // Regla especial: Mujeres pueden tener hasta una categoría superior a la del torneo
-    // Ejemplo: Torneo 6ta (nivel 6) -> Se permiten mujeres de 5ta (nivel 5) o inferiores (6ta, 7ma, 8va).
     const maxAllowedFemaleLevel = tourLevel - 1; // 6 - 1 = 5 (nivel 5 = 5ta)
     if (playerLevel < maxAllowedFemaleLevel) {
       return {
@@ -88,8 +216,6 @@ export function isPlayerEligibleForTournament(
     return { eligible: true };
   }
 
-  // Jugador Masculino en Torneo Masculino:
-  // No permitir que un jugador se anote en un torneo de una categoría inferior (playerLevel < tourLevel es superior)
   if (playerLevel < tourLevel) {
     return {
       eligible: false,
@@ -142,16 +268,24 @@ export function getAvailablePlayersForTournament(
   if (!tournamentId) return [];
 
   const assigned = getAssignedPlayerIdsInTournament(couples, tournamentId, excludeCoupleId);
+  const selectedPartner = excludePlayerId ? allPlayers.find((p) => p.id === excludePlayerId) : null;
 
   return allPlayers.filter((player) => {
     // Si ya integra una pareja en este torneo, no está disponible
     if (assigned.has(player.id)) return false;
     // Si ya fue seleccionado como el compañero en la misma pareja, no está disponible
     if (excludePlayerId && player.id === excludePlayerId) return false;
+
     // Si se requiere filtrado estricto por elegibilidad de torneo
     if (tournament && filterByEligibility) {
       const { eligible } = isPlayerEligibleForTournament(player, tournament);
       if (!eligible) return false;
+
+      // Si es torneo SUMA y ya hay un compañero seleccionado, verificar compatibilidad de suma
+      if (selectedPartner && isSumaCategory(tournament.category)) {
+        const sumaCheck = validateCoupleCategorySuma(selectedPartner, player, tournament);
+        if (!sumaCheck.isValid) return false;
+      }
     }
     return true;
   });
@@ -164,6 +298,7 @@ export function getAvailablePlayersForTournament(
  * 3. Jugadores diferentes (no puede ser la misma persona).
  * 4. Ninguno de los dos jugadores puede integrar ya otra pareja en el mismo torneo.
  * 5. Ambos jugadores deben ser elegibles para el torneo por Género y Categoría.
+ * 6. En torneos SUMA, la pareja debe cumplir con la suma de categorías mínima estipulada.
  */
 export function validateCoupleFormation(
   tournamentId: string,
@@ -221,6 +356,14 @@ export function validateCoupleFormation(
       const el2 = isPlayerEligibleForTournament(p2, tournament);
       if (!el2.eligible) {
         return { isValid: false, error: el2.reason || "El Jugador 2 no cumple con los requisitos del torneo." };
+      }
+    }
+
+    // 6. En torneos SUMA, validar la suma de la pareja
+    if (p1 && p2 && isSumaCategory(tournament.category)) {
+      const sumaCheck = validateCoupleCategorySuma(p1, p2, tournament);
+      if (!sumaCheck.isValid) {
+        return { isValid: false, error: sumaCheck.error || "La pareja no cumple con la suma de categorías requerida." };
       }
     }
   }
@@ -325,12 +468,14 @@ export function getCouplePlayersShortLabel(couple?: Couple | null): string {
 
 /**
  * Genera parejas aleatorias a partir de una lista de jugadores disponibles para un torneo.
- * Empareja de a dos en dos y asigna la numeración secuencial correlativa ("Pareja 1", "Pareja 2", etc.).
+ * En torneos SUMA, realiza emparejamientos inteligentes que satisfagan la suma de categorías requerida.
+ * Asigna la numeración secuencial correlativa ("Pareja 1", "Pareja 2", etc.).
  */
 export function generateRandomCouples(
   availablePlayers: Player[],
   tournamentId: string,
-  startingNumber = 1
+  startingNumber = 1,
+  tournament?: Tournament | null
 ): {
   tournament_id: string;
   player1_id: string;
@@ -343,18 +488,63 @@ export function generateRandomCouples(
   if (!tournamentId || availablePlayers.length < 2) return [];
 
   // Mezclar jugadores con Fisher-Yates shuffle
-  const shuffled = [...availablePlayers];
-  for (let i = shuffled.length - 1; i > 0; i--) {
+  const pool = [...availablePlayers];
+  for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    [pool[i], pool[j]] = [pool[j], pool[i]];
   }
 
   const result = [];
   let currentNum = startingNumber;
 
-  for (let i = 0; i + 1 < shuffled.length; i += 2) {
-    const p1 = shuffled[i];
-    const p2 = shuffled[i + 1];
+  // Si es torneo SUMA, emparejar inteligentemente de forma que cumplan con la suma
+  if (tournament && isSumaCategory(tournament.category)) {
+    const matched = new Set<string>();
+
+    for (let i = 0; i < pool.length; i++) {
+      const p1 = pool[i];
+      if (matched.has(p1.id)) continue;
+
+      // Buscar un compañero disponible que cumpla la suma requerida
+      let partnerIndex = -1;
+      for (let j = i + 1; j < pool.length; j++) {
+        const p2 = pool[j];
+        if (matched.has(p2.id)) continue;
+
+        const check = validateCoupleCategorySuma(p1, p2, tournament);
+        if (check.isValid) {
+          partnerIndex = j;
+          break;
+        }
+      }
+
+      if (partnerIndex !== -1) {
+        const p2 = pool[partnerIndex];
+        matched.add(p1.id);
+        matched.add(p2.id);
+
+        const num = currentNum++;
+        const p1Short = formatPlayerShortName(p1);
+        const p2Short = formatPlayerShortName(p2);
+        result.push({
+          tournament_id: tournamentId,
+          player1_id: p1.id,
+          player2_id: p2.id,
+          couple_number: num,
+          player1: p1,
+          player2: p2,
+          label: `Pareja ${num}: ${p1Short} / ${p2Short}`,
+        });
+      }
+    }
+
+    return result;
+  }
+
+  // Torneos tradicionales: emparejamiento directo 2 en 2
+  for (let i = 0; i + 1 < pool.length; i += 2) {
+    const p1 = pool[i];
+    const p2 = pool[i + 1];
     const num = currentNum++;
     const p1Short = formatPlayerShortName(p1);
     const p2Short = formatPlayerShortName(p2);

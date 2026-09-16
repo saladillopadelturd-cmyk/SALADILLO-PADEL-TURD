@@ -13,7 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
 import { calculateRoundRobinStandings } from "@/lib/tournament/standings";
 import { calculateOptimalZones } from "@/lib/tournament/zones";
-import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel } from "@/lib/tournament/couples";
+import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel, isSumaCategory } from "@/lib/tournament/couples";
 import { findNextPlayoffMatchSlot, propagatePlayoffWinners, getStageName } from "@/lib/tournament/elimination";
 import ZoneCard from "@/components/tournament/ZoneCard";
 import {
@@ -553,9 +553,22 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
               <div>
                 <div className="flex items-center gap-2.5 mb-2 flex-wrap">
                   <Badge variant="success">{tournament.status.toUpperCase()}</Badge>
-                  <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-primary-500/10 text-primary-400 border border-primary-500/25">
-                    Categoría {tournament.category}
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                    tournament.gender === "Femenino"
+                      ? "bg-pink-500/10 text-pink-400 border-pink-500/30"
+                      : "bg-blue-500/10 text-blue-400 border-blue-500/30"
+                  }`}>
+                    {tournament.gender === "Femenino" ? "♀ Femenino" : "♂ Masculino"}
                   </span>
+                  {isSumaCategory(tournament.category) ? (
+                    <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/35">
+                      ∑ {tournament.category}
+                    </span>
+                  ) : (
+                    <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-primary-500/10 text-primary-400 border border-primary-500/25">
+                      Categoría {tournament.category}
+                    </span>
+                  )}
                   {tournament.golden_point && (
                     <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-amber-400/15 text-amber-300 border border-amber-400/30 flex items-center gap-1">
                       ⭐ Punto de Oro (40-40)

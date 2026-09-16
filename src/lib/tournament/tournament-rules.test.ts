@@ -57,6 +57,10 @@ import {
   generateRandomCouples,
   isPlayerEligibleForTournament,
   parseCategoryLevel,
+  isSumaCategory,
+  parseSumaTarget,
+  getEffectivePlayerLevelForTournament,
+  validateCoupleCategorySuma,
 } from "./couples";
 
 import { calculateOptimalZones } from "./zones";
@@ -1158,6 +1162,124 @@ export function runTournamentBusinessLogicTests(): TestResult {
   // Pareja inválida: Hombre 6ta en Torneo Femenino 6ta
   const invalidManInFem = validateCoupleFormation("tour_fem_6ta", "pm6", "ph6", [], null, tourFem6ta, allTestPlayers);
   assert(invalidManInFem.isValid === false && invalidManInFem.error?.includes("Femenino") === true, "Rechaza hombre en Torneo Femenino");
+
+  // =========================================================================
+  // 15. REGLAS DE TORNEOS FORMATO "SUMA" (Suma de Categorías de Parejas)
+  // =========================================================================
+  // a) Helpers de detección y extracción
+  assert(isSumaCategory("Suma 10") === true, "Detecta 'Suma 10'");
+  assert(isSumaCategory("SUMA 8") === true, "Detecta 'SUMA 8' en mayúsculas");
+  assert(isSumaCategory("Suma 14") === true, "Detecta 'Suma 14'");
+  assert(isSumaCategory("6ta") === false, "6ta no es formato SUMA");
+  assert(isSumaCategory("5ta Categoría") === false, "5ta Categoría no es formato SUMA");
+
+  assert(parseSumaTarget("Suma 10") === 10, "parseSumaTarget('Suma 10') = 10");
+  assert(parseSumaTarget("SUMA 8") === 8, "parseSumaTarget('SUMA 8') = 8");
+  assert(parseSumaTarget("Suma 12") === 12, "parseSumaTarget('Suma 12') = 12");
+  assert(parseSumaTarget("6ta") === null, "parseSumaTarget('6ta') = null");
+
+  // b) Torneos SUMA de prueba
+  const tourSuma10Masc = {
+    id: "tour_suma_10_masc",
+    name: "Torneo Masculino Suma 10",
+    category: "Suma 10",
+    gender: "Masculino",
+    date: "2026-10-15",
+    status: "active",
+  } as any;
+
+  const tourSuma10Fem = {
+    id: "tour_suma_10_fem",
+    name: "Torneo Femenino Suma 10",
+    category: "Suma 10",
+    gender: "Femenino",
+    date: "2026-10-15",
+    status: "active",
+  } as any;
+
+  const pMasc3ra: Player = { id: "p_m3", first_name: "Hombre", last_name: "3ra", gender: "Masculino", category: "3ra", created_at: "" };
+  const pMasc4ta: Player = { id: "p_m4", first_name: "Hombre", last_name: "4ta", gender: "Masculino", category: "4ta", created_at: "" };
+  const pMasc5ta: Player = { id: "p_m5", first_name: "Hombre", last_name: "5ta", gender: "Masculino", category: "5ta", created_at: "" };
+  const pMasc6ta: Player = { id: "p_m6", first_name: "Hombre", last_name: "6ta", gender: "Masculino", category: "6ta", created_at: "" };
+  const pMasc7ma: Player = { id: "p_m7", first_name: "Hombre", last_name: "7ma", gender: "Masculino", category: "7ma", created_at: "" };
+  const pFem4ta: Player = { id: "p_f4", first_name: "Mujer", last_name: "4ta", gender: "Femenino", category: "4ta", created_at: "" };
+  const pFem5ta: Player = { id: "p_f5", first_name: "Mujer", last_name: "5ta", gender: "Femenino", category: "5ta", created_at: "" };
+  const pFem6ta: Player = { id: "p_f6", first_name: "Mujer", last_name: "6ta", gender: "Femenino", category: "6ta", created_at: "" };
+
+  // c) Cómputo de nivel efectivo
+  // Hombre en torneo Masculino -> nivel directo
+  assert(getEffectivePlayerLevelForTournament(pMasc4ta, tourSuma10Masc) === 4, "Hombre 4ta en Masc computa 4");
+  assert(getEffectivePlayerLevelForTournament(pMasc5ta, tourSuma10Masc) === 5, "Hombre 5ta en Masc computa 5");
+  // Mujer en torneo Masculino -> bonificación de +1 en su categoría (5ta computa 6)
+  assert(getEffectivePlayerLevelForTournament(pFem5ta, tourSuma10Masc) === 6, "Mujer 5ta en Masc computa 6 (bonificación reglamentaria)");
+  assert(getEffectivePlayerLevelForTournament(pFem4ta, tourSuma10Masc) === 5, "Mujer 4ta en Masc computa 5 (bonificación reglamentaria)");
+  // Mujer en torneo Femenino -> nivel directo
+  assert(getEffectivePlayerLevelForTournament(pFem5ta, tourSuma10Fem) === 5, "Mujer 5ta en Fem computa 5");
+
+  // d) Validación de Suma en Torneo Masculino Suma 10
+  // 1. Caso 5ta + 5ta = 10 (Válido)
+  const suma5y5 = validateCoupleCategorySuma(pMasc5ta, pMasc5ta, tourSuma10Masc);
+  assert(suma5y5.isValid === true && suma5y5.sum === 10, "Suma 10: 5ta + 5ta = 10 es Válido");
+
+  // 2. Caso 4ta + 6ta = 10 (Válido)
+  const suma4y6 = validateCoupleCategorySuma(pMasc4ta, pMasc6ta, tourSuma10Masc);
+  assert(suma4y6.isValid === true && suma4y6.sum === 10, "Suma 10: 4ta + 6ta = 10 es Válido");
+
+  // 3. Caso 3ra + 7ma = 10 (Válido)
+  const suma3y7 = validateCoupleCategorySuma(pMasc3ra, pMasc7ma, tourSuma10Masc);
+  assert(suma3y7.isValid === true && suma3y7.sum === 10, "Suma 10: 3ra + 7ma = 10 es Válido");
+
+  // 4. Caso 5ta + 6ta = 11 (Válido: sum >= 10, menor nivel deportivo)
+  const suma5y6 = validateCoupleCategorySuma(pMasc5ta, pMasc6ta, tourSuma10Masc);
+  assert(suma5y6.isValid === true && suma5y6.sum === 11, "Suma 10: 5ta + 6ta = 11 es Válido (sum >= 10)");
+
+  // 5. Caso 4ta + 5ta = 9 (Rechazado: suma menor al límite de nivel)
+  const suma4y5 = validateCoupleCategorySuma(pMasc4ta, pMasc5ta, tourSuma10Masc);
+  assert(suma4y5.isValid === false && suma4y5.sum === 9, "Suma 10: 4ta + 5ta = 9 es Rechazado (supera nivel permitido)");
+
+  // 6. Caso mixto: Hombre 4ta + Mujer 5ta en Torneo Masculino Suma 10
+  // 4 + (5 + 1) = 4 + 6 = 10 (Válido)
+  const sumaMixtoValido = validateCoupleCategorySuma(pMasc4ta, pFem5ta, tourSuma10Masc);
+  assert(sumaMixtoValido.isValid === true && sumaMixtoValido.sum === 10, "Suma 10: Hombre 4ta (4) + Mujer 5ta (computa 6) = 10 es Válido");
+
+  // 7. Caso mixto: Hombre 4ta + Mujer 4ta en Torneo Masculino Suma 10
+  // 4 + (4 + 1) = 4 + 5 = 9 (Rechazado)
+  const sumaMixtoInvalido = validateCoupleCategorySuma(pMasc4ta, pFem4ta, tourSuma10Masc);
+  assert(sumaMixtoInvalido.isValid === false && sumaMixtoInvalido.sum === 9, "Suma 10: Hombre 4ta (4) + Mujer 4ta (computa 5) = 9 es Rechazado");
+
+  // e) Validación en Torneo Femenino Suma 10
+  // Dos mujeres 5ta: 5 + 5 = 10 (Válido)
+  const sumaFemValida = validateCoupleCategorySuma(pFem5ta, pFem5ta, tourSuma10Fem);
+  assert(sumaFemValida.isValid === true && sumaFemValida.sum === 10, "Suma 10 Femenino: Mujer 5ta + Mujer 5ta = 10 es Válido");
+
+  // Hombre en Torneo Femenino Suma 10 (Rechazado por género)
+  const sumaHombreEnFem = validateCoupleCategorySuma(pMasc5ta, pFem5ta, tourSuma10Fem);
+  assert(sumaHombreEnFem.isValid === false && sumaHombreEnFem.error?.includes("Femenino") === true, "Suma 10 Femenino: Rechaza hombre");
+
+  // f) validateCoupleFormation para Torneo SUMA
+  const sumaPlayers = [pMasc3ra, pMasc4ta, pMasc5ta, pMasc6ta, pMasc7ma, pFem4ta, pFem5ta, pFem6ta];
+  const formSumaValida = validateCoupleFormation("tour_suma_10_masc", "p_m4", "p_m6", [], null, tourSuma10Masc, sumaPlayers);
+  assert(formSumaValida.isValid === true, "validateCoupleFormation acepta 4ta + 6ta en Suma 10");
+
+  const formSumaInvalida = validateCoupleFormation("tour_suma_10_masc", "p_m4", "p_m5", [], null, tourSuma10Masc, sumaPlayers);
+  assert(formSumaInvalida.isValid === false && formSumaInvalida.error?.includes("Suma 10") === true, "validateCoupleFormation rechaza 4ta + 5ta en Suma 10");
+
+  // g) generateRandomCouples para Torneo SUMA
+  // Probamos que el emparejamiento inteligente de 4 jugadores respeta la suma requerida
+  const autoPlayersSuma: Player[] = [
+    { id: "s_p1", first_name: "A", last_name: "4ta", gender: "Masculino", category: "4ta", created_at: "" },
+    { id: "s_p2", first_name: "B", last_name: "4ta", gender: "Masculino", category: "4ta", created_at: "" },
+    { id: "s_p3", first_name: "C", last_name: "6ta", gender: "Masculino", category: "6ta", created_at: "" },
+    { id: "s_p4", first_name: "D", last_name: "6ta", gender: "Masculino", category: "6ta", created_at: "" },
+  ];
+  // Dos de 4ta y dos de 6ta: la única forma válida de armar parejas para Suma 10 es (4ta+6ta) y (4ta+6ta).
+  // Si se unieran 4ta+4ta sumaría 8 (inválido).
+  const autoCouplesSuma = generateRandomCouples(autoPlayersSuma, "tour_suma_10_masc", 1, tourSuma10Masc);
+  assert(autoCouplesSuma.length === 2, "generateRandomCouples genera 2 parejas válidas para Suma 10");
+  for (const c of autoCouplesSuma) {
+    const check = validateCoupleCategorySuma(c.player1, c.player2, tourSuma10Masc);
+    assert(check.isValid === true && check.sum >= 10, "Cada pareja generada automáticamente cumple la Suma 10");
+  }
 
   return {
     passed,

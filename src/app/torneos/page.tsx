@@ -3,6 +3,7 @@ import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import { createClient } from "@/lib/supabase/server";
 import type { Tournament } from "@/types/tournament";
+import { isSumaCategory } from "@/lib/tournament/couples";
 import { Calendar, MapPin, ArrowRight, Activity, Sparkles } from "lucide-react";
 
 export const revalidate = 0;
@@ -94,9 +95,15 @@ export default async function TorneosPage() {
                         }`}>
                           {tour.gender === "Femenino" ? "♀ Femenino" : "♂ Masculino"}
                         </span>
-                        <span className="text-xs font-black px-2.5 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
-                          Cat. {tour.category || "6ta"}
-                        </span>
+                        {isSumaCategory(tour.category) ? (
+                          <span className="text-xs font-black px-2.5 py-0.5 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/35">
+                            ∑ {tour.category}
+                          </span>
+                        ) : (
+                          <span className="text-xs font-black px-2.5 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                            Cat. {tour.category || "6ta"}
+                          </span>
+                        )}
                       </div>
                     </div>
 

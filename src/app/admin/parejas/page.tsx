@@ -15,6 +15,10 @@ import {
   getCoupleNumberMap,
   generateRandomCouples,
   isPlayerEligibleForTournament,
+  isSumaCategory,
+  parseSumaTarget,
+  validateCoupleCategorySuma,
+  getEffectivePlayerLevelForTournament,
 } from "@/lib/tournament/couples";
 import { calculateOptimalZones } from "@/lib/tournament/zones";
 import { AlertCircle, AlertTriangle, CheckCircle2, Users, Filter, Plus, Shuffle, Sparkles, Trophy } from "lucide-react";
@@ -158,6 +162,14 @@ export default function AdminParejasPage() {
     return couples.filter((c) => c.tournament_id === autoTorneo).length;
   }, [couples, autoTorneo]);
 
+  const partner1 = useMemo(() => {
+    return players.find((p) => p.id === formJugador1) || null;
+  }, [players, formJugador1]);
+
+  const partner2 = useMemo(() => {
+    return players.find((p) => p.id === formJugador2) || null;
+  }, [players, formJugador2]);
+
   // Opciones para Jugador 1: excluye los ya asignados y al Jugador 2 (si fue seleccionado)
   const player1Options = useMemo(() => {
     const available = getAvailablePlayersForTournament(
@@ -167,6 +179,8 @@ export default function AdminParejasPage() {
       editing?.id,
       formJugador2 || null
     );
+    const isSuma = selectedTournament ? isSumaCategory(selectedTournament.category) : false;
+
     return available.map((p) => {
       const cat = p.category ? ` (${p.category})` : "";
       const sex = p.gender ? ` [${p.gender}]` : "";
@@ -179,6 +193,14 @@ export default function AdminParejasPage() {
         if (!check.eligible) {
           eligibilityNote = " 🚫 (No elegible)";
           isDisabled = true;
+        } else if (isSuma && partner2) {
+          const sumaCheck = validateCoupleCategorySuma(p, partner2, selectedTournament);
+          if (!sumaCheck.isValid) {
+            eligibilityNote = ` [Suma: ${sumaCheck.sum} 🚫 Mínimo ${sumaCheck.target}]`;
+            isDisabled = true;
+          } else {
+            eligibilityNote = ` [Suma: ${sumaCheck.sum} ✔]`;
+          }
         }
       }
 
@@ -188,7 +210,7 @@ export default function AdminParejasPage() {
         disabled: isDisabled,
       };
     });
-  }, [players, couples, formTorneo, editing, formJugador2, selectedTournament]);
+  }, [players, couples, formTorneo, editing, formJugador2, selectedTournament, partner2]);
 
   // Opciones para Jugador 2: excluye los ya asignados y al Jugador 1 (si fue seleccionado)
   const player2Options = useMemo(() => {
@@ -199,6 +221,8 @@ export default function AdminParejasPage() {
       editing?.id,
       formJugador1 || null
     );
+    const isSuma = selectedTournament ? isSumaCategory(selectedTournament.category) : false;
+
     return available.map((p) => {
       const cat = p.category ? ` (${p.category})` : "";
       const sex = p.gender ? ` [${p.gender}]` : "";
@@ -211,6 +235,14 @@ export default function AdminParejasPage() {
         if (!check.eligible) {
           eligibilityNote = " 🚫 (No elegible)";
           isDisabled = true;
+        } else if (isSuma && partner1) {
+          const sumaCheck = validateCoupleCategorySuma(partner1, p, selectedTournament);
+          if (!sumaCheck.isValid) {
+            eligibilityNote = ` [Suma: ${sumaCheck.sum} 🚫 Mínimo ${sumaCheck.target}]`;
+            isDisabled = true;
+          } else {
+            eligibilityNote = ` [Suma: ${sumaCheck.sum} ✔]`;
+          }
         }
       }
 
@@ -220,7 +252,7 @@ export default function AdminParejasPage() {
         disabled: isDisabled,
       };
     });
-  }, [players, couples, formTorneo, editing, formJugador1, selectedTournament]);
+  }, [players, couples, formTorneo, editing, formJugador1, selectedTournament, partner1]);
 
   // Filtrar parejas en la lista según el torneo seleccionado en el filtro
   const filteredCouples = useMemo(() => {
@@ -293,11 +325,12 @@ export default function AdminParejasPage() {
         const generated = generateRandomCouples(
           availablePlayersForAuto,
           autoTorneo,
-          startNumber
+          startNumber,
+          autoSelectedTournament
         );
 
         if (generated.length === 0) {
-          throw new Error("No hay suficientes jugadores libres disponibles.");
+          throw new Error("No fue posible armar parejas que cumplan con la suma o requisitos de este torneo.");
         }
 
         const payloads = generated.map((g) => ({
@@ -588,9 +621,18 @@ export default function AdminParejasPage() {
                                 {tourData?.gender === "Femenino" ? "♀ Femenino" : "♂ Masculino"}
                               </span>
                               <span className="text-dark-600">•</span>
-                              <span className="text-primary-400 font-medium">
-                                Cat. {tourData?.category || "6ta"}
-                              </span>
+                              {isSumaCategory(tourData?.category) ? (
+                                <span className="text-amber-300 font-bold">
+                                  ∑ {tourData?.category}
+                                  {pair.player1?.category && pair.player2?.category
+                                    ? ` (${pair.player1.category}+${pair.player2.category})`
+                                    : ""}
+                                </span>
+                              ) : (
+                                <span className="text-primary-400 font-medium">
+                                  Cat. {tourData?.category || "6ta"}
+                                </span>
+                              )}
                             </div>
                           )}
                         </div>
@@ -647,12 +689,24 @@ export default function AdminParejasPage() {
                 }`}>
                   {selectedTournament.gender === "Femenino" ? "♀ Femenino" : "♂ Masculino"}
                 </span>
-                <span className="px-2 py-0.5 rounded-full font-semibold bg-primary-500/10 text-primary-400 border border-primary-500/30">
-                  Categoría {selectedTournament.category || "6ta"}
-                </span>
+                {isSumaCategory(selectedTournament.category) ? (
+                  <span className="px-2.5 py-0.5 rounded-full font-bold bg-amber-500/15 text-amber-300 border border-amber-500/35">
+                    ∑ {selectedTournament.category}
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full font-semibold bg-primary-500/10 text-primary-400 border border-primary-500/30">
+                    Categoría {selectedTournament.category || "6ta"}
+                  </span>
+                )}
               </div>
               <p className="text-dark-400 text-[11px]">
-                {selectedTournament.gender === "Femenino"
+                {isSumaCategory(selectedTournament.category)
+                  ? `Torneo ${selectedTournament.category}: La suma de las categorías de ambos integrantes debe ser ${selectedTournament.category} o superior (ej: 5ta+5ta=10, 4ta+6ta=10). ${
+                      selectedTournament.gender === "Masculino"
+                        ? "En torneos masculinos, las mujeres cuentan con bonificación de +1 en la suma (5ta computa como 6ta)."
+                        : "Solo pueden inscribirse jugadoras mujeres."
+                    }`
+                  : selectedTournament.gender === "Femenino"
                   ? "Torneo Femenino: Solo jugadoras mujeres de igual o menor categoría. Jugadores masculinos o de categoría superior están inhabilitados."
                   : `Torneo Masculino: Hombres de ${selectedTournament.category || "6ta"} o inferior, y mujeres de hasta 1 categoría superior permitidas. Jugadores de nivel superior están inhabilitados.`}
               </p>
@@ -726,6 +780,32 @@ export default function AdminParejasPage() {
               <strong className="text-primary-400">Pareja {nextCoupleNumber}:</strong>{" "}
               {player1Options.find((p) => p.value === formJugador1)?.label} /{" "}
               {player2Options.find((p) => p.value === formJugador2)?.label}
+            </div>
+          )}
+
+          {formJugador1 && formJugador2 && selectedTournament && isSumaCategory(selectedTournament.category) && (
+            <div className="p-3 bg-dark-800/95 border border-amber-500/30 rounded-xl flex items-center justify-between text-xs">
+              <span className="text-dark-300 font-medium">Validación de Suma:</span>
+              {(() => {
+                const p1 = players.find((p) => p.id === formJugador1);
+                const p2 = players.find((p) => p.id === formJugador2);
+                if (!p1 || !p2) return null;
+                const res = validateCoupleCategorySuma(p1, p2, selectedTournament);
+                const l1 = getEffectivePlayerLevelForTournament(p1, selectedTournament);
+                const l2 = getEffectivePlayerLevelForTournament(p2, selectedTournament);
+                return (
+                  <span
+                    className={`px-2.5 py-1 rounded-lg font-bold border ${
+                      res.isValid
+                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                        : "bg-red-500/20 text-red-300 border-red-500/40"
+                    }`}
+                  >
+                    {p1.category || "5ta"} ({l1}) + {p2.category || "5ta"} ({l2}) = {res.sum}{" "}
+                    {res.isValid ? `✔ (Mín. ${res.target})` : `🚫 (Requiere Mín. ${res.target})`}
+                  </span>
+                );
+              })()}
             </div>
           )}
 
@@ -847,12 +927,24 @@ export default function AdminParejasPage() {
                 }`}>
                   {selectedTournament.gender === "Femenino" ? "♀ Femenino" : "♂ Masculino"}
                 </span>
-                <span className="px-2 py-0.5 rounded-full font-semibold bg-primary-500/10 text-primary-400 border border-primary-500/30">
-                  Categoría {selectedTournament.category || "6ta"}
-                </span>
+                {isSumaCategory(selectedTournament.category) ? (
+                  <span className="px-2.5 py-0.5 rounded-full font-bold bg-amber-500/15 text-amber-300 border border-amber-500/35">
+                    ∑ {selectedTournament.category}
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full font-semibold bg-primary-500/10 text-primary-400 border border-primary-500/30">
+                    Categoría {selectedTournament.category || "6ta"}
+                  </span>
+                )}
               </div>
               <p className="text-dark-400 text-[11px]">
-                {selectedTournament.gender === "Femenino"
+                {isSumaCategory(selectedTournament.category)
+                  ? `Torneo ${selectedTournament.category}: La suma de las categorías de ambos integrantes debe ser ${selectedTournament.category} o superior (ej: 5ta+5ta=10, 4ta+6ta=10). ${
+                      selectedTournament.gender === "Masculino"
+                        ? "En torneos masculinos, las mujeres cuentan con bonificación de +1 en la suma (5ta computa como 6ta)."
+                        : "Solo pueden inscribirse jugadoras mujeres."
+                    }`
+                  : selectedTournament.gender === "Femenino"
                   ? "Torneo Femenino: Solo jugadoras mujeres de igual o menor categoría. Jugadores masculinos o de categoría superior están inhabilitados."
                   : `Torneo Masculino: Hombres de ${selectedTournament.category || "6ta"} o inferior, y mujeres de hasta 1 categoría superior permitidas. Jugadores de nivel superior están inhabilitados.`}
               </p>
@@ -895,6 +987,32 @@ export default function AdminParejasPage() {
             value={formJugador2}
             onChange={(e) => setFormJugador2(e.target.value)}
           />
+
+          {formJugador1 && formJugador2 && selectedTournament && isSumaCategory(selectedTournament.category) && (
+            <div className="p-3 bg-dark-800/95 border border-amber-500/30 rounded-xl flex items-center justify-between text-xs">
+              <span className="text-dark-300 font-medium">Validación de Suma:</span>
+              {(() => {
+                const p1 = players.find((p) => p.id === formJugador1);
+                const p2 = players.find((p) => p.id === formJugador2);
+                if (!p1 || !p2) return null;
+                const res = validateCoupleCategorySuma(p1, p2, selectedTournament);
+                const l1 = getEffectivePlayerLevelForTournament(p1, selectedTournament);
+                const l2 = getEffectivePlayerLevelForTournament(p2, selectedTournament);
+                return (
+                  <span
+                    className={`px-2.5 py-1 rounded-lg font-bold border ${
+                      res.isValid
+                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                        : "bg-red-500/20 text-red-300 border-red-500/40"
+                    }`}
+                  >
+                    {p1.category || "5ta"} ({l1}) + {p2.category || "5ta"} ({l2}) = {res.sum}{" "}
+                    {res.isValid ? `✔ (Mín. ${res.target})` : `🚫 (Requiere Mín. ${res.target})`}
+                  </span>
+                );
+              })()}
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="ghost" onClick={() => setEditing(null)} disabled={isPending}>
