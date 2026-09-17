@@ -5,7 +5,10 @@
  * - split_card: Logo sup-izq, título masivo a la izquierda, tarjeta vertical lateral derecha.
  * - hero_center: Logo sup-centro con halo dorado, título centrado, 3 módulos podio y CTA central.
  * - split_inverted: Logo sup-der, tarjeta vertical a la izquierda, título y CTA alineados a derecha.
- * - magazine_bold: Logo flotante der, cabecera panorámica corrida, dos módulos gemelos y tarjeta dorada de premios.
+ * - magazine_bold: Logo en cabecera panorámica, titular masivo y módulos gemelos equilibrados.
+ *
+ * NOTA DE DISEÑO: Preserva SIEMPRE la proporción de aspecto original (1:1 o nativa) del logo
+ * Saladillo Padel Tour, evitando cualquier deformación o estiramiento.
  */
 
 export type FlyerTheme =
@@ -171,6 +174,40 @@ function roundRect(
   ctx.closePath();
 }
 
+/**
+ * Dibuja una imagen en el canvas garantizando SIEMPRE la preservación
+ * estricta de su aspecto original (aspect ratio), centrada dentro del box delimitador.
+ * NUNCA deforma ni estira el logotipo.
+ */
+function drawImageProportional(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  boxX: number,
+  boxY: number,
+  maxW: number,
+  maxH: number,
+  align: "left" | "center" | "right" = "center"
+): { x: number; y: number; width: number; height: number } {
+  const natW = img.naturalWidth || maxW;
+  const natH = img.naturalHeight || maxH;
+  const scale = Math.min(maxW / natW, maxH / natH);
+
+  const drawW = Math.round(natW * scale);
+  const drawH = Math.round(natH * scale);
+
+  let drawX = boxX;
+  if (align === "center") {
+    drawX = boxX + Math.round((maxW - drawW) / 2);
+  } else if (align === "right") {
+    drawX = boxX + (maxW - drawW);
+  }
+
+  const drawY = boxY + Math.round((maxH - drawH) / 2);
+
+  ctx.drawImage(img, drawX, drawY, drawW, drawH);
+  return { x: drawX, y: drawY, width: drawW, height: drawH };
+}
+
 // Helpers de ajuste de texto
 function wrapText(
   ctx: CanvasRenderingContext2D,
@@ -312,7 +349,7 @@ function drawSponsorsBar(
 
 /**
  * LAYOUT 1: split_card (Clásico Asimétrico)
- * Logo: Superior Izquierda
+ * Logo: Superior Izquierda (Proporción exacta 1:1, nunca deformado)
  * Título: Izquierda masivo
  * Tarjeta: Derecha vertical
  */
@@ -325,15 +362,29 @@ function renderLayoutSplitCard(
   logoImage?: HTMLImageElement | null
 ) {
   // 1. LOGO SPT SUPERIOR IZQUIERDA
-  const logoW = 195;
-  const logoH = 75;
+  // Contenedor cuadrado para proporción 1:1 perfecta (sin deformación)
+  const logoBoxSize = 96;
   const logoX = 100;
-  const logoY = 65;
+  const logoY = 55;
 
+  let actualDrawnW = logoBoxSize;
   if (logoImage && logoImage.complete && logoImage.naturalWidth > 0) {
-    ctx.drawImage(logoImage, logoX, logoY, logoW, logoH);
+    ctx.save();
+    ctx.shadowColor = "rgba(245, 158, 11, 0.45)";
+    ctx.shadowBlur = 18;
+    const drawn = drawImageProportional(
+      ctx,
+      logoImage,
+      logoX,
+      logoY,
+      logoBoxSize,
+      logoBoxSize,
+      "left"
+    );
+    actualDrawnW = drawn.width;
+    ctx.restore();
   } else {
-    roundRect(ctx, logoX, logoY, logoW, logoH, 12);
+    roundRect(ctx, logoX, logoY, logoBoxSize, logoBoxSize, 16);
     ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
     ctx.fill();
     ctx.strokeStyle = theme.accentColor;
@@ -342,12 +393,12 @@ function renderLayoutSplitCard(
     ctx.font = "900 24px 'Inter', sans-serif";
     ctx.fillStyle = "#ffffff";
     ctx.textAlign = "center";
-    ctx.fillText("SPT", logoX + logoW / 2, logoY + 46);
+    ctx.fillText("SPT", logoX + logoBoxSize / 2, logoY + 56);
   }
 
   // Badge categoría al lado del logo
-  const badgeX = logoX + logoW + 24;
-  const badgeY = logoY + 12;
+  const badgeX = logoX + actualDrawnW + 24;
+  const badgeY = logoY + 22;
   const badgeText = data.category ? data.category.toUpperCase() : "TORNEO OFICIAL";
   ctx.font = "900 18px 'Inter', sans-serif";
   const catWidth = ctx.measureText(badgeText).width + 36;
@@ -498,7 +549,7 @@ function renderLayoutSplitCard(
 
 /**
  * LAYOUT 2: hero_center (Impacto Central)
- * Logo: Centro Superior (X=960) con halo luminoso
+ * Logo: Centro Superior (X=960) con proporción intacta 1:1 y halo dorado
  * Título: Centrado masivo
  * Tarjetas: 3 módulos horizontales podio (Fecha, Premios destacado, Sede)
  * CTA: Central abajo
@@ -514,24 +565,35 @@ function renderLayoutHeroCenter(
   const centerX = W / 2;
 
   // 1. HALO LUMINOSO CENTRAL
-  const haloGrad = ctx.createRadialGradient(centerX, 150, 10, centerX, 150, 260);
+  const haloGrad = ctx.createRadialGradient(centerX, 115, 10, centerX, 115, 240);
   haloGrad.addColorStop(0, theme.cardGlow);
   haloGrad.addColorStop(1, "transparent");
   ctx.fillStyle = haloGrad;
   ctx.beginPath();
-  ctx.arc(centerX, 150, 260, 0, Math.PI * 2);
+  ctx.arc(centerX, 115, 240, 0, Math.PI * 2);
   ctx.fill();
 
-  // 2. LOGO SPT CENTRO SUPERIOR
-  const logoW = 240;
-  const logoH = 92;
-  const logoX = centerX - logoW / 2;
-  const logoY = 60;
+  // 2. LOGO SPT CENTRO SUPERIOR (Proporción nativa 1:1, nunca estirado)
+  const logoBoxSize = 110;
+  const logoX = centerX - logoBoxSize / 2;
+  const logoY = 48;
 
   if (logoImage && logoImage.complete && logoImage.naturalWidth > 0) {
-    ctx.drawImage(logoImage, logoX, logoY, logoW, logoH);
+    ctx.save();
+    ctx.shadowColor = "rgba(245, 158, 11, 0.6)";
+    ctx.shadowBlur = 24;
+    drawImageProportional(
+      ctx,
+      logoImage,
+      logoX,
+      logoY,
+      logoBoxSize,
+      logoBoxSize,
+      "center"
+    );
+    ctx.restore();
   } else {
-    roundRect(ctx, logoX, logoY, logoW, logoH, 16);
+    roundRect(ctx, logoX, logoY, logoBoxSize, logoBoxSize, 20);
     ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
     ctx.fill();
     ctx.strokeStyle = theme.accentColor;
@@ -540,7 +602,7 @@ function renderLayoutHeroCenter(
     ctx.font = "900 28px 'Inter', sans-serif";
     ctx.fillStyle = "#ffffff";
     ctx.textAlign = "center";
-    ctx.fillText("SPT", centerX, logoY + 56);
+    ctx.fillText("SPT", centerX, logoY + 65);
   }
 
   // Pill de Categoría justo abajo del logo
@@ -673,7 +735,7 @@ function renderLayoutHeroCenter(
 
 /**
  * LAYOUT 3: split_inverted (Invertido Vanguardia)
- * Logo: Superior Derecha
+ * Logo: Superior Derecha (Proporción exacta 1:1, sin deformación)
  * Título: Derecha alineado
  * Tarjeta: Izquierda vertical
  */
@@ -685,16 +747,29 @@ function renderLayoutSplitInverted(
   theme: ThemeConfig,
   logoImage?: HTMLImageElement | null
 ) {
-  // 1. LOGO SUPERIOR DERECHA
-  const logoW = 205;
-  const logoH = 78;
-  const logoX = W - 100 - logoW;
-  const logoY = 65;
+  // 1. LOGO SUPERIOR DERECHA (Caja cuadrada 1:1)
+  const logoBoxSize = 96;
+  const logoX = W - 100 - logoBoxSize;
+  const logoY = 55;
 
+  let actualDrawnW = logoBoxSize;
   if (logoImage && logoImage.complete && logoImage.naturalWidth > 0) {
-    ctx.drawImage(logoImage, logoX, logoY, logoW, logoH);
+    ctx.save();
+    ctx.shadowColor = "rgba(245, 158, 11, 0.45)";
+    ctx.shadowBlur = 18;
+    const drawn = drawImageProportional(
+      ctx,
+      logoImage,
+      logoX,
+      logoY,
+      logoBoxSize,
+      logoBoxSize,
+      "right"
+    );
+    actualDrawnW = drawn.width;
+    ctx.restore();
   } else {
-    roundRect(ctx, logoX, logoY, logoW, logoH, 12);
+    roundRect(ctx, logoX, logoY, logoBoxSize, logoBoxSize, 16);
     ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
     ctx.fill();
     ctx.strokeStyle = theme.accentColor;
@@ -703,7 +778,7 @@ function renderLayoutSplitInverted(
     ctx.font = "900 24px 'Inter', sans-serif";
     ctx.fillStyle = "#ffffff";
     ctx.textAlign = "center";
-    ctx.fillText("SPT", logoX + logoW / 2, logoY + 48);
+    ctx.fillText("SPT", logoX + logoBoxSize / 2, logoY + 56);
   }
 
   // Badge categoría al lado izquierdo del logo
@@ -711,7 +786,7 @@ function renderLayoutSplitInverted(
   ctx.font = "900 18px 'Inter', sans-serif";
   const catWidth = ctx.measureText(badgeText).width + 36;
   const badgeX = logoX - catWidth - 24;
-  const badgeY = logoY + 14;
+  const badgeY = logoY + 22;
 
   roundRect(ctx, badgeX, badgeY, catWidth, 50, 25);
   ctx.fillStyle = theme.badgeBg;
@@ -858,7 +933,7 @@ function renderLayoutSplitInverted(
 
 /**
  * LAYOUT 4: magazine_bold (Editorial Deportivo)
- * Logo: En cinta superior derecha
+ * Logo: En cabecera panorámica (proporción 1:1 exacta, sin estiramiento)
  * Cabecera: Cinta panorámica superior con categoría
  * Titular: Masivo superior-medio
  * Módulos: Dos tarjetas gemelas (Fecha / Sede) y una tarjeta horizontal dorada de premios
@@ -873,8 +948,8 @@ function renderLayoutMagazineBold(
 ) {
   // 1. CINTA SUPERIOR PANORÁMICA
   const bannerY = 50;
-  const bannerH = 60;
-  roundRect(ctx, 80, bannerY, W - 160, bannerH, 14);
+  const bannerH = 68;
+  roundRect(ctx, 80, bannerY, W - 160, bannerH, 16);
   ctx.fillStyle = "rgba(10, 15, 29, 0.85)";
   ctx.fill();
   ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
@@ -885,14 +960,14 @@ function renderLayoutMagazineBold(
   ctx.font = "bold 16px 'Inter', sans-serif";
   ctx.fillStyle = "#94a3b8";
   ctx.textAlign = "left";
-  ctx.fillText("CIRCUITO OFICIAL • SALADILLO PÁDEL TOUR", 120, bannerY + 37);
+  ctx.fillText("CIRCUITO OFICIAL • SALADILLO PÁDEL TOUR", 120, bannerY + 42);
 
   // Badge categoría en la cinta
   const catText = (data.category || "CATEGORÍA ABIERTA").toUpperCase();
   ctx.font = "900 18px 'Inter', sans-serif";
   const catW = ctx.measureText(catText).width + 36;
   const catX = 580;
-  roundRect(ctx, catX, bannerY + 8, catW, 44, 22);
+  roundRect(ctx, catX, bannerY + 11, catW, 46, 23);
   ctx.fillStyle = theme.badgeBg;
   ctx.fill();
   ctx.strokeStyle = theme.badgeBorder;
@@ -901,27 +976,38 @@ function renderLayoutMagazineBold(
 
   ctx.fillStyle = theme.badgeText;
   ctx.textAlign = "center";
-  ctx.fillText(catText, catX + catW / 2, bannerY + 36);
+  ctx.fillText(catText, catX + catW / 2, bannerY + 39);
 
-  // 2. LOGO EN LA CINTA A LA DERECHA
-  const logoW = 190;
-  const logoH = 70;
-  const logoX = W - 120 - logoW;
-  const logoY = 45;
+  // 2. LOGO EN LA CINTA A LA DERECHA (Proporción nativa 1:1, nunca estirado)
+  const logoBoxSize = 58;
+  const logoX = W - 120 - logoBoxSize;
+  const logoY = bannerY + 5;
 
   if (logoImage && logoImage.complete && logoImage.naturalWidth > 0) {
-    ctx.drawImage(logoImage, logoX, logoY, logoW, logoH);
+    ctx.save();
+    ctx.shadowColor = "rgba(245, 158, 11, 0.45)";
+    ctx.shadowBlur = 12;
+    drawImageProportional(
+      ctx,
+      logoImage,
+      logoX,
+      logoY,
+      logoBoxSize,
+      logoBoxSize,
+      "center"
+    );
+    ctx.restore();
   } else {
-    roundRect(ctx, logoX, logoY, logoW, logoH, 10);
+    roundRect(ctx, logoX, logoY, logoBoxSize, logoBoxSize, 10);
     ctx.fillStyle = "#000000";
     ctx.fill();
     ctx.strokeStyle = theme.accentColor;
     ctx.lineWidth = 2;
     ctx.stroke();
-    ctx.font = "900 22px 'Inter', sans-serif";
+    ctx.font = "900 20px 'Inter', sans-serif";
     ctx.fillStyle = "#ffffff";
     ctx.textAlign = "center";
-    ctx.fillText("SPT", logoX + logoW / 2, logoY + 44);
+    ctx.fillText("SPT", logoX + logoBoxSize / 2, logoY + 38);
   }
 
   // 3. TITULAR EDITORIAL MASIVO
