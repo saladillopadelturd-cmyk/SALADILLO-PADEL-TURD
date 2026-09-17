@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
@@ -68,8 +69,15 @@ export default function LoginPage() {
     <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-gradient-to-br from-primary-500 to-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary-500/20">
-            <span className="text-white font-black text-xl">SPT</span>
+          <div className="w-24 h-24 rounded-2xl overflow-hidden border border-amber-500/30 bg-dark-950 flex items-center justify-center mx-auto mb-4 shadow-2xl shadow-amber-500/20 group">
+            <Image
+              src="/logo.png"
+              alt="Saladillo Padel Tour"
+              width={96}
+              height={96}
+              className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+              priority
+            />
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
             Acceso Administrativo

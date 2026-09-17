@@ -11,8 +11,11 @@ import {
   renderFlyerOnCanvas,
   ALL_THEMES,
   THEMES,
+  ALL_LAYOUTS,
+  LAYOUT_CONFIGS,
   type FlyerRenderData,
   type FlyerTheme,
+  type FlyerLayout,
 } from "@/lib/canvas/flyerRenderer";
 import {
   Download,
@@ -149,6 +152,17 @@ export default function AdminFlyersPage() {
   const supabase = createClient();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
+  const [logoImage, setLogoImage] = useState<HTMLImageElement | null>(null);
+
+  // Cargar logotipo oficial SPT para el compositor del flyer
+  useEffect(() => {
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      setLogoImage(img);
+    };
+    img.src = "/logo-emblem.png";
+  }, []);
 
   // Form State
   const [title, setTitle] = useState("TORNEO ABIERTO DE PÁDEL");
@@ -162,6 +176,7 @@ export default function AdminFlyersPage() {
   const [selectedBackgroundId, setSelectedBackgroundId] = useState<string>("random");
   const [currentActiveFile, setCurrentActiveFile] = useState<string>(FONDOS_DISPONIBLES[0].filename);
   const [currentTheme, setCurrentTheme] = useState<FlyerTheme>("neon_emerald");
+  const [currentLayout, setCurrentLayout] = useState<FlyerLayout>("split_card");
 
   // System & UI State
   const [loadingBg, setLoadingBg] = useState(false);
@@ -263,8 +278,10 @@ export default function AdminFlyersPage() {
   /**
    * REGENERAR FLYER:
    * Diseñado por @spt-flyer-designer:
-   * 1. Selecciona un nuevo fondo de la carpeta local diferente del actual.
-   * 2. Diseña una variación visual completamente nueva alternando el tema/paleta cromática y tarjeta.
+   * 1. Cambia imagen de fondo de flyer (FONDOS_DISPONIBLES diferentes del actual).
+   * 2. Cambia el diseño y la distribución de títulos y textos del flyer (alineación, escala, disposición).
+   * 3. Cambia el diseño general del flyer (distribución de tarjetas: lateral, podio 3 columnas o revista panorámica).
+   * 4. Cambia la ubicación del logo SaladilloPadelTour (izq, centro con halo, der o cabecera corrida).
    */
   const handleRegenerateFlyer = () => {
     // 1. Nuevo fondo diferente del actual
@@ -275,7 +292,13 @@ export default function AdminFlyersPage() {
       availableFondos[Math.floor(Math.random() * availableFondos.length)] ||
       FONDOS_DISPONIBLES[0];
 
-    // 2. Nuevo estilo visual / paleta cromática diferente de la actual
+    // 2. Nuevo diseño y distribución general (Layout diferente del actual)
+    const availableLayouts = ALL_LAYOUTS.filter((l) => l !== currentLayout);
+    const nextLayout =
+      availableLayouts[Math.floor(Math.random() * availableLayouts.length)] ||
+      ALL_LAYOUTS[0];
+
+    // 3. Nuevo estilo visual / paleta cromática diferente de la actual
     const availableThemes = ALL_THEMES.filter((t) => t !== currentTheme);
     const nextTheme =
       availableThemes[Math.floor(Math.random() * availableThemes.length)] ||
@@ -283,12 +306,14 @@ export default function AdminFlyersPage() {
 
     setCurrentActiveFile(nextFondo.filename);
     setSelectedBackgroundId(nextFondo.id);
+    setCurrentLayout(nextLayout);
     setCurrentTheme(nextTheme);
     loadLocalImage(`/assets/fondos/${nextFondo.filename}`);
 
+    const layoutInfo = LAYOUT_CONFIGS[nextLayout];
     setStatusMsg({
       type: "success",
-      text: `✨ Flyer regenerado por @spt-flyer-designer: Fondo ${nextFondo.filename} • Estilo: ${THEMES[nextTheme].name}`,
+      text: `✨ Flyer regenerado con éxito: Diseño "${layoutInfo.name}" • Logo: ${layoutInfo.logoPosition} • Fondo: ${nextFondo.filename} • Estilo: ${THEMES[nextTheme].name}`,
     });
   };
 
@@ -309,10 +334,11 @@ export default function AdminFlyersPage() {
       prizes,
       sponsors: sponsorsList,
       theme: currentTheme,
+      layout: currentLayout,
     };
 
-    renderFlyerOnCanvas(canvasRef.current, bgImage, renderData);
-  }, [title, category, date, location, prizes, sponsorsText, bgImage, currentTheme]);
+    renderFlyerOnCanvas(canvasRef.current, bgImage, renderData, logoImage);
+  }, [title, category, date, location, prizes, sponsorsText, bgImage, currentTheme, currentLayout, logoImage]);
 
   useEffect(() => {
     redrawCanvas();
@@ -456,9 +482,14 @@ export default function AdminFlyersPage() {
       {/* Encabezado Principal */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold mb-2">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>DISEÑADO POR @SPT-FLYER-DESIGNER • 1920 × 1080 PX</span>
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-400 text-xs font-bold">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>LOGO OFICIAL SPT INTEGRADO</span>
+            </div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
+              <span>1920 × 1080 PX (16:9)</span>
+            </div>
           </div>
           <h1 className="text-3xl font-black text-white tracking-tight flex items-center gap-3">
             Generador de Flyers
@@ -538,7 +569,14 @@ export default function AdminFlyersPage() {
             Vista Previa • Resolución 1920 × 1080 px (16:9)
           </span>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold text-emerald-300 bg-emerald-950/70 px-3 py-1 rounded-lg border border-emerald-500/30 flex items-center gap-1.5 shadow-sm">
+              <Layers className="w-3.5 h-3.5 text-emerald-400" />
+              {LAYOUT_CONFIGS[currentLayout].name}
+            </span>
+            <span className="text-xs font-medium text-amber-300 bg-amber-950/50 px-2.5 py-1 rounded-lg border border-amber-500/30 flex items-center gap-1.5">
+              Logo: {LAYOUT_CONFIGS[currentLayout].logoPosition}
+            </span>
             <span className="text-xs font-medium text-slate-300 bg-dark-800 px-3 py-1 rounded-lg border border-dark-700 flex items-center gap-1.5">
               <Palette className="w-3.5 h-3.5 text-emerald-400" />
               {THEMES[currentTheme].name}
@@ -741,6 +779,33 @@ export default function AdminFlyersPage() {
               <span className="text-[11px] text-emerald-400 font-semibold">
                 @spt-flyer-designer
               </span>
+            </div>
+
+            {/* Selector de Diseño y Distribución (Layout) */}
+            <div>
+              <label className="block text-xs font-medium text-dark-300 mb-1.5 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                  Diseño y Distribución General:
+                </span>
+                <span className="text-[10px] text-amber-400 font-bold">
+                  Logo: {LAYOUT_CONFIGS[currentLayout].logoPosition}
+                </span>
+              </label>
+              <select
+                value={currentLayout}
+                onChange={(e) => setCurrentLayout(e.target.value as FlyerLayout)}
+                className="w-full bg-dark-900 border border-dark-700 rounded-xl px-4 py-2.5 text-sm text-white font-medium focus:border-emerald-500 focus:outline-none"
+              >
+                {ALL_LAYOUTS.map((lay) => (
+                  <option key={lay} value={lay}>
+                    {LAYOUT_CONFIGS[lay].name} (Logo {LAYOUT_CONFIGS[lay].logoPosition})
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-dark-400 mt-1">
+                {LAYOUT_CONFIGS[currentLayout].description}
+              </p>
             </div>
 
             {/* Selector de Estilo Visual */}

@@ -10,12 +10,12 @@ const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.NEXT_PUBLIC_
 
 const DEFAULT_FLYER = {
   id: "oficial-spt-2026",
-  title: "TORNEO ABIERTO DE PÁDEL - 5TA LIBRES",
-  image_url: "/assets/fondos/fondo_1.jpg",
+  title: "GRAN TORNEO APERTURA 2026 - SALADILLO PADEL TOUR",
+  image_url: "/assets/fondos/flyer_oficial_spt.png",
   link_url: "#torneos-activos",
   active: true,
   sort_order: -1,
-  created_at: "2026-09-15T00:00:00.000Z",
+  created_at: "2026-09-17T00:00:00.000Z",
 };
 
 export async function GET() {

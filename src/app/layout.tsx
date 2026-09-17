@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Image from "next/image";
 import "./globals.css";
 import Header from "@/components/layout/Header";
 import ServiceWorkerRegister from "@/components/pwa/ServiceWorkerRegister";
@@ -19,6 +20,11 @@ export const metadata: Metadata = {
   title: "SPT - Saladillo Padel Tour",
   description:
     "Gestión de torneos de pádel - Saladillo Padel Tour. Consulta torneos, rankings, zonas y cuadros de eliminación en tiempo real.",
+  icons: {
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
+    apple: "/icon-192x192.png",
+  },
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
@@ -51,13 +57,24 @@ export default function RootLayout({
         <main className="flex-1">{children}</main>
         <footer className="border-t border-dark-700 bg-dark-900 py-6">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-green-500 rounded-md flex items-center justify-center">
-                <span className="text-white font-bold text-xs">SPT</span>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg overflow-hidden border border-amber-500/30 bg-dark-950 flex items-center justify-center shadow-sm">
+                <Image
+                  src="/logo-emblem.png"
+                  alt="SPT Logo"
+                  width={32}
+                  height={32}
+                  className="w-full h-full object-cover"
+                />
               </div>
-              <span className="text-dark-400 text-sm">
-                Saladillo Padel Tour
-              </span>
+              <div className="flex flex-col">
+                <span className="text-white text-sm font-bold tracking-tight leading-tight">
+                  Saladillo Padel Tour
+                </span>
+                <span className="text-dark-500 text-[10px] uppercase font-semibold tracking-wider">
+                  Circuito Oficial
+                </span>
+              </div>
             </div>
             <div className="flex items-center gap-4">
               <InstallButton />

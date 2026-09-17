@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Trophy, Users, UserCheck, Shield, ArrowLeft, Image as ImageIcon, Sparkles } from "lucide-react";
 
@@ -19,10 +20,24 @@ export default function Sidebar() {
 
   return (
     <aside className="hidden lg:flex lg:flex-col w-64 bg-dark-950/90 backdrop-blur-md border-r border-dark-800 min-h-[calc(100vh-4rem)]">
-      <div className="px-4 py-4 border-b border-dark-800/80">
-        <span className="text-[11px] font-black uppercase tracking-wider text-emerald-400">
-          Panel de Control SPT
-        </span>
+      <div className="px-4 py-4 border-b border-dark-800/80 flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg overflow-hidden border border-amber-500/30 bg-dark-900 flex items-center justify-center flex-shrink-0 shadow-sm">
+          <Image
+            src="/logo-emblem.png"
+            alt="SPT Logo"
+            width={32}
+            height={32}
+            className="w-full h-full object-cover"
+          />
+        </div>
+        <div className="flex flex-col min-w-0">
+          <span className="text-[11px] font-black uppercase tracking-wider text-amber-400 truncate">
+            Panel de Control
+          </span>
+          <span className="text-[10px] text-dark-400 font-semibold truncate">
+            Saladillo Padel Tour
+          </span>
+        </div>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1.5">
