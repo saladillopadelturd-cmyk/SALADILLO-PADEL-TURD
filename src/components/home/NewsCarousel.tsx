@@ -76,6 +76,47 @@ export default function NewsCarousel({ flyers: initialFlyers }: NewsCarouselProp
         }
       })
       .catch(() => {});
+
+    // 4. Escuchar evento personalizado para actualización en tiempo real (misma pestaña)
+    const handleFlyerConfirmed = (event: Event) => {
+      const customEvent = event as CustomEvent<Flyer>;
+      const newFlyer = customEvent.detail;
+      if (newFlyer && newFlyer.image_url) {
+        // Prepend el nuevo flyer, eliminando DEFAULT_FLYER si existed
+        setFlyers((prev) => {
+          const filtered = prev.filter((f) => f.id !== newFlyer.id && f.id !== DEFAULT_FLYER.id);
+          return [newFlyer, ...filtered];
+        });
+        setCurrentIndex(0);
+      }
+    };
+
+    window.addEventListener("spt-flyer-confirmed", handleFlyerConfirmed);
+
+    // 5. Escuchar cambios en localStorage para actualización entre petañas/dispositivos
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === "spt_confirmed_flyer" && event.newValue) {
+        try {
+          const newFlyer: Flyer = JSON.parse(event.newValue);
+          if (newFlyer && newFlyer.image_url) {
+            setFlyers((prev) => {
+              const filtered = prev.filter((f) => f.id !== newFlyer.id && f.id !== DEFAULT_FLYER.id);
+              return [newFlyer, ...filtered];
+            });
+            setCurrentIndex(0);
+          }
+        } catch (e) {
+          console.warn("Error parsing flyer from storage event:", e);
+        }
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+
+    return () => {
+      window.removeEventListener("spt-flyer-confirmed", handleFlyerConfirmed);
+      window.removeEventListener("storage", handleStorageChange);
+    };
   }, []);
 
   useEffect(() => {

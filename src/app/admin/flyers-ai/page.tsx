@@ -436,6 +436,8 @@ export default function AdminFlyersPage() {
             created_at: new Date().toISOString(),
           };
           localStorage.setItem("spt_confirmed_flyer", JSON.stringify(confirmedFlyerData));
+          // Disparar evento personalizado para notificar a otros componentes
+          window.dispatchEvent(new CustomEvent("spt-flyer-confirmed", { detail: confirmedFlyerData }));
         } catch (storageErr) {
           console.error("Local storage error:", storageErr);
         }
