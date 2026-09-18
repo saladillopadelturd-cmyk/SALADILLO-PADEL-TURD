@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import type { Tournament } from "@/types/tournament";
 import { Trophy, Calendar, MapPin, ArrowRight, ShieldCheck, Clock, Users, Activity, Sparkles, Flame } from "lucide-react";
 import RulesSection from "@/components/home/RulesSection";
+import NewsCarousel from "@/components/home/NewsCarousel";
+import type { Flyer } from "@/types/flyer";
 
 export const revalidate = 0; // Fresh tournament data on each load
 
@@ -34,14 +36,75 @@ export default async function HomePage() {
   const supabase = await createClient();
 
   let tournaments: Tournament[] = [];
-  
+  let flyers: Flyer[] = [];
+
   try {
-    const tourRes = await supabase
-      .from("tournaments")
-      .select("*")
-      .order("date", { ascending: false });
-    
+    const [tourRes, flyersRes] = await Promise.all([
+      supabase
+        .from("tournaments")
+        .select("*")
+        .order("date", { ascending: false }),
+      supabase
+        .from("flyers")
+        .select("*")
+        .eq("active", true)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: false })
+    ]);
+
     if (tourRes.data) tournaments = tourRes.data;
+    if (flyersRes.data && flyersRes.data.length > 0) {
+      flyers = flyersRes.data;
+    } else {
+      // 1. Intentar consultar Supabase Storage público
+      try {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hrediohisjcjykaranzx.supabase.co";
+        const storageRes = await fetch(`${supabaseUrl}/storage/v1/object/public/flyers/confirmed_flyer.json`, {
+          cache: "no-store",
+        });
+        if (storageRes.ok) {
+          const storageData = await storageRes.json();
+          if (storageData && storageData.image_url) {
+            flyers = [storageData];
+          }
+        }
+      } catch (storageErr) {
+        console.warn("Storage confirmed flyer fetch error on page:", storageErr);
+      }
+
+      // 2. Fallback a archivo en disco si no se obtuvo de storage
+      if (flyers.length === 0) {
+        try {
+          const fs = await import("fs");
+          const path = await import("path");
+          const filePath = path.join(process.cwd(), "public", "confirmed_flyer.json");
+          if (fs.existsSync(filePath)) {
+            const fileData = fs.readFileSync(filePath, "utf-8");
+            const parsed = JSON.parse(fileData);
+            if (parsed && parsed.image_url) {
+              flyers = [parsed];
+            }
+          }
+        } catch (fsErr) {
+          console.warn("Could not load local confirmed flyer:", fsErr);
+        }
+      }
+
+      // 3. Fallback garantizado para que nunca esté vacío en móviles
+      if (flyers.length === 0) {
+        flyers = [
+          {
+            id: "oficial-spt-2026",
+            title: "GRAN TORNEO APERTURA 2026 - SALADILLO PADEL TOUR",
+            image_url: "/assets/fondos/flyer_oficial_spt.png",
+            link_url: "#torneos-activos",
+            active: true,
+            sort_order: -1,
+            created_at: new Date().toISOString(),
+          },
+        ];
+      }
+    }
   } catch (e) {
     console.error("Error loading data on home:", e);
   }
@@ -78,6 +141,8 @@ export default async function HomePage() {
             Viví el pádel con seguimiento en tiempo real: marcadores en vivo con punto de oro,
             tablas de posiciones de zonas, cuadros de playoffs y rankings acumulados.
           </p>
+
+          <NewsCarousel flyers={flyers} />
 
           {/* Quick Action CTA */}
           <div className="mt-2 sm:mt-8 flex flex-row gap-3 justify-center w-full mx-auto sm:max-w-none">
