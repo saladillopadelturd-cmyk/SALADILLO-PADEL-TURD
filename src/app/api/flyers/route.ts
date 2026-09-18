@@ -6,7 +6,7 @@ import path from "path";
 export const dynamic = "force-dynamic";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hrediohisjcjykaranzx.supabase.co";
-const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SECRET_KEY || "";
 
 const DEFAULT_FLYER = {
   id: "oficial-spt-2026",
@@ -83,13 +83,13 @@ export async function POST(req: Request) {
         const buffer = Buffer.from(base64Data, "base64");
         const fileName = `flyer_confirmado_${Date.now()}.png`;
 
-        // Subir a Supabase Storage con Service Key
-        if (SUPABASE_KEY) {
+        // Subir a Supabase Storage con Service Role Key
+        if (SUPABASE_SERVICE_ROLE_KEY) {
           const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/flyers/${fileName}`, {
             method: "POST",
             headers: {
-              apikey: SUPABASE_KEY,
-              Authorization: `Bearer ${SUPABASE_KEY}`,
+              apikey: SUPABASE_SERVICE_ROLE_KEY,
+              Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
               "Content-Type": "image/png",
               "x-upsert": "true",
             },
@@ -125,13 +125,13 @@ export async function POST(req: Request) {
     };
 
     // 2. Guardar confirmed_flyer.json en Supabase Storage (disponible para todos los móviles)
-    if (SUPABASE_KEY) {
+    if (SUPABASE_SERVICE_ROLE_KEY) {
       try {
         await fetch(`${SUPABASE_URL}/storage/v1/object/flyers/confirmed_flyer.json`, {
           method: "POST",
           headers: {
-            apikey: SUPABASE_KEY,
-            Authorization: `Bearer ${SUPABASE_KEY}`,
+            apikey: SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
             "Content-Type": "application/json",
             "x-upsert": "true",
           },
