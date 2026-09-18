@@ -4,6 +4,8 @@ import fs from "fs";
 import path from "path";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+export const bodyParser = { sizeLimit: "10mb" };
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hrediohisjcjykaranzx.supabase.co";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SECRET_KEY || "";
@@ -81,6 +83,12 @@ export async function POST(req: Request) {
       try {
         const base64Data = raw_base64.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, "base64");
+        
+        // Verificar tamaño (max 5MB)
+        if (buffer.length > 5 * 1024 * 1024) {
+          return NextResponse.json({ success: false, error: "Imagen demasiado grande (máx 5MB)" }, { status: 413 });
+        }
+        
         const fileName = `flyer_confirmado_${Date.now()}.png`;
 
         // Subir a Supabase Storage con Service Role Key
@@ -96,9 +104,13 @@ export async function POST(req: Request) {
             body: buffer,
           });
 
-          if (uploadRes.ok) {
-            finalImageUrl = `${SUPABASE_URL}/storage/v1/object/public/flyers/${fileName}`;
+          if (!uploadRes.ok) {
+            const errText = await uploadRes.text();
+            console.error("Storage upload failed:", uploadRes.status, errText);
+            return NextResponse.json({ success: false, error: "Error subiendo a Storage" }, { status: 500 });
           }
+
+          finalImageUrl = `${SUPABASE_URL}/storage/v1/object/public/flyers/${fileName}`;
         }
 
         // Guardado local opcional en disco (solo funciona en dev local)
@@ -112,6 +124,11 @@ export async function POST(req: Request) {
       } catch (saveErr) {
         console.warn("Could not save image buffer:", saveErr);
       }
+    }
+
+    // Si no se subió a Storage, usar la URL original o un fallback
+    if (!finalImageUrl || finalImageUrl.startsWith("data:")) {
+      finalImageUrl = image_url || "/assets/fondos/flyer_oficial_spt.png";
     }
 
     const confirmedFlyer = {
