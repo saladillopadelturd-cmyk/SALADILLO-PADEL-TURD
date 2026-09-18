@@ -20,24 +20,19 @@ export default function Sidebar() {
 
   return (
     <aside className="hidden lg:flex lg:flex-col w-64 bg-dark-950/90 backdrop-blur-md border-r border-dark-800 min-h-[calc(100vh-4rem)]">
-      <div className="px-4 py-4 border-b border-dark-800/80 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg overflow-hidden border border-amber-500/30 bg-dark-900 flex items-center justify-center flex-shrink-0 shadow-sm">
+      <div className="px-4 py-4 border-b border-dark-800/80 flex items-center justify-between">
+        <div className="relative h-8 w-32 flex items-center justify-start">
           <Image
-            src="/logo-emblem.png"
-            alt="SPT Logo"
-            width={32}
-            height={32}
-            className="w-full h-full object-cover"
+            src="/LOGOSPT.png"
+            alt="Saladillo Padel Tour"
+            width={128}
+            height={36}
+            className="h-full w-auto object-contain"
           />
         </div>
-        <div className="flex flex-col min-w-0">
-          <span className="text-[11px] font-black uppercase tracking-wider text-amber-400 truncate">
-            Panel de Control
-          </span>
-          <span className="text-[10px] text-dark-400 font-semibold truncate">
-            Saladillo Padel Tour
-          </span>
-        </div>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400/90 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20">
+          Admin
+        </span>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1.5">

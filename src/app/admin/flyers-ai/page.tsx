@@ -161,7 +161,7 @@ export default function AdminFlyersPage() {
     img.onload = () => {
       setLogoImage(img);
     };
-    img.src = "/logo-emblem.png";
+    img.src = "/LOGOSPT.png";
   }, []);
 
   // Form State

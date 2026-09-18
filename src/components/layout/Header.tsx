@@ -22,26 +22,15 @@ export default function Header() {
         <div className="flex items-center justify-between h-16">
           {/* Logo & Brand */}
           <Link href="/" className="flex items-center gap-3 group">
-            <div className="relative flex items-center justify-center">
-              <div className="w-10 h-10 rounded-xl overflow-hidden border border-amber-500/40 bg-dark-900 shadow-md shadow-amber-500/20 group-hover:scale-105 group-hover:border-amber-400/80 transition-all flex items-center justify-center">
-                <Image
-                  src="/logo-emblem.png"
-                  alt="SPT - Saladillo Padel Tour"
-                  width={40}
-                  height={40}
-                  className="w-full h-full object-cover"
-                  priority
-                />
-              </div>
-              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full ring-2 ring-dark-950 animate-pulse" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-white font-black text-base tracking-tight leading-none group-hover:text-amber-400 transition-colors">
-                Saladillo Padel Tour
-              </span>
-              <span className="text-[10px] text-dark-400 font-semibold tracking-wider uppercase mt-0.5">
-                Circuito Oficial
-              </span>
+            <div className="relative h-10 sm:h-11 w-32 sm:w-36 flex items-center justify-start">
+              <Image
+                src="/LOGOSPT.png"
+                alt="Saladillo Padel Tour"
+                width={160}
+                height={48}
+                className="h-full w-auto object-contain transition-transform duration-300 group-hover:scale-105"
+                priority
+              />
             </div>
           </Link>
 

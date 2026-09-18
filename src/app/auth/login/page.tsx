@@ -69,13 +69,13 @@ export default function LoginPage() {
     <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-24 h-24 rounded-2xl overflow-hidden border border-amber-500/30 bg-dark-950 flex items-center justify-center mx-auto mb-4 shadow-2xl shadow-amber-500/20 group">
+          <div className="w-64 h-28 rounded-2xl overflow-hidden border border-amber-500/30 bg-dark-950/80 flex items-center justify-center mx-auto mb-4 p-3 shadow-2xl shadow-amber-500/20 group">
             <Image
-              src="/logo.png"
+              src="/LOGOSPT.png"
               alt="Saladillo Padel Tour"
-              width={96}
-              height={96}
-              className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+              width={256}
+              height={100}
+              className="w-full h-full object-contain transition-transform duration-300 hover:scale-105"
               priority
             />
           </div>
