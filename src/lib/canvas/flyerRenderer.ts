@@ -154,6 +154,31 @@ export const THEMES: Record<FlyerTheme, ThemeConfig> = {
 };
 
 // Helper de dibujo de rectángulo redondeado
+/**
+ * Helper para aplicar sombra de desenfoque negra profunda a objetos y tarjetas
+ */
+function setBlackShadow(
+  ctx: CanvasRenderingContext2D,
+  blur = 30,
+  offsetY = 10,
+  alpha = 0.85
+) {
+  ctx.shadowColor = `rgba(0, 0, 0, ${alpha})`;
+  ctx.shadowBlur = blur;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = offsetY;
+}
+
+/**
+ * Limpia cualquier sombra activa en el contexto de dibujo
+ */
+function clearShadow(ctx: CanvasRenderingContext2D) {
+  ctx.shadowColor = "transparent";
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+}
+
 function roundRect(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -205,7 +230,10 @@ function drawImageProportional(
 
   const drawY = boxY + Math.round((maxH - drawH) / 2);
 
+  ctx.save();
+  setBlackShadow(ctx, 35, 12, 0.9);
   ctx.drawImage(img, drawX, drawY, drawW, drawH);
+  ctx.restore();
   return { x: drawX, y: drawY, width: drawW, height: drawH };
 }
 
@@ -370,9 +398,12 @@ function drawSponsorsBar(
     const tw = ctx.measureText(spon.toUpperCase()).width;
     const spW = Math.max(tw + 52, 160);
 
+    ctx.save();
+    setBlackShadow(ctx, 16, 6, 0.8);
     roundRect(ctx, spX, spY, spW, spH, 14);
     ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
     ctx.fill();
+    ctx.restore();
     ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
     ctx.lineWidth = 1.5;
     ctx.stroke();
@@ -433,9 +464,15 @@ function renderLayoutSplitCard(
   const catWidth = ctx.measureText(badgeText).width + 56;
   const badgeH = 56;
 
+  ctx.save();
+  setBlackShadow(ctx, 24, 8, 0.85);
+  ctx.save();
+  setBlackShadow(ctx, 24, 8, 0.85);
   roundRect(ctx, badgeX, badgeY, catWidth, badgeH, 28);
   ctx.fillStyle = theme.badgeBg;
   ctx.fill();
+  ctx.restore();
+  ctx.restore();
   ctx.strokeStyle = theme.badgeBorder;
   ctx.lineWidth = 2.5;
   ctx.stroke();
@@ -455,7 +492,10 @@ function renderLayoutSplitCard(
   tGrad.addColorStop(1, theme.brandGradient[2]);
   ctx.fillStyle = tGrad;
 
+  ctx.save();
+  setBlackShadow(ctx, 25, 6, 0.95);
   wrapText(ctx, (data.title || "GRAN TORNEO RELÁMPAGO").toUpperCase(), 70, titleY, 930, 92, 2);
+  ctx.restore();
 
   // Línea de acento decorativa
   ctx.fillStyle = theme.accentColor;
@@ -464,6 +504,8 @@ function renderLayoutSplitCard(
   // Subtítulo informativo
   ctx.font = "600 28px 'Inter', sans-serif";
   ctx.fillStyle = "#f1f5f9";
+  ctx.save();
+  setBlackShadow(ctx, 18, 4, 0.9);
   wrapText(
     ctx,
     "¡Viví la emoción del mejor pádel! Inscripciones abiertas para todas las parejas de la región.",
@@ -473,6 +515,7 @@ function renderLayoutSplitCard(
     42,
     2
   );
+  ctx.restore();
 
   // CTA Button (Izquierda abajo)
   const ctaW = 460;
@@ -480,12 +523,18 @@ function renderLayoutSplitCard(
   const ctaX = 70;
   const ctaY = 790;
 
+  ctx.save();
+  setBlackShadow(ctx, 35, 14, 0.9);
+  ctx.save();
+  setBlackShadow(ctx, 35, 14, 0.9);
   roundRect(ctx, ctaX, ctaY, ctaW, ctaH, 20);
   const ctaGrad = ctx.createLinearGradient(ctaX, ctaY, ctaX + ctaW, ctaY);
   ctaGrad.addColorStop(0, theme.brandGradient[1]);
   ctaGrad.addColorStop(1, theme.brandGradient[2]);
   ctx.fillStyle = ctaGrad;
   ctx.fill();
+  ctx.restore();
+  ctx.restore();
 
   ctx.font = "900 26px 'Inter', sans-serif";
   ctx.fillStyle = "#000000";
@@ -499,10 +548,9 @@ function renderLayoutSplitCard(
   const cardH = 825;
 
   ctx.save();
-  ctx.shadowColor = theme.cardGlow;
-  ctx.shadowBlur = 40;
+  setBlackShadow(ctx, 50, 18, 0.92);
   roundRect(ctx, cardX, cardY, cardW, cardH, 30);
-  ctx.fillStyle = "rgba(10, 15, 29, 0.88)";
+  ctx.fillStyle = "rgba(10, 15, 29, 0.90)";
   ctx.fill();
   ctx.restore();
 
@@ -545,9 +593,15 @@ function renderLayoutSplitCard(
   const prizeBoxW = cardW - 100;
   const prizeBoxH = 220;
 
+  ctx.save();
+  setBlackShadow(ctx, 26, 10, 0.85);
+  ctx.save();
+  setBlackShadow(ctx, 26, 10, 0.85);
   roundRect(ctx, cardX + 50, row3Y, prizeBoxW, prizeBoxH, 24);
   ctx.fillStyle = theme.badgeBg;
   ctx.fill();
+  ctx.restore();
+  ctx.restore();
   ctx.strokeStyle = theme.badgeBorder;
   ctx.lineWidth = 2.5;
   ctx.stroke();
@@ -625,9 +679,12 @@ function renderLayoutHeroCenter(
   ctx.font = "900 22px 'Inter', sans-serif";
   const catW = ctx.measureText(catText).width + 60;
   const catY = logoY + logoH + 15;
+  ctx.save();
+  setBlackShadow(ctx, 24, 8, 0.85);
   roundRect(ctx, centerX - catW / 2, catY, catW, 50, 25);
   ctx.fillStyle = theme.badgeBg;
   ctx.fill();
+  ctx.restore();
   ctx.strokeStyle = theme.badgeBorder;
   ctx.lineWidth = 2.5;
   ctx.stroke();
@@ -647,7 +704,10 @@ function renderLayoutHeroCenter(
   tGrad.addColorStop(1, theme.brandGradient[2]);
   ctx.fillStyle = tGrad;
 
+  ctx.save();
+  setBlackShadow(ctx, 30, 8, 0.95);
   wrapTextCentered(ctx, (data.title || "GRAN TORNEO RELÁMPAGO").toUpperCase(), centerX, titleY, 1720, 88, 1);
+  ctx.restore();
 
   // 4. TRES TARJETAS HORIZONTALES (PODIO) - EXPANDIDAS PARA REDUCIR ESPACIO OCIOSO
   const modY = titleY + 50;
@@ -659,9 +719,12 @@ function renderLayoutHeroCenter(
 
   // Tarjeta 1: FECHA
   const card1X = startX;
+  ctx.save();
+  setBlackShadow(ctx, 45, 16, 0.9);
   roundRect(ctx, card1X, modY, modW, modH, 24);
-  ctx.fillStyle = "rgba(10, 15, 29, 0.88)";
+  ctx.fillStyle = "rgba(10, 15, 29, 0.90)";
   ctx.fill();
+  ctx.restore();
   ctx.strokeStyle = theme.cardBorder;
   ctx.lineWidth = 2.5;
   ctx.stroke();
@@ -681,9 +744,12 @@ function renderLayoutHeroCenter(
 
   // Tarjeta 2: PREMIOS (Tarjeta destacada central con altura extendida)
   const card2X = startX + modW + gap;
+  ctx.save();
+  setBlackShadow(ctx, 50, 18, 0.92);
   roundRect(ctx, card2X, modY - 15, modW, modH + 30, 26);
   ctx.fillStyle = theme.badgeBg;
   ctx.fill();
+  ctx.restore();
   ctx.strokeStyle = theme.badgeBorder;
   ctx.lineWidth = 3.5;
   ctx.stroke();
@@ -703,9 +769,12 @@ function renderLayoutHeroCenter(
 
   // Tarjeta 3: SEDE
   const card3X = startX + (modW + gap) * 2;
+  ctx.save();
+  setBlackShadow(ctx, 45, 16, 0.9);
   roundRect(ctx, card3X, modY, modW, modH, 24);
-  ctx.fillStyle = "rgba(10, 15, 29, 0.88)";
+  ctx.fillStyle = "rgba(10, 15, 29, 0.90)";
   ctx.fill();
+  ctx.restore();
   ctx.strokeStyle = theme.cardBorder;
   ctx.lineWidth = 2.5;
   ctx.stroke();
@@ -729,12 +798,18 @@ function renderLayoutHeroCenter(
   const ctaX = centerX - ctaW / 2;
   const ctaY = modY + modH + 28;
 
+  ctx.save();
+  setBlackShadow(ctx, 35, 14, 0.9);
+  ctx.save();
+  setBlackShadow(ctx, 35, 14, 0.9);
   roundRect(ctx, ctaX, ctaY, ctaW, ctaH, 20);
   const ctaGrad = ctx.createLinearGradient(ctaX, ctaY, ctaX + ctaW, ctaY);
   ctaGrad.addColorStop(0, theme.brandGradient[1]);
   ctaGrad.addColorStop(1, theme.brandGradient[2]);
   ctx.fillStyle = ctaGrad;
   ctx.fill();
+  ctx.restore();
+  ctx.restore();
 
   ctx.font = "900 26px 'Inter', sans-serif";
   ctx.fillStyle = "#000000";
@@ -788,9 +863,15 @@ function renderLayoutSplitInverted(
   const badgeX = W - 70 - catWidth;
   const badgeY = logoY + logoH + 20;
 
+  ctx.save();
+  setBlackShadow(ctx, 24, 8, 0.85);
+  ctx.save();
+  setBlackShadow(ctx, 24, 8, 0.85);
   roundRect(ctx, badgeX, badgeY, catWidth, badgeH, 28);
   ctx.fillStyle = theme.badgeBg;
   ctx.fill();
+  ctx.restore();
+  ctx.restore();
   ctx.strokeStyle = theme.badgeBorder;
   ctx.lineWidth = 2.5;
   ctx.stroke();
@@ -806,10 +887,9 @@ function renderLayoutSplitInverted(
   const cardH = 825;
 
   ctx.save();
-  ctx.shadowColor = theme.cardGlow;
-  ctx.shadowBlur = 40;
+  setBlackShadow(ctx, 50, 18, 0.92);
   roundRect(ctx, cardX, cardY, cardW, cardH, 30);
-  ctx.fillStyle = "rgba(10, 15, 29, 0.88)";
+  ctx.fillStyle = "rgba(10, 15, 29, 0.90)";
   ctx.fill();
   ctx.restore();
 
@@ -852,9 +932,15 @@ function renderLayoutSplitInverted(
   const prizeBoxW = cardW - 100;
   const prizeBoxH = 220;
 
+  ctx.save();
+  setBlackShadow(ctx, 26, 10, 0.85);
+  ctx.save();
+  setBlackShadow(ctx, 26, 10, 0.85);
   roundRect(ctx, cardX + 50, row3Y, prizeBoxW, prizeBoxH, 24);
   ctx.fillStyle = theme.badgeBg;
   ctx.fill();
+  ctx.restore();
+  ctx.restore();
   ctx.strokeStyle = theme.badgeBorder;
   ctx.lineWidth = 2.5;
   ctx.stroke();
@@ -888,7 +974,10 @@ function renderLayoutSplitInverted(
   tGrad.addColorStop(1, theme.brandGradient[2]);
   ctx.fillStyle = tGrad;
 
+  ctx.save();
+  setBlackShadow(ctx, 25, 6, 0.95);
   wrapTextRight(ctx, (data.title || "GRAN TORNEO RELÁMPAGO").toUpperCase(), rightX, titleY, 930, 92, 2);
+  ctx.restore();
 
   // Línea de acento a la derecha
   ctx.fillStyle = theme.accentColor;
@@ -913,12 +1002,18 @@ function renderLayoutSplitInverted(
   const ctaX = rightX - ctaW;
   const ctaY = 790;
 
+  ctx.save();
+  setBlackShadow(ctx, 35, 14, 0.9);
+  ctx.save();
+  setBlackShadow(ctx, 35, 14, 0.9);
   roundRect(ctx, ctaX, ctaY, ctaW, ctaH, 20);
   const ctaGrad = ctx.createLinearGradient(ctaX, ctaY, ctaX + ctaW, ctaY);
   ctaGrad.addColorStop(0, theme.brandGradient[1]);
   ctaGrad.addColorStop(1, theme.brandGradient[2]);
   ctx.fillStyle = ctaGrad;
   ctx.fill();
+  ctx.restore();
+  ctx.restore();
 
   ctx.font = "900 26px 'Inter', sans-serif";
   ctx.fillStyle = "#000000";
@@ -942,9 +1037,12 @@ function renderLayoutMagazineBold(
   // 1. CINTA SUPERIOR PANORÁMICA DE CABECERA
   const bannerY = 40;
   const bannerH = 175;
+  ctx.save();
+  setBlackShadow(ctx, 45, 16, 0.9);
   roundRect(ctx, 70, bannerY, W - 140, bannerH, 24);
-  ctx.fillStyle = "rgba(10, 15, 29, 0.88)";
+  ctx.fillStyle = "rgba(10, 15, 29, 0.90)";
   ctx.fill();
+  ctx.restore();
   ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
   ctx.lineWidth = 2;
   ctx.stroke();
@@ -1001,7 +1099,10 @@ function renderLayoutMagazineBold(
   tGrad.addColorStop(1, theme.brandGradient[2]);
   ctx.fillStyle = tGrad;
 
+  ctx.save();
+  setBlackShadow(ctx, 28, 6, 0.95);
   wrapText(ctx, (data.title || "GRAN TORNEO RELÁMPAGO").toUpperCase(), 70, titleY, 1780, 92, 1);
+  ctx.restore();
 
   // 4. MÓDULOS DE CONTENIDO - OCUPAN TODO EL ESPACIO HASTA EL FOOTER
   const modY = titleY + 45;
@@ -1009,9 +1110,12 @@ function renderLayoutMagazineBold(
   const colH = 260;
 
   // Módulo A: FECHA (Izquierda)
+  ctx.save();
+  setBlackShadow(ctx, 40, 14, 0.88);
   roundRect(ctx, 70, modY, colW, colH, 24);
-  ctx.fillStyle = "rgba(10, 15, 29, 0.88)";
+  ctx.fillStyle = "rgba(10, 15, 29, 0.90)";
   ctx.fill();
+  ctx.restore();
   ctx.strokeStyle = theme.cardBorder;
   ctx.lineWidth = 2.5;
   ctx.stroke();
@@ -1054,9 +1158,12 @@ function renderLayoutMagazineBold(
   const col3X = col2X + colW + 30;
   const col3W = W - col3X - 70;
 
+  ctx.save();
+  setBlackShadow(ctx, 45, 16, 0.9);
   roundRect(ctx, col3X, modY, col3W, colH + 215, 26);
   ctx.fillStyle = theme.badgeBg;
   ctx.fill();
+  ctx.restore();
   ctx.strokeStyle = theme.badgeBorder;
   ctx.lineWidth = 3.5;
   ctx.stroke();
@@ -1101,9 +1208,12 @@ function renderLayoutMagazineBold(
   const bottomBoxW = colW * 2 + 30;
   const bottomBoxH = 190;
 
+  ctx.save();
+  setBlackShadow(ctx, 35, 12, 0.85);
   roundRect(ctx, bottomBoxX, bottomBoxY, bottomBoxW, bottomBoxH, 22);
-  ctx.fillStyle = "rgba(10, 15, 29, 0.7)";
+  ctx.fillStyle = "rgba(10, 15, 29, 0.80)";
   ctx.fill();
+  ctx.restore();
   ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
   ctx.lineWidth = 1.5;
   ctx.stroke();
