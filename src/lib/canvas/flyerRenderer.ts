@@ -159,9 +159,9 @@ export const THEMES: Record<FlyerTheme, ThemeConfig> = {
  */
 function setBlackShadow(
   ctx: CanvasRenderingContext2D,
-  blur = 30,
-  offsetY = 10,
-  alpha = 0.85
+  blur = 50,
+  offsetY = 14,
+  alpha = 0.95
 ) {
   ctx.shadowColor = `rgba(0, 0, 0, ${alpha})`;
   ctx.shadowBlur = blur;
@@ -204,6 +204,7 @@ function roundRect(
  * Dibuja una imagen en el canvas garantizando SIEMPRE la preservación
  * estricta de su aspecto original (aspect ratio), dentro del box delimitador.
  * NUNCA deforma ni estira el logotipo.
+ * Aplica sombra negra de desenfoque de máxima intensidad para otorgarle protagonismo total.
  */
 function drawImageProportional(
   ctx: CanvasRenderingContext2D,
@@ -231,7 +232,9 @@ function drawImageProportional(
   const drawY = boxY + Math.round((maxH - drawH) / 2);
 
   ctx.save();
-  setBlackShadow(ctx, 35, 12, 0.9);
+  // Doble sombra blur profunda para protagonismo e impacto visual sobre cualquier fondo
+  setBlackShadow(ctx, 60, 16, 0.98);
+  ctx.drawImage(img, drawX, drawY, drawW, drawH);
   ctx.drawImage(img, drawX, drawY, drawW, drawH);
   ctx.restore();
   return { x: drawX, y: drawY, width: drawW, height: drawH };
@@ -792,29 +795,28 @@ function renderLayoutHeroCenter(
   ctx.fillStyle = "#cbd5e1";
   ctx.fillText("Canchas de cristal indoor", card3X + modW / 2, modY + 220);
 
-  // 5. CTA BUTTON CENTRAL
-  const ctaW = 520;
+  // 5. CTA BUTTON CENTRAL (Amplitud optimizada para contener perfectamente el texto)
+  const ctaW = 580;
   const ctaH = 74;
   const ctaX = centerX - ctaW / 2;
   const ctaY = modY + modH + 28;
 
   ctx.save();
-  setBlackShadow(ctx, 35, 14, 0.9);
-  ctx.save();
-  setBlackShadow(ctx, 35, 14, 0.9);
-  roundRect(ctx, ctaX, ctaY, ctaW, ctaH, 20);
+  setBlackShadow(ctx, 45, 14, 0.95);
+  roundRect(ctx, ctaX, ctaY, ctaW, ctaH, 22);
   const ctaGrad = ctx.createLinearGradient(ctaX, ctaY, ctaX + ctaW, ctaY);
   ctaGrad.addColorStop(0, theme.brandGradient[1]);
   ctaGrad.addColorStop(1, theme.brandGradient[2]);
   ctx.fillStyle = ctaGrad;
   ctx.fill();
   ctx.restore();
-  ctx.restore();
 
-  ctx.font = "900 26px 'Inter', sans-serif";
+  ctx.font = "900 22px 'Inter', sans-serif";
   ctx.fillStyle = "#000000";
   ctx.textAlign = "center";
-  ctx.fillText("INSCRIPCIONES ABIERTAS AHORA 🎾", centerX, ctaY + 47);
+  ctx.textBaseline = "middle";
+  ctx.fillText("INSCRIPCIONES ABIERTAS AHORA 🎾", centerX, ctaY + ctaH / 2);
+  ctx.textBaseline = "alphabetic";
 }
 
 /**
@@ -1266,11 +1268,11 @@ export function renderFlyerOnCanvas(
 
     ctx.drawImage(bgImage, sx, sy, sw, sh);
 
-    // Velo ultra-suave y transparente: la imagen de fondo se ve mucho más clara y brillante
+    // Velo suave con +5% de opacidad: contraste equilibrado y elegante con fondo visible
     const grad = ctx.createLinearGradient(0, 0, W, H);
-    grad.addColorStop(0, "rgba(4, 9, 20, 0.18)");
-    grad.addColorStop(0.5, "rgba(4, 9, 20, 0.10)");
-    grad.addColorStop(1, "rgba(4, 9, 20, 0.24)");
+    grad.addColorStop(0, "rgba(4, 9, 20, 0.23)");
+    grad.addColorStop(0.5, "rgba(4, 9, 20, 0.15)");
+    grad.addColorStop(1, "rgba(4, 9, 20, 0.29)");
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
   } else {
