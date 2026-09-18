@@ -73,23 +73,42 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { title, image_url, link_url, raw_base64 } = body;
+    const contentType = req.headers.get("content-type") || "";
+    let title = "Torneo Saladillo Padel Tour";
+    let link_url = "#torneos-activos";
+    let buffer: Buffer | null = null;
+    let fileName = `flyer_confirmado_${Date.now()}.png`;
 
-    let finalImageUrl = image_url;
-
-    // 1. Si viene base64 crudo, subir la imagen a Supabase Storage bucket 'flyers'
-    if (raw_base64 && typeof raw_base64 === "string" && raw_base64.startsWith("data:image")) {
-      try {
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await req.formData();
+      title = formData.get("title") as string || title;
+      link_url = formData.get("link_url") as string || link_url;
+      const file = formData.get("file") as File | null;
+      
+      if (file) {
+        const arrayBuffer = await file.arrayBuffer();
+        buffer = Buffer.from(arrayBuffer);
+      }
+    } else {
+      const body = await req.json();
+      title = body.title || title;
+      link_url = body.link_url || link_url;
+      const { raw_base64 } = body;
+      
+      if (raw_base64 && typeof raw_base64 === "string" && raw_base64.startsWith("data:image")) {
         const base64Data = raw_base64.replace(/^data:image\/\w+;base64,/, "");
-        const buffer = Buffer.from(base64Data, "base64");
-        
-        // Verificar tamaño (max 5MB)
-        if (buffer.length > 5 * 1024 * 1024) {
-          return NextResponse.json({ success: false, error: "Imagen demasiado grande (máx 5MB)" }, { status: 413 });
-        }
-        
-        const fileName = `flyer_confirmado_${Date.now()}.png`;
+        buffer = Buffer.from(base64Data, "base64");
+      }
+    }
+
+    let finalImageUrl = "";
+
+    // Si tenemos buffer, subir a Supabase Storage
+    if (buffer) {
+      // Verificar tamaño (max 5MB)
+      if (buffer.length > 5 * 1024 * 1024) {
+        return NextResponse.json({ success: false, error: "Imagen demasiado grande (máx 5MB)" }, { status: 413 });
+      }
 
         // Subir a Supabase Storage con Service Role Key
         if (SUPABASE_SERVICE_ROLE_KEY) {
@@ -101,34 +120,28 @@ export async function POST(req: Request) {
               "Content-Type": "image/png",
               "x-upsert": "true",
             },
-            body: buffer,
+            body: new Uint8Array(buffer),
           });
 
-          if (!uploadRes.ok) {
-            const errText = await uploadRes.text();
-            console.error("Storage upload failed:", uploadRes.status, errText);
-            return NextResponse.json({ success: false, error: "Error subiendo a Storage" }, { status: 500 });
-          }
-
-          finalImageUrl = `${SUPABASE_URL}/storage/v1/object/public/flyers/${fileName}`;
+        if (!uploadRes.ok) {
+          const errText = await uploadRes.text();
+          console.error("Storage upload failed:", uploadRes.status, errText);
+          return NextResponse.json({ success: false, error: "Error subiendo a Storage" }, { status: 500 });
         }
 
-        // Guardado local opcional en disco (solo funciona en dev local)
-        try {
-          const localSavePath = path.join(process.cwd(), "public", "assets", "fondos", fileName);
-          fs.writeFileSync(localSavePath, buffer);
-          if (!finalImageUrl || finalImageUrl.startsWith("data:")) {
-            finalImageUrl = `/assets/fondos/${fileName}`;
-          }
-        } catch {}
-      } catch (saveErr) {
-        console.warn("Could not save image buffer:", saveErr);
+        finalImageUrl = `${SUPABASE_URL}/storage/v1/object/public/flyers/${fileName}`;
       }
-    }
 
-    // Si no se subió a Storage, usar la URL original o un fallback
-    if (!finalImageUrl || finalImageUrl.startsWith("data:")) {
-      finalImageUrl = image_url || "/assets/fondos/flyer_oficial_spt.png";
+      // Guardado local opcional en disco (solo funciona en dev local)
+      try {
+        const localSavePath = path.join(process.cwd(), "public", "assets", "fondos", fileName);
+        fs.writeFileSync(localSavePath, buffer);
+        if (!finalImageUrl) {
+          finalImageUrl = `/assets/fondos/${fileName}`;
+        }
+      } catch {}
+    } else {
+      finalImageUrl = "/assets/fondos/flyer_oficial_spt.png";
     }
 
     const confirmedFlyer = {

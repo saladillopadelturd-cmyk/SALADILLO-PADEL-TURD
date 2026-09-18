@@ -379,19 +379,21 @@ export default function AdminFlyersPage() {
     setStatusMsg(null);
 
     try {
-      const dataUrl = canvasRef.current.toDataURL("image/png");
+      // Convertir canvas a blob (más eficiente que dataURL)
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvasRef.current!.toBlob(resolve, "image/png", 0.9);
+      });
+      
+      if (!blob) throw new Error("No se pudo generar la imagen del flyer");
 
-      // Enviar directamente a /api/flyers para persistencia garantizada en la nube
-      // El servidor subirá la imagen a Supabase Storage y devolverá la URL pública
+      const formData = new FormData();
+      formData.append("file", blob, "flyer.png");
+      formData.append("title", `${title} - ${category}`);
+      formData.append("link_url", selectedTournamentId ? `/torneo/${selectedTournamentId}` : "#torneos-activos");
+
       const apiRes = await fetch("/api/flyers", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: `${title} - ${category}`,
-          image_url: dataUrl,
-          link_url: selectedTournamentId ? `/torneo/${selectedTournamentId}` : "#torneos-activos",
-          raw_base64: dataUrl,
-        }),
+        body: formData,
       });
       const apiData = await apiRes.json();
       
@@ -408,7 +410,6 @@ export default function AdminFlyersPage() {
             created_at: apiData.flyer.created_at,
           };
           localStorage.setItem("spt_confirmed_flyer", JSON.stringify(confirmedFlyerData));
-          // Disparar evento personalizado para notificar a otros componentes
           window.dispatchEvent(new CustomEvent("spt-flyer-confirmed", { detail: confirmedFlyerData }));
         } catch (storageErr) {
           console.error("Local storage error:", storageErr);
@@ -419,7 +420,7 @@ export default function AdminFlyersPage() {
           text: "✅ ¡Flyer Confirmado Definitivo! Ya fue publicado automáticamente en la aplicación para móviles justo debajo del header y arriba de los botones TORNEO EN VIVO y RANKINGS.",
         });
       } else {
-        throw new Error("Error al guardar el flyer en el servidor");
+        throw new Error(apiData.error || "Error al guardar el flyer en el servidor");
       }
     } catch (err: unknown) {
       console.error("Error al confirmar flyer:", err);
