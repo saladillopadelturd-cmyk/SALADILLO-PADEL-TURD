@@ -5,6 +5,7 @@ import Image from "next/image";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
+import NewsCarousel from "@/components/home/NewsCarousel";
 import { createClient } from "@/lib/supabase/client";
 import type { Flyer } from "@/types/flyer";
 import Link from "next/link";
@@ -195,69 +196,13 @@ export default function AdminNovedadesPage() {
         </div>
       )}
 
-      {loading ? (
-        <div className="text-center py-12 text-dark-400">Cargando flyers...</div>
-      ) : flyers.length === 0 ? (
-        <Card className="text-center py-12 text-dark-400 border-dashed">
-          <ImageIcon className="w-12 h-12 mx-auto mb-3 opacity-20" />
-          <p>No hay flyers subidos actualmente.</p>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {flyers.map((flyer) => (
-            <Card key={flyer.id} className="overflow-hidden flex flex-col">
-              <div className="relative aspect-[21/9] w-full bg-dark-900 group">
-                <Image
-                  src={flyer.image_url}
-                  alt={flyer.title || "Flyer"}
-                  fill
-                  className={`object-cover transition-opacity ${!flyer.active ? 'opacity-40 grayscale' : ''}`}
-                />
-                {!flyer.active && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="bg-dark-950/80 text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider backdrop-blur-sm">
-                      Inactivo
-                    </span>
-                  </div>
-                )}
-              </div>
-              
-              <div className="p-4 flex-1 flex flex-col justify-between">
-                <div>
-                  <h3 className="font-semibold text-white mb-1 truncate">
-                    {flyer.title || "Sin título"}
-                  </h3>
-                  {flyer.link_url && (
-                    <a href={flyer.link_url} target="_blank" rel="noreferrer" className="text-xs text-blue-400 hover:underline flex items-center gap-1 mb-3">
-                      <LinkIcon className="w-3 h-3" /> Enlace adjunto
-                    </a>
-                  )}
-                </div>
-                
-                <div className="flex items-center justify-between pt-4 mt-2 border-t border-dark-800">
-                  <button
-                    onClick={() => toggleActive(flyer)}
-                    className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
-                      flyer.active 
-                        ? 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20' 
-                        : 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
-                    }`}
-                  >
-                    {flyer.active ? "Desactivar" : "Activar"}
-                  </button>
-                  
-                  <button
-                    onClick={() => deleteFlyer(flyer.id, flyer.image_url)}
-                    className="p-1.5 text-dark-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
+      {/* Vista previa del carrusel con miniaturas y botón eliminar */}
+      <NewsCarousel 
+        flyers={flyers} 
+        showThumbnails={true} 
+        isAdmin={true}
+        onDelete={deleteFlyer}
+      />
 
       <Modal isOpen={isModalOpen} onClose={() => !isSubmitting && setIsModalOpen(false)} title="Nuevo Flyer">
         <form onSubmit={handleAddFlyer} className="space-y-4">

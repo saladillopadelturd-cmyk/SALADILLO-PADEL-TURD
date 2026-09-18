@@ -2,11 +2,14 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import type { Flyer } from "@/types/flyer";
 
 interface NewsCarouselProps {
   flyers: Flyer[];
+  showThumbnails?: boolean;
+  onDelete?: (id: string, imageUrl: string) => void;
+  isAdmin?: boolean;
 }
 
 const DEFAULT_FLYER: Flyer = {
@@ -19,7 +22,12 @@ const DEFAULT_FLYER: Flyer = {
   created_at: "2026-09-17T00:00:00.000Z",
 };
 
-export default function NewsCarousel({ flyers: initialFlyers }: NewsCarouselProps) {
+export default function NewsCarousel({ 
+  flyers: initialFlyers, 
+  showThumbnails = false, 
+  onDelete,
+  isAdmin = false 
+}: NewsCarouselProps) {
   const [flyers, setFlyers] = useState<Flyer[]>(
     initialFlyers && initialFlyers.length > 0 ? initialFlyers : [DEFAULT_FLYER]
   );
@@ -146,7 +154,7 @@ export default function NewsCarousel({ flyers: initialFlyers }: NewsCarouselProp
       <img
         src={currentFlyer.image_url}
         alt={currentFlyer.title || "Flyer Oficial SPT"}
-        className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
+        className="w-full h-full object-cover"
         loading="eager"
       />
       
@@ -193,6 +201,56 @@ export default function NewsCarousel({ flyers: initialFlyers }: NewsCarouselProp
         </Link>
       ) : (
         content
+      )}
+
+      {/* Miniaturas visibles - Solo en admin o cuando showThumbnails=true */}
+      {showThumbnails && flyers.length > 0 && (
+        <div className="mt-4">
+          <h3 className="text-xs font-bold text-dark-400 uppercase tracking-wider mb-2">
+            {isAdmin ? "Flyers en carrusel (clic en X para eliminar)" : "Flyers disponibles"}
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            {flyers.map((flyer, idx) => (
+              <div
+                key={flyer.id}
+                className={`relative aspect-video rounded-xl overflow-hidden bg-dark-900 border-2 transition-all ${
+                  idx === currentIndex
+                    ? "border-emerald-400 ring-2 ring-emerald-500/30"
+                    : "border-dark-700 hover:border-dark-500"
+                }`}
+              >
+                <img
+                  src={flyer.image_url}
+                  alt={flyer.title || "Flyer"}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
+                {isAdmin && onDelete && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onDelete(flyer.id, flyer.image_url);
+                    }}
+                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/90 text-white flex items-center justify-center shadow-lg hover:bg-red-500 hover:scale-110 transition-all z-10"
+                    aria-label={`Eliminar flyer: ${flyer.title}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <div className="absolute bottom-1 left-1 right-1 p-1.5 text-[10px] text-white truncate font-medium">
+                  {flyer.title || "Sin título"}
+                </div>
+                {idx === currentIndex && (
+                  <div className="absolute top-1 left-1 w-5 h-5 rounded-full bg-emerald-400 text-dark-950 flex items-center justify-center text-[10px] font-black shadow">
+                    ACTIVO
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
