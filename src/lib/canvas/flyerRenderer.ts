@@ -534,26 +534,42 @@ function drawSponsorsBar(
   ctx.fillStyle = sepGrad;
   ctx.fillRect(0, barY, W, 3.5);
 
-  // Etiqueta SPONSORS
-  ctx.font = "bold 20px 'Inter', sans-serif";
-  ctx.fillStyle = "#94a3b8";
+  // Etiqueta SPONSORS (ampliada para legibilidad en pantallas pequeñas)
+  ctx.font = "bold 26px 'Inter', sans-serif";
+  ctx.fillStyle = "#cbd5e1";
   ctx.textAlign = "left";
-  ctx.fillText("MAIN SPONSORS & PARTNERS OFICIALES", 70, barY + 42);
+  ctx.fillText("MAIN SPONSORS & PARTNERS OFICIALES", 70, barY + 44);
 
   // Pills de sponsors
-  const sponsorList =
+  const sponsorList = (
     sponsors && sponsors.length > 0
       ? sponsors
-      : ["HEAD PADEL", "BULLPADEL", "NOX PADEL", "WILSON", "BABOLAT", "MUNICH"];
+      : ["HEAD PADEL", "BULLPADEL", "NOX PADEL", "WILSON", "BABOLAT", "MUNICH"]
+  ).slice(0, 6);
 
+  const spGap = 24;
+  const spY = barY + 70;
+  const spH = 66;
+  const availableW = W - 140;
+
+  // Auto-ajuste: reduce la fuente de las píldoras si el total excede el ancho disponible
+  let spFont = 30;
+  const measurePills = (fs: number) => {
+    ctx.font = `bold ${fs}px 'Montserrat', 'Inter', sans-serif`;
+    return sponsorList.map((s) => Math.max(ctx.measureText(s.toUpperCase()).width + 56, 160));
+  };
+  let spWidths = measurePills(spFont);
+  let spTotal = spWidths.reduce((a, b) => a + b, 0) + spGap * (spWidths.length - 1);
+  while (spTotal > availableW && spFont > 18) {
+    spFont -= 2;
+    spWidths = measurePills(spFont);
+    spTotal = spWidths.reduce((a, b) => a + b, 0) + spGap * (spWidths.length - 1);
+  }
+
+  ctx.font = `bold ${spFont}px 'Montserrat', 'Inter', sans-serif`;
   let spX = 70;
-  const spY = barY + 68;
-  const spH = 62;
-
-  sponsorList.slice(0, 6).forEach((spon) => {
-    ctx.font = "bold 24px 'Montserrat', 'Inter', sans-serif";
-    const tw = ctx.measureText(spon.toUpperCase()).width;
-    const spW = Math.max(tw + 52, 160);
+  sponsorList.forEach((spon, idx) => {
+    const spW = spWidths[idx];
 
     ctx.save();
     setBlackShadow(ctx, 35, 10, 0.98);
@@ -573,7 +589,7 @@ function drawSponsorsBar(
     ctx.fillText(spon.toUpperCase(), spX + spW / 2, spY + spH / 2);
     ctx.textBaseline = "alphabetic";
 
-    spX += spW + 24;
+    spX += spW + spGap;
   });
 }
 
@@ -619,27 +635,27 @@ function renderLayoutSplitCard(
   const badgeX = logoX;
   const badgeY = logoY + logoH + 20;
   const badgeText = (data.category || "TORNEO OFICIAL").toUpperCase();
-  ctx.font = "900 24px 'Montserrat', 'Inter', sans-serif";
-  const catWidth = Math.min(ctx.measureText(badgeText).width + 56, 450);
-  const badgeH = 56;
+  ctx.font = "900 30px 'Montserrat', 'Inter', sans-serif";
+  const catWidth = Math.min(ctx.measureText(badgeText).width + 64, 540);
+  const badgeH = 62;
 
   ctx.save();
   setBlackShadow(ctx, 45, 12, 0.98);
-  roundRect(ctx, badgeX, badgeY, catWidth, badgeH, 28);
+  roundRect(ctx, badgeX, badgeY, catWidth, badgeH, 31);
   ctx.fillStyle = theme.badgeBg;
   ctx.fill();
   ctx.restore();
-  roundRect(ctx, badgeX, badgeY, catWidth, badgeH, 28);
+  roundRect(ctx, badgeX, badgeY, catWidth, badgeH, 31);
   ctx.strokeStyle = theme.badgeBorder;
   ctx.lineWidth = 2.5;
   ctx.stroke();
 
   ctx.fillStyle = theme.badgeText;
   ctx.textAlign = "center";
-  ctx.fillText(badgeText, badgeX + catWidth / 2, badgeY + 36);
+  ctx.fillText(badgeText, badgeX + catWidth / 2, badgeY + 41);
 
   // 2. TÍTULO PRINCIPAL (COLUMNA IZQUIERDA) - 100% DENTRO DE LOS LÍMITES
-  const titleY = badgeY + badgeH + 68;
+  const titleY = badgeY + badgeH + 64;
   const titleMaxW = 920;
   const tGrad = ctx.createLinearGradient(70, titleY, 950, titleY + 140);
   tGrad.addColorStop(0, theme.brandGradient[0]);
@@ -654,9 +670,9 @@ function renderLayoutSplitCard(
     70,
     titleY,
     titleMaxW,
-    2,
-    80,
-    52,
+    3,
+    104,
+    66,
     "left"
   );
 
@@ -670,8 +686,8 @@ function renderLayoutSplitCard(
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(70, accentLineY, 40, 6);
 
-  // Subtítulo informativo
-  ctx.font = "600 26px 'Inter', sans-serif";
+  // Subtítulo informativo (ampliado)
+  ctx.font = "600 30px 'Inter', sans-serif";
   ctx.fillStyle = "#f1f5f9";
   ctx.save();
   setBlackShadow(ctx, 25, 6, 0.98);
@@ -679,18 +695,18 @@ function renderLayoutSplitCard(
     ctx,
     "¡Viví la emoción del mejor pádel! Inscripciones abiertas para todas las parejas de la región.",
     70,
-    accentLineY + 50,
+    accentLineY + 52,
     titleMaxW,
-    38,
+    42,
     2
   );
   ctx.restore();
 
   // CTA Button (Izquierda abajo)
   const ctaW = 480;
-  const ctaH = 78;
+  const ctaH = 74;
   const ctaX = 70;
-  const ctaY = 790;
+  const ctaY = 824;
 
   ctx.save();
   setBlackShadow(ctx, 55, 18, 0.98);
@@ -708,10 +724,10 @@ function renderLayoutSplitCard(
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  ctx.font = "900 26px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 30px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = "#000000";
   ctx.textAlign = "center";
-  ctx.fillText("¡SUMATE AL CUADRO! ⚡", ctaX + ctaW / 2, ctaY + 48);
+  ctx.fillText("¡SUMATE AL CUADRO! ⚡", ctaX + ctaW / 2, ctaY + 46);
 
   // 3. TARJETA VERTICAL LATERAL (DERECHA) - LLENA EL ESPACIO COMPLETO
   const cardX = 1040;
@@ -728,35 +744,35 @@ function renderLayoutSplitCard(
   ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
   ctx.fill();
 
-  ctx.font = "900 28px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 34px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = "#ffffff";
   ctx.textAlign = "left";
-  ctx.fillText("INFORMACIÓN DEL TORNEO", cardX + 50, cardY + 54);
+  ctx.fillText("INFORMACIÓN DEL TORNEO", cardX + 50, cardY + 58);
 
   // Fila 1: FECHA
   const row1Y = cardY + 160;
-  ctx.font = "800 20px 'Inter', sans-serif";
+  ctx.font = "800 26px 'Inter', sans-serif";
   ctx.fillStyle = theme.accentColor;
   ctx.fillText("📅 CRONOGRAMA DE DISPUTA", cardX + 50, row1Y);
 
-  ctx.font = "900 36px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 44px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = "#ffffff";
   ctx.save();
   setBlackShadow(ctx, 22, 6, 0.95);
-  wrapText(ctx, (data.date || "PRÓXIMAMENTE").toUpperCase(), cardX + 50, row1Y + 46, cardW - 100, 42, 2);
+  wrapText(ctx, (data.date || "PRÓXIMAMENTE").toUpperCase(), cardX + 50, row1Y + 52, cardW - 100, 52, 2);
   ctx.restore();
 
   // Fila 2: SEDE
   const row2Y = cardY + 310;
-  ctx.font = "800 20px 'Inter', sans-serif";
+  ctx.font = "800 26px 'Inter', sans-serif";
   ctx.fillStyle = theme.accentColor;
   ctx.fillText("📍 COMPLEJO & UBICACIÓN", cardX + 50, row2Y);
 
-  ctx.font = "900 34px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 42px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = "#ffffff";
   ctx.save();
   setBlackShadow(ctx, 22, 6, 0.95);
-  wrapText(ctx, (data.location || "SALADILLO, BUENOS AIRES").toUpperCase(), cardX + 50, row2Y + 46, cardW - 100, 40, 2);
+  wrapText(ctx, (data.location || "SALADILLO, BUENOS AIRES").toUpperCase(), cardX + 50, row2Y + 52, cardW - 100, 50, 2);
   ctx.restore();
 
   // Fila 3: PREMIOS DESTACADOS
@@ -776,26 +792,26 @@ function renderLayoutSplitCard(
   ctx.lineWidth = 2.5;
   ctx.stroke();
 
-  ctx.font = "900 24px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 30px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = theme.badgeText;
-  ctx.fillText("🏆 BOLSA DE PREMIOS OFICIAL", cardX + 80, row3Y + 52);
+  ctx.fillText("🏆 BOLSA DE PREMIOS OFICIAL", cardX + 80, row3Y + 56);
 
-  ctx.font = "900 50px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 58px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = "#ffffff";
   ctx.save();
   setBlackShadow(ctx, 25, 8, 0.98);
-  wrapText(ctx, (data.prizes || "TROFEOS + EFECTIVO").toUpperCase(), cardX + 80, row3Y + 124, prizeBoxW - 50, 52, 1);
+  wrapText(ctx, (data.prizes || "TROFEOS + EFECTIVO").toUpperCase(), cardX + 80, row3Y + 130, prizeBoxW - 50, 60, 1);
   ctx.restore();
 
-  ctx.font = "600 20px 'Inter', sans-serif";
+  ctx.font = "600 24px 'Inter', sans-serif";
   ctx.fillStyle = "#e2e8f0";
-  ctx.fillText("Indumentaria pro + Puntos para el ranking anual SPT", cardX + 80, row3Y + 175);
+  ctx.fillText("Indumentaria pro + Puntos para el ranking anual SPT", cardX + 80, row3Y + 188);
 
   // Fila 4: Footer de tarjeta
-  ctx.font = "bold 20px 'Inter', sans-serif";
+  ctx.font = "bold 24px 'Inter', sans-serif";
   ctx.fillStyle = "#94a3b8";
   ctx.textAlign = "center";
-  ctx.fillText("INSCRIPCIÓN ONLINE OFICIAL EN SPT-PADEL-TOUR.COM", cardX + cardW / 2, cardY + cardH - 40);
+  ctx.fillText("INSCRIPCIÓN ONLINE OFICIAL EN SPT-PADEL-TOUR.COM", cardX + cardW / 2, cardY + cardH - 38);
 }
 
 /**
@@ -850,27 +866,27 @@ function renderLayoutHeroCenter(
 
   // Pill de Categoría justo abajo del logo
   const catText = (data.category || "TORNEO OFICIAL").toUpperCase();
-  ctx.font = "900 22px 'Montserrat', 'Inter', sans-serif";
-  const catW = Math.min(ctx.measureText(catText).width + 60, 600);
+  ctx.font = "900 30px 'Montserrat', 'Inter', sans-serif";
+  const catW = Math.min(ctx.measureText(catText).width + 68, 720);
   const catY = logoY + logoH + 15;
   ctx.save();
   setBlackShadow(ctx, 35, 10, 0.98);
-  roundRect(ctx, centerX - catW / 2, catY, catW, 50, 25);
+  roundRect(ctx, centerX - catW / 2, catY, catW, 58, 29);
   ctx.fillStyle = theme.badgeBg;
   ctx.fill();
   ctx.restore();
-  roundRect(ctx, centerX - catW / 2, catY, catW, 50, 25);
+  roundRect(ctx, centerX - catW / 2, catY, catW, 58, 29);
   ctx.strokeStyle = theme.badgeBorder;
   ctx.lineWidth = 2.5;
   ctx.stroke();
 
   ctx.fillStyle = theme.badgeText;
   ctx.textAlign = "center";
-  ctx.fillText(catText, centerX, catY + 33);
+  ctx.fillText(catText, centerX, catY + 39);
 
   // 3. TÍTULO CENTRADO GIGANTE - 100% DENTRO DE LOS LÍMITES
-  const titleY = catY + 98;
-  const titleMaxW = 1720;
+  const titleY = catY + 106;
+  const titleMaxW = 1820;
   const tGrad = ctx.createLinearGradient(centerX - 600, titleY, centerX + 600, titleY + 80);
   tGrad.addColorStop(0, theme.brandGradient[0]);
   tGrad.addColorStop(0.5, theme.brandGradient[1]);
@@ -884,8 +900,8 @@ function renderLayoutHeroCenter(
     titleY,
     titleMaxW,
     1,
-    82,
-    50,
+    118,
+    52,
     "center"
   );
 
@@ -912,19 +928,19 @@ function renderLayoutHeroCenter(
   drawElevatedCard(ctx, card1X, modY, modW, modH, 24, "rgba(8, 14, 28, 0.92)", theme.cardBorder, 2.5);
   drawSportTechDecorations(ctx, card1X, modY, modW, modH, theme.accentColor);
 
-  ctx.font = "900 22px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 28px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = theme.accentColor;
   ctx.textAlign = "center";
-  ctx.fillText("📅 CRONOGRAMA", card1X + modW / 2, modY + 50);
+  ctx.fillText("📅 CRONOGRAMA", card1X + modW / 2, modY + 52);
 
-  ctx.font = "900 34px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 40px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = "#ffffff";
   ctx.save();
   setBlackShadow(ctx, 20, 6, 0.95);
-  wrapTextCentered(ctx, (data.date || "PRÓXIMAMENTE").toUpperCase(), card1X + modW / 2, modY + 115, modW - 40, 42, 2);
+  wrapTextCentered(ctx, (data.date || "PRÓXIMAMENTE").toUpperCase(), card1X + modW / 2, modY + 118, modW - 40, 48, 2);
   ctx.restore();
 
-  ctx.font = "600 20px 'Inter', sans-serif";
+  ctx.font = "600 24px 'Inter', sans-serif";
   ctx.fillStyle = "#cbd5e1";
   ctx.fillText("Turnos y cuadros confirmados", card1X + modW / 2, modY + 220);
 
@@ -946,40 +962,40 @@ function renderLayoutHeroCenter(
   ctx.stroke();
   drawSportTechDecorations(ctx, card2X, card2Y, modW, card2H, theme.accentColor);
 
-  ctx.font = "900 24px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 30px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = theme.badgeText;
   ctx.textAlign = "center";
-  ctx.fillText("🏆 BOLSA DE PREMIOS", card2X + modW / 2, modY + 45);
+  ctx.fillText("🏆 BOLSA DE PREMIOS", card2X + modW / 2, modY + 48);
 
-  ctx.font = "900 44px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 54px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = "#ffffff";
   ctx.save();
   setBlackShadow(ctx, 25, 8, 0.98);
-  wrapTextCentered(ctx, (data.prizes || "$500.000 EN EFECTIVO").toUpperCase(), card2X + modW / 2, modY + 118, modW - 40, 48, 2);
+  wrapTextCentered(ctx, (data.prizes || "$500.000 EN EFECTIVO").toUpperCase(), card2X + modW / 2, modY + 122, modW - 40, 58, 2);
   ctx.restore();
 
-  ctx.font = "700 20px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "700 24px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = theme.badgeText;
-  ctx.fillText("+ Palas Pro + Puntos del Ranking", card2X + modW / 2, modY + 235);
+  ctx.fillText("+ Palas Pro + Puntos del Ranking", card2X + modW / 2, modY + 238);
 
   // Tarjeta 3: SEDE
   const card3X = startX + (modW + gap) * 2;
   drawElevatedCard(ctx, card3X, modY, modW, modH, 24, "rgba(8, 14, 28, 0.92)", theme.cardBorder, 2.5);
   drawSportTechDecorations(ctx, card3X, modY, modW, modH, theme.accentColor);
 
-  ctx.font = "900 22px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 28px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = theme.accentColor;
   ctx.textAlign = "center";
-  ctx.fillText("📍 SEDE & CLUB", card3X + modW / 2, modY + 50);
+  ctx.fillText("📍 SEDE & CLUB", card3X + modW / 2, modY + 52);
 
-  ctx.font = "900 32px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 40px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = "#ffffff";
   ctx.save();
   setBlackShadow(ctx, 20, 6, 0.95);
-  wrapTextCentered(ctx, (data.location || "COMPLEJO CENTRAL").toUpperCase(), card3X + modW / 2, modY + 115, modW - 40, 40, 2);
+  wrapTextCentered(ctx, (data.location || "COMPLEJO CENTRAL").toUpperCase(), card3X + modW / 2, modY + 118, modW - 40, 48, 2);
   ctx.restore();
 
-  ctx.font = "600 20px 'Inter', sans-serif";
+  ctx.font = "600 24px 'Inter', sans-serif";
   ctx.fillStyle = "#cbd5e1";
   ctx.fillText("Canchas de cristal indoor", card3X + modW / 2, modY + 220);
 
@@ -1005,7 +1021,7 @@ function renderLayoutHeroCenter(
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  ctx.font = "900 22px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 26px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = "#000000";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -1048,26 +1064,26 @@ function renderLayoutSplitInverted(
 
   // Badge categoría debajo del logo alineado a la derecha
   const badgeText = (data.category || "TORNEO OFICIAL").toUpperCase();
-  ctx.font = "900 24px 'Montserrat', 'Inter', sans-serif";
-  const catWidth = Math.min(ctx.measureText(badgeText).width + 56, 450);
-  const badgeH = 56;
+  ctx.font = "900 30px 'Montserrat', 'Inter', sans-serif";
+  const catWidth = Math.min(ctx.measureText(badgeText).width + 64, 540);
+  const badgeH = 62;
   const badgeX = W - 70 - catWidth;
   const badgeY = logoY + logoH + 20;
 
   ctx.save();
   setBlackShadow(ctx, 45, 12, 0.98);
-  roundRect(ctx, badgeX, badgeY, catWidth, badgeH, 28);
+  roundRect(ctx, badgeX, badgeY, catWidth, badgeH, 31);
   ctx.fillStyle = theme.badgeBg;
   ctx.fill();
   ctx.restore();
-  roundRect(ctx, badgeX, badgeY, catWidth, badgeH, 28);
+  roundRect(ctx, badgeX, badgeY, catWidth, badgeH, 31);
   ctx.strokeStyle = theme.badgeBorder;
   ctx.lineWidth = 2.5;
   ctx.stroke();
 
   ctx.fillStyle = theme.badgeText;
   ctx.textAlign = "center";
-  ctx.fillText(badgeText, badgeX + catWidth / 2, badgeY + 36);
+  ctx.fillText(badgeText, badgeX + catWidth / 2, badgeY + 41);
 
   // 2. TARJETA VERTICAL A LA IZQUIERDA - LLENA EL ESPACIO COMPLETO
   const cardX = 70;
@@ -1082,35 +1098,35 @@ function renderLayoutSplitInverted(
   ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
   ctx.fill();
 
-  ctx.font = "900 28px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 34px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = "#ffffff";
   ctx.textAlign = "left";
-  ctx.fillText("COORDENADAS DEL TORNEO", cardX + 50, cardY + 54);
+  ctx.fillText("COORDENADAS DEL TORNEO", cardX + 50, cardY + 58);
 
   // Fila 1: FECHA
   const row1Y = cardY + 160;
-  ctx.font = "800 20px 'Inter', sans-serif";
+  ctx.font = "800 26px 'Inter', sans-serif";
   ctx.fillStyle = theme.accentColor;
   ctx.fillText("📅 FECHA DE DISPUTA", cardX + 50, row1Y);
 
-  ctx.font = "900 36px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 44px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = "#ffffff";
   ctx.save();
   setBlackShadow(ctx, 22, 6, 0.95);
-  wrapText(ctx, (data.date || "PRÓXIMAMENTE").toUpperCase(), cardX + 50, row1Y + 46, cardW - 100, 42, 2);
+  wrapText(ctx, (data.date || "PRÓXIMAMENTE").toUpperCase(), cardX + 50, row1Y + 52, cardW - 100, 52, 2);
   ctx.restore();
 
   // Fila 2: SEDE
   const row2Y = cardY + 310;
-  ctx.font = "800 20px 'Inter', sans-serif";
+  ctx.font = "800 26px 'Inter', sans-serif";
   ctx.fillStyle = theme.accentColor;
   ctx.fillText("📍 COMPLEJO SEDE", cardX + 50, row2Y);
 
-  ctx.font = "900 34px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 42px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = "#ffffff";
   ctx.save();
   setBlackShadow(ctx, 22, 6, 0.95);
-  wrapText(ctx, (data.location || "SALADILLO, BUENOS AIRES").toUpperCase(), cardX + 50, row2Y + 46, cardW - 100, 40, 2);
+  wrapText(ctx, (data.location || "SALADILLO, BUENOS AIRES").toUpperCase(), cardX + 50, row2Y + 52, cardW - 100, 50, 2);
   ctx.restore();
 
   // Fila 3: PREMIOS
@@ -1130,26 +1146,26 @@ function renderLayoutSplitInverted(
   ctx.lineWidth = 2.5;
   ctx.stroke();
 
-  ctx.font = "900 24px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 30px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = theme.badgeText;
-  ctx.fillText("🏆 PREMIOS Y RECONOCIMIENTOS", cardX + 80, row3Y + 52);
+  ctx.fillText("🏆 PREMIOS Y RECONOCIMIENTOS", cardX + 80, row3Y + 56);
 
-  ctx.font = "900 50px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 58px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = "#ffffff";
   ctx.save();
   setBlackShadow(ctx, 25, 8, 0.98);
-  wrapText(ctx, (data.prizes || "TROFEOS + EFECTIVO").toUpperCase(), cardX + 80, row3Y + 124, prizeBoxW - 50, 52, 1);
+  wrapText(ctx, (data.prizes || "TROFEOS + EFECTIVO").toUpperCase(), cardX + 80, row3Y + 130, prizeBoxW - 50, 60, 1);
   ctx.restore();
 
-  ctx.font = "600 20px 'Inter', sans-serif";
+  ctx.font = "600 24px 'Inter', sans-serif";
   ctx.fillStyle = "#e2e8f0";
-  ctx.fillText("Suma puntos para el ranking oficial Saladillo", cardX + 80, row3Y + 175);
+  ctx.fillText("Suma puntos para el ranking oficial Saladillo", cardX + 80, row3Y + 188);
 
   // Footer tarjeta
-  ctx.font = "bold 20px 'Inter', sans-serif";
+  ctx.font = "bold 24px 'Inter', sans-serif";
   ctx.fillStyle = "#94a3b8";
   ctx.textAlign = "center";
-  ctx.fillText("INSCRIPCIÓN ONLINE OFICIAL EN SPT-PADEL-TOUR.COM", cardX + cardW / 2, cardY + cardH - 40);
+  ctx.fillText("INSCRIPCIÓN ONLINE OFICIAL EN SPT-PADEL-TOUR.COM", cardX + cardW / 2, cardY + cardH - 38);
 
   // 3. TÍTULO Y CONTENIDO A LA DERECHA (ALINEADO A LA DERECHA) - 100% DENTRO DE LOS LÍMITES
   const rightX = W - 70;
@@ -1168,9 +1184,9 @@ function renderLayoutSplitInverted(
     rightX,
     titleY,
     titleMaxW,
-    2,
-    80,
-    52,
+    3,
+    104,
+    66,
     "right"
   );
 
@@ -1185,7 +1201,7 @@ function renderLayoutSplitInverted(
   ctx.fillRect(rightX - 40, accentLineY, 40, 6);
 
   // Subtítulo
-  ctx.font = "600 26px 'Inter', sans-serif";
+  ctx.font = "600 30px 'Inter', sans-serif";
   ctx.fillStyle = "#f1f5f9";
   ctx.save();
   setBlackShadow(ctx, 25, 6, 0.98);
@@ -1193,18 +1209,18 @@ function renderLayoutSplitInverted(
     ctx,
     "Demostrá tu nivel en la pista más competitiva. Cupos limitados por estricto orden de inscripción.",
     rightX,
-    accentLineY + 50,
+    accentLineY + 52,
     titleMaxW,
-    38,
+    42,
     2
   );
   ctx.restore();
 
   // CTA Button (Alineado a la derecha)
   const ctaW = 480;
-  const ctaH = 78;
+  const ctaH = 74;
   const ctaX = rightX - ctaW;
-  const ctaY = 790;
+  const ctaY = 824;
 
   ctx.save();
   setBlackShadow(ctx, 55, 18, 0.98);
@@ -1222,10 +1238,10 @@ function renderLayoutSplitInverted(
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  ctx.font = "900 26px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 30px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = "#000000";
   ctx.textAlign = "center";
-  ctx.fillText("¡ANOTATE CON TU PAREJA! ⚡", ctaX + ctaW / 2, ctaY + 48);
+  ctx.fillText("¡ANOTATE CON TU PAREJA! ⚡", ctaX + ctaW / 2, ctaY + 46);
 }
 
 /**
@@ -1249,25 +1265,25 @@ function renderLayoutMagazineBold(
 
   // Badge categoría en la cinta (Izquierda)
   const catText = (data.category || "CATEGORÍA ABIERTA").toUpperCase();
-  ctx.font = "900 26px 'Montserrat', 'Inter', sans-serif";
-  const catW = Math.min(ctx.measureText(catText).width + 68, 480);
+  ctx.font = "900 32px 'Montserrat', 'Inter', sans-serif";
+  const catW = Math.min(ctx.measureText(catText).width + 76, 580);
   const catX = 120;
 
   ctx.save();
   setBlackShadow(ctx, 35, 10, 0.98);
-  roundRect(ctx, catX, bannerY + 54, catW, 68, 34);
+  roundRect(ctx, catX, bannerY + 50, catW, 76, 38);
   ctx.fillStyle = theme.badgeBg;
   ctx.fill();
   ctx.restore();
 
-  roundRect(ctx, catX, bannerY + 54, catW, 68, 34);
+  roundRect(ctx, catX, bannerY + 50, catW, 76, 38);
   ctx.strokeStyle = theme.badgeBorder;
   ctx.lineWidth = 3;
   ctx.stroke();
 
   ctx.fillStyle = theme.badgeText;
   ctx.textAlign = "center";
-  ctx.fillText(catText, catX + catW / 2, bannerY + 97);
+  ctx.fillText(catText, catX + catW / 2, bannerY + 99);
 
   // 2. LOGO EN LA CINTA A LA DERECHA: 35% exacto de 1920px = 672px
   const logoW = 672;
@@ -1310,8 +1326,8 @@ function renderLayoutMagazineBold(
     titleY,
     titleMaxW,
     1,
-    86,
-    54,
+    116,
+    58,
     "left"
   );
 
@@ -1331,41 +1347,41 @@ function renderLayoutMagazineBold(
   drawElevatedCard(ctx, 70, modY, colW, colH, 24, "rgba(8, 14, 28, 0.92)", theme.cardBorder, 2.5);
   drawSportTechDecorations(ctx, 70, modY, colW, colH, theme.accentColor);
 
-  ctx.font = "900 22px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 28px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = theme.accentColor;
   ctx.textAlign = "left";
-  ctx.fillText("📅 FECHA DE JUEGO", 110, modY + 52);
+  ctx.fillText("📅 FECHA DE JUEGO", 110, modY + 54);
 
-  ctx.font = "900 34px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 40px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = "#ffffff";
   ctx.save();
   setBlackShadow(ctx, 22, 6, 0.95);
-  wrapText(ctx, (data.date || "PRÓXIMO FIN DE SEMANA").toUpperCase(), 110, modY + 115, colW - 80, 42, 2);
+  wrapText(ctx, (data.date || "PRÓXIMO FIN DE SEMANA").toUpperCase(), 110, modY + 118, colW - 80, 48, 2);
   ctx.restore();
 
-  ctx.font = "600 18px 'Inter', sans-serif";
+  ctx.font = "600 22px 'Inter', sans-serif";
   ctx.fillStyle = "#94a3b8";
-  ctx.fillText("Fase de grupos + Playoffs eliminatorios", 110, modY + 215);
+  ctx.fillText("Fase de grupos + Playoffs eliminatorios", 110, modY + 218);
 
   // Módulo B: SEDE (Centro)
   const col2X = 70 + colW + 30;
   drawElevatedCard(ctx, col2X, modY, colW, colH, 24, "rgba(8, 14, 28, 0.92)", theme.cardBorder, 2.5);
   drawSportTechDecorations(ctx, col2X, modY, colW, colH, theme.accentColor);
 
-  ctx.font = "900 22px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 28px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = theme.accentColor;
-  ctx.fillText("📍 COMPLEJO OFICIAL", col2X + 40, modY + 52);
+  ctx.fillText("📍 COMPLEJO OFICIAL", col2X + 40, modY + 54);
 
-  ctx.font = "900 34px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 40px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = "#ffffff";
   ctx.save();
   setBlackShadow(ctx, 22, 6, 0.95);
-  wrapText(ctx, (data.location || "COMPLEJO CENTRAL SALADILLO").toUpperCase(), col2X + 40, modY + 115, colW - 80, 40, 2);
+  wrapText(ctx, (data.location || "COMPLEJO CENTRAL SALADILLO").toUpperCase(), col2X + 40, modY + 118, colW - 80, 48, 2);
   ctx.restore();
 
-  ctx.font = "600 18px 'Inter', sans-serif";
+  ctx.font = "600 22px 'Inter', sans-serif";
   ctx.fillStyle = "#94a3b8";
-  ctx.fillText("Vestuarios, bar y vista panorámica", col2X + 40, modY + 215);
+  ctx.fillText("Vestuarios, bar y vista panorámica", col2X + 40, modY + 218);
 
   // Módulo C: PREMIOS + CTA (Derecha)
   const col3X = col2X + colW + 30;
@@ -1384,25 +1400,25 @@ function renderLayoutMagazineBold(
   ctx.stroke();
   drawSportTechDecorations(ctx, col3X, modY, col3W, colH + 215, theme.accentColor);
 
-  ctx.font = "900 24px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 30px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = theme.badgeText;
   ctx.textAlign = "center";
-  ctx.fillText("🏆 PREMIOS PRINCIPALES", col3X + col3W / 2, modY + 55);
+  ctx.fillText("🏆 PREMIOS PRINCIPALES", col3X + col3W / 2, modY + 58);
 
-  ctx.font = "900 50px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 58px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = "#ffffff";
   ctx.save();
   setBlackShadow(ctx, 25, 8, 0.98);
-  wrapTextCentered(ctx, (data.prizes || "PREMIOS EN EFECTIVO").toUpperCase(), col3X + col3W / 2, modY + 128, col3W - 40, 52, 2);
+  wrapTextCentered(ctx, (data.prizes || "PREMIOS EN EFECTIVO").toUpperCase(), col3X + col3W / 2, modY + 136, col3W - 40, 62, 2);
   ctx.restore();
 
-  ctx.font = "700 22px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "700 26px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = theme.badgeText;
-  ctx.fillText("+ Trofeos para Campeones y Finalistas", col3X + col3W / 2, modY + 245);
+  ctx.fillText("+ Trofeos para Campeones y Finalistas", col3X + col3W / 2, modY + 256);
 
-  ctx.font = "600 19px 'Inter', sans-serif";
+  ctx.font = "600 23px 'Inter', sans-serif";
   ctx.fillStyle = "#e2e8f0";
-  ctx.fillText("Indumentaria técnica oficial", col3X + col3W / 2, modY + 285);
+  ctx.fillText("Indumentaria técnica oficial", col3X + col3W / 2, modY + 300);
 
   // CTA integrado en tarjeta derecha
   const ctaH = 74;
@@ -1425,7 +1441,7 @@ function renderLayoutMagazineBold(
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  ctx.font = "900 24px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 28px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = "#000000";
   ctx.fillText("RESERVAR LUGAR AHORA ⚡", col3X + col3W / 2, ctaY + 46);
 
@@ -1433,25 +1449,25 @@ function renderLayoutMagazineBold(
   const bottomBoxX = 70;
   const bottomBoxY = modY + colH + 25;
   const bottomBoxW = colW * 2 + 30;
-  const bottomBoxH = 190;
+  const bottomBoxH = 220;
 
   drawElevatedCard(ctx, bottomBoxX, bottomBoxY, bottomBoxW, bottomBoxH, 22, "rgba(8, 14, 28, 0.90)", "rgba(255, 255, 255, 0.12)", 1.5);
   drawSportTechDecorations(ctx, bottomBoxX, bottomBoxY, bottomBoxW, bottomBoxH, theme.accentColor);
 
-  ctx.font = "bold 24px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "bold 30px 'Montserrat', 'Inter', sans-serif";
   ctx.fillStyle = theme.accentColor;
   ctx.textAlign = "left";
-  ctx.fillText("⭐ COMPETICIÓN DE MÁXIMO NIVEL", bottomBoxX + 40, bottomBoxY + 52);
+  ctx.fillText("⭐ COMPETICIÓN DE MÁXIMO NIVEL", bottomBoxX + 40, bottomBoxY + 56);
 
-  ctx.font = "600 22px 'Inter', sans-serif";
+  ctx.font = "600 24px 'Inter', sans-serif";
   ctx.fillStyle = "#cbd5e1";
   wrapText(
     ctx,
     "Todos los partidos cuentan para el Ranking General Anual. Transmisión de finales en vivo y cobertura fotográfica profesional de cada encuentro.",
     bottomBoxX + 40,
-    bottomBoxY + 100,
+    bottomBoxY + 104,
     bottomBoxW - 80,
-    36,
+    38,
     3
   );
 }
