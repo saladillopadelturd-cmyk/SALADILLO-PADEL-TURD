@@ -154,7 +154,7 @@ export default function NewsCarousel({
       <img
         src={currentFlyer.image_url}
         alt={currentFlyer.title || "Flyer Oficial SPT"}
-        className="w-full h-full object-cover"
+        className="w-full h-full object-contain"
         loading="eager"
       />
       

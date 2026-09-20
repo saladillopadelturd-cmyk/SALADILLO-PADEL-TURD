@@ -216,7 +216,7 @@ export default function AdminNovedadesPage() {
             >
               {previewUrl ? (
                 <div className="relative aspect-[21/9] w-full rounded-lg overflow-hidden">
-                  <Image src={previewUrl} alt="Preview" fill className="object-cover" />
+                  <Image src={previewUrl} alt="Preview" fill className="object-contain" />
                 </div>
               ) : (
                 <div className="py-6 flex flex-col items-center">
