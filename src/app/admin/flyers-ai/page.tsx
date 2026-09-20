@@ -170,7 +170,6 @@ export default function AdminFlyersPage() {
   const [date, setDate] = useState("24 Y 25 DE OCTUBRE");
   const [location, setLocation] = useState("QUINTA LA PISTA - SALADILLO");
   const [prizes, setPrizes] = useState("$200.000 EN PREMIOS");
-  const [sponsorsText, setSponsorsText] = useState("Bullpadel, Head, Saladillo Deportes, Padel Pro, Nox");
 
   // Selection & Theme States
   const [selectedBackgroundId, setSelectedBackgroundId] = useState<string>("random");
@@ -321,24 +320,18 @@ export default function AdminFlyersPage() {
   const redrawCanvas = useCallback(() => {
     if (!canvasRef.current) return;
 
-    const sponsorsList = sponsorsText
-      .split(",")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-
     const renderData: FlyerRenderData = {
       title,
       category,
       date,
       location,
       prizes,
-      sponsors: sponsorsList,
       theme: currentTheme,
       layout: currentLayout,
     };
 
     renderFlyerOnCanvas(canvasRef.current, bgImage, renderData, logoImage);
-  }, [title, category, date, location, prizes, sponsorsText, bgImage, currentTheme, currentLayout, logoImage]);
+  }, [title, category, date, location, prizes, bgImage, currentTheme, currentLayout, logoImage]);
 
   useEffect(() => {
     redrawCanvas();
@@ -702,22 +695,6 @@ export default function AdminFlyersPage() {
                 placeholder="Ej: $200.000 EN PREMIOS"
                 className="w-full bg-dark-900 border border-dark-700 rounded-xl px-3.5 py-2.5 text-sm text-amber-400 font-semibold uppercase focus:border-primary-500 focus:outline-none"
               />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-dark-300 mb-1.5">
-                Sponsors y Marcas (separadas por comas)
-              </label>
-              <input
-                type="text"
-                value={sponsorsText}
-                onChange={(e) => setSponsorsText(e.target.value)}
-                placeholder="Ej: Bullpadel, Head, Saladillo Deportes, Padel Pro, Nox"
-                className="w-full bg-dark-900 border border-dark-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-primary-500 focus:outline-none"
-              />
-              <p className="text-[11px] text-dark-500 mt-1">
-                Se ubicarán ordenadas automáticamente en la barra inferior del flyer.
-              </p>
             </div>
           </Card>
         </div>

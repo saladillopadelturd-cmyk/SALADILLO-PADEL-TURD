@@ -31,7 +31,6 @@ export interface FlyerRenderData {
   date: string;
   location: string;
   prizes: string;
-  sponsors: string[];
   theme?: FlyerTheme;
   layout?: FlyerLayout;
 }
@@ -510,87 +509,6 @@ function wrapTextRight(
   }
   ctx.fillText(line.trim(), rightX, currentY);
   return currentY;
-}
-
-// Barra inferior común de sponsors
-function drawSponsorsBar(
-  ctx: CanvasRenderingContext2D,
-  W: number,
-  H: number,
-  sponsors: string[],
-  theme: ThemeConfig
-) {
-  const barY = 910;
-  const barH = 170;
-  ctx.fillStyle = theme.footerBg;
-  ctx.fillRect(0, barY, W, barH);
-
-  // Línea divisoria superior con degradado
-  const sepGrad = ctx.createLinearGradient(0, barY, W, barY);
-  sepGrad.addColorStop(0, "transparent");
-  sepGrad.addColorStop(0.3, theme.accentColor);
-  sepGrad.addColorStop(0.7, theme.accentColor);
-  sepGrad.addColorStop(1, "transparent");
-  ctx.fillStyle = sepGrad;
-  ctx.fillRect(0, barY, W, 3.5);
-
-  // Etiqueta SPONSORS (ampliada para legibilidad en pantallas pequeñas)
-  ctx.font = "bold 26px 'Inter', sans-serif";
-  ctx.fillStyle = "#cbd5e1";
-  ctx.textAlign = "left";
-  ctx.fillText("MAIN SPONSORS & PARTNERS OFICIALES", 70, barY + 44);
-
-  // Pills de sponsors
-  const sponsorList = (
-    sponsors && sponsors.length > 0
-      ? sponsors
-      : ["HEAD PADEL", "BULLPADEL", "NOX PADEL", "WILSON", "BABOLAT", "MUNICH"]
-  ).slice(0, 6);
-
-  const spGap = 24;
-  const spY = barY + 70;
-  const spH = 66;
-  const availableW = W - 140;
-
-  // Auto-ajuste: reduce la fuente de las píldoras si el total excede el ancho disponible
-  let spFont = 30;
-  const measurePills = (fs: number) => {
-    ctx.font = `bold ${fs}px 'Montserrat', 'Inter', sans-serif`;
-    return sponsorList.map((s) => Math.max(ctx.measureText(s.toUpperCase()).width + 56, 160));
-  };
-  let spWidths = measurePills(spFont);
-  let spTotal = spWidths.reduce((a, b) => a + b, 0) + spGap * (spWidths.length - 1);
-  while (spTotal > availableW && spFont > 18) {
-    spFont -= 2;
-    spWidths = measurePills(spFont);
-    spTotal = spWidths.reduce((a, b) => a + b, 0) + spGap * (spWidths.length - 1);
-  }
-
-  ctx.font = `bold ${spFont}px 'Montserrat', 'Inter', sans-serif`;
-  let spX = 70;
-  sponsorList.forEach((spon, idx) => {
-    const spW = spWidths[idx];
-
-    ctx.save();
-    setBlackShadow(ctx, 35, 10, 0.98);
-    roundRect(ctx, spX, spY, spW, spH, 14);
-    ctx.fillStyle = "rgba(12, 18, 32, 0.85)";
-    ctx.fill();
-    ctx.restore();
-
-    roundRect(ctx, spX, spY, spW, spH, 14);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.22)";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    ctx.fillStyle = "#ffffff";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(spon.toUpperCase(), spX + spW / 2, spY + spH / 2);
-    ctx.textBaseline = "alphabetic";
-
-    spX += spW + spGap;
-  });
 }
 
 /**
@@ -1535,7 +1453,4 @@ export function renderFlyerOnCanvas(
       renderLayoutSplitCard(ctx, W, H, data, activeTheme, logoImage);
       break;
   }
-
-  // 4. BARRA INFERIOR DE SPONSORS (COMÚN Y HOMOGÉNEA)
-  drawSponsorsBar(ctx, W, H, data.sponsors, activeTheme);
 }
