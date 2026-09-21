@@ -92,9 +92,9 @@ export const LAYOUT_CONFIGS: Record<
 export const THEMES: Record<FlyerTheme, ThemeConfig> = {
   neon_emerald: {
     name: "Verde Padel Neón",
-    badgeBg: "rgba(16, 185, 129, 0.28)",
+    badgeBg: "rgba(4, 9, 20, 0.88)",
     badgeBorder: "rgba(52, 211, 153, 0.95)",
-    badgeText: "#34d399",
+    badgeText: "#ffffff",
     brandPrimaryText: "#ffffff",
     brandGradient: ["#ffffff", "#6ee7b7", "#10b981"],
     accentColor: "#10b981",
@@ -104,9 +104,9 @@ export const THEMES: Record<FlyerTheme, ThemeConfig> = {
   },
   gold_luxury: {
     name: "Oro Imperial & Master",
-    badgeBg: "rgba(245, 158, 11, 0.28)",
+    badgeBg: "rgba(4, 9, 20, 0.88)",
     badgeBorder: "rgba(251, 191, 36, 0.95)",
-    badgeText: "#fde047",
+    badgeText: "#ffffff",
     brandPrimaryText: "#ffffff",
     brandGradient: ["#ffffff", "#fde047", "#f59e0b"],
     accentColor: "#f59e0b",
@@ -116,9 +116,9 @@ export const THEMES: Record<FlyerTheme, ThemeConfig> = {
   },
   cyan_glacier: {
     name: "Azul Eléctrico Pista",
-    badgeBg: "rgba(6, 182, 212, 0.28)",
+    badgeBg: "rgba(4, 9, 20, 0.88)",
     badgeBorder: "rgba(56, 189, 248, 0.95)",
-    badgeText: "#38bdf8",
+    badgeText: "#ffffff",
     brandPrimaryText: "#ffffff",
     brandGradient: ["#ffffff", "#7dd3fc", "#0284c7"],
     accentColor: "#06b6d4",
@@ -128,9 +128,9 @@ export const THEMES: Record<FlyerTheme, ThemeConfig> = {
   },
   fire_sunset: {
     name: "Fuego & Competencia",
-    badgeBg: "rgba(239, 68, 68, 0.28)",
+    badgeBg: "rgba(4, 9, 20, 0.88)",
     badgeBorder: "rgba(251, 146, 60, 0.95)",
-    badgeText: "#fb923c",
+    badgeText: "#ffffff",
     brandPrimaryText: "#ffffff",
     brandGradient: ["#ffffff", "#fdba74", "#f97316"],
     accentColor: "#f97316",
@@ -140,9 +140,9 @@ export const THEMES: Record<FlyerTheme, ThemeConfig> = {
   },
   cyber_violet: {
     name: "Cyber Violeta Padel",
-    badgeBg: "rgba(168, 85, 247, 0.28)",
+    badgeBg: "rgba(4, 9, 20, 0.88)",
     badgeBorder: "rgba(216, 180, 254, 0.95)",
-    badgeText: "#d8b4fe",
+    badgeText: "#ffffff",
     brandPrimaryText: "#ffffff",
     brandGradient: ["#ffffff", "#f0abfc", "#c084fc"],
     accentColor: "#c084fc",
@@ -426,7 +426,7 @@ function renderLayoutSplitCard(
   ctx.textBaseline = "alphabetic";
 
   // Título principal (escala a 3 líneas máx dentro del espacio libre)
-  const titleTop = badgeY + badgeH + 50;
+  const titleTop = badgeY + badgeH + 18;
   const titleMaxH = H - pad - titleTop;
   const tGrad = ctx.createLinearGradient(leftX, titleTop, leftX + leftW, titleTop + Math.min(titleMaxH, 260));
   tGrad.addColorStop(0, theme.brandGradient[0]);
@@ -519,7 +519,7 @@ function renderLayoutHeroCenter(
   const gap = 20;
 
   // ── TÍTULO masivo centrado entre el badge y las bandas ──
-  const titleTop = badgeY + badgeH + 38;
+  const titleTop = badgeY + badgeH + 18;
   const titleMaxW = innerW;
   const titleMaxH = bandsTop - 40 - titleTop;
   const titleCY = titleTop + titleMaxH / 2;
@@ -604,14 +604,14 @@ function renderLayoutSplitInverted(
   ctx.fillText(catText, badgeX + badgeW / 2, badgeY + badgeH / 2);
   ctx.textBaseline = "alphabetic";
 
-  // Título alineado a la derecha
-  const titleTop = badgeY + badgeH + 50;
+  // Título centrado
+  const titleTop = badgeY + badgeH + 18;
   const titleMaxH = H - pad - titleTop;
   const tGrad = ctx.createLinearGradient(rightX, titleTop, rightX + rightW, titleTop + Math.min(titleMaxH, 260));
   tGrad.addColorStop(0, theme.brandGradient[2]);
   tGrad.addColorStop(0.5, theme.brandGradient[1]);
   tGrad.addColorStop(1, theme.brandGradient[0]);
-  fitDrawLines(ctx, data.title || "GRAN TORNEO", rightX + rightW / 2, titleTop + titleMaxH / 2, rightW, titleMaxH, 3, "center", 130, tGrad, 65);
+  fitDrawLines(ctx, data.title || "GRAN TORNEO", rightX + rightW / 2, titleTop + titleMaxH / 2, rightW, titleMaxH, 3, "center", 130, tGrad, 90);
 
   // 3 bandas a la izquierda, simetría vertical exacta
   const cardTop = pad;
@@ -711,7 +711,7 @@ function renderLayoutMagazineBold(
   ctx.textBaseline = "alphabetic";
 
   // ── TITULAR EDITORIAL masivo, centrado ──
-  const titleTop = badgeY + badgeH + 34;
+  const titleTop = badgeY + badgeH + 18;
   const titleMaxW = innerW;
   const titleMaxH = bandsTop - 34 - titleTop;
   const tGrad = ctx.createLinearGradient(pad, titleTop, W - pad, titleTop + Math.min(titleMaxH, 220));
