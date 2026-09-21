@@ -426,7 +426,7 @@ function renderLayoutSplitCard(
   ctx.textBaseline = "alphabetic";
 
   // Título principal (escala a 3 líneas máx dentro del espacio libre)
-  const titleTop = badgeY + badgeH + 18;
+  const titleTop = badgeY + badgeH + 10;
   const titleMaxH = H - pad - titleTop;
   const tGrad = ctx.createLinearGradient(leftX, titleTop, leftX + leftW, titleTop + Math.min(titleMaxH, 260));
   tGrad.addColorStop(0, theme.brandGradient[0]);
@@ -519,7 +519,7 @@ function renderLayoutHeroCenter(
   const gap = 20;
 
   // ── TÍTULO masivo centrado entre el badge y las bandas ──
-  const titleTop = badgeY + badgeH + 18;
+  const titleTop = badgeY + badgeH + 10;
   const titleMaxW = innerW;
   const titleMaxH = bandsTop - 40 - titleTop;
   const titleCY = titleTop + titleMaxH / 2;
@@ -605,7 +605,7 @@ function renderLayoutSplitInverted(
   ctx.textBaseline = "alphabetic";
 
   // Título centrado
-  const titleTop = badgeY + badgeH + 18;
+  const titleTop = badgeY + badgeH + 10;
   const titleMaxH = H - pad - titleTop;
   const tGrad = ctx.createLinearGradient(rightX, titleTop, rightX + rightW, titleTop + Math.min(titleMaxH, 260));
   tGrad.addColorStop(0, theme.brandGradient[2]);
@@ -711,7 +711,7 @@ function renderLayoutMagazineBold(
   ctx.textBaseline = "alphabetic";
 
   // ── TITULAR EDITORIAL masivo, centrado ──
-  const titleTop = badgeY + badgeH + 18;
+  const titleTop = badgeY + badgeH + 10;
   const titleMaxW = innerW;
   const titleMaxH = bandsTop - 34 - titleTop;
   const tGrad = ctx.createLinearGradient(pad, titleTop, W - pad, titleTop + Math.min(titleMaxH, 220));
