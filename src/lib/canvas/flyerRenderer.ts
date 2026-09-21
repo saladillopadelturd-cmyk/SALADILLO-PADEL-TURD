@@ -425,15 +425,16 @@ function renderLayoutSplitCard(
   ctx.fillText(catText, leftX + leftW / 2, badgeY + badgeH / 2);
   ctx.textBaseline = "alphabetic";
 
-  // Título principal (escala a 3 líneas máx dentro del espacio libre)
-  const titleTop = badgeY + badgeH + 10;
+    // Título principal (escala a 3 líneas máx dentro del espacio libre)
+  const titleFS = 130;
+  const titleGap = titleFS * 1.14;
+  const titleTop = badgeY + badgeH + titleGap;
   const titleMaxH = H - pad - titleTop;
   const tGrad = ctx.createLinearGradient(leftX, titleTop, leftX + leftW, titleTop + Math.min(titleMaxH, 260));
   tGrad.addColorStop(0, theme.brandGradient[0]);
   tGrad.addColorStop(0.5, theme.brandGradient[1]);
   tGrad.addColorStop(1, theme.brandGradient[2]);
-  fitDrawLines(ctx, data.title || "GRAN TORNEO", leftX + leftW / 2, titleTop + titleMaxH / 2, leftW, titleMaxH, 3, "center", 130, tGrad, 90);
-
+  fitDrawLines(ctx, data.title || "GRAN TORNEO", leftX + leftW / 2, titleTop + titleMaxH / 2, leftW, titleMaxH, 3, "center", titleFS, tGrad, 90);
   // Card fondo (3 bandas que llenan verticalmente de pad a H-pad)
   const cardTop = pad;
   const cardBot = H - pad;
@@ -519,7 +520,9 @@ function renderLayoutHeroCenter(
   const gap = 20;
 
   // ── TÍTULO masivo centrado entre el badge y las bandas ──
-  const titleTop = badgeY + badgeH + 10;
+  const titleFS = 150;
+  const titleGap = titleFS * 1.14;
+  const titleTop = badgeY + badgeH + titleGap;
   const titleMaxW = innerW;
   const titleMaxH = bandsTop - 40 - titleTop;
   const titleCY = titleTop + titleMaxH / 2;
@@ -527,7 +530,7 @@ function renderLayoutHeroCenter(
   tGrad.addColorStop(0, theme.brandGradient[0]);
   tGrad.addColorStop(0.5, theme.brandGradient[1]);
   tGrad.addColorStop(1, theme.brandGradient[2]);
-  fitDrawLines(ctx, data.title || "GRAN TORNEO", cx, titleCY, titleMaxW, titleMaxH, 2, "center", 150, tGrad, 90);
+  fitDrawLines(ctx, data.title || "GRAN TORNEO", cx, titleCY, titleMaxW, titleMaxH, 2, "center", titleFS, tGrad, 90);
 
   function drawFullBand(top: number, h: number, label: string, value: string, accent: string) {
     ctx.save();
@@ -605,13 +608,15 @@ function renderLayoutSplitInverted(
   ctx.textBaseline = "alphabetic";
 
   // Título centrado
-  const titleTop = badgeY + badgeH + 10;
+  const titleFS = 130;
+  const titleGap = titleFS * 1.14;
+  const titleTop = badgeY + badgeH + titleGap;
   const titleMaxH = H - pad - titleTop;
   const tGrad = ctx.createLinearGradient(rightX, titleTop, rightX + rightW, titleTop + Math.min(titleMaxH, 260));
   tGrad.addColorStop(0, theme.brandGradient[2]);
   tGrad.addColorStop(0.5, theme.brandGradient[1]);
   tGrad.addColorStop(1, theme.brandGradient[0]);
-  fitDrawLines(ctx, data.title || "GRAN TORNEO", rightX + rightW / 2, titleTop + titleMaxH / 2, rightW, titleMaxH, 3, "center", 130, tGrad, 90);
+  fitDrawLines(ctx, data.title || "GRAN TORNEO", rightX + rightW / 2, titleTop + titleMaxH / 2, rightW, titleMaxH, 3, "center", titleFS, tGrad, 90);
 
   // 3 bandas a la izquierda, simetría vertical exacta
   const cardTop = pad;
@@ -711,14 +716,16 @@ function renderLayoutMagazineBold(
   ctx.textBaseline = "alphabetic";
 
   // ── TITULAR EDITORIAL masivo, centrado ──
-  const titleTop = badgeY + badgeH + 10;
+  const titleFS = 142;
+  const titleGap = titleFS * 1.14;
+  const titleTop = badgeY + badgeH + titleGap;
   const titleMaxW = innerW;
   const titleMaxH = bandsTop - 34 - titleTop;
   const tGrad = ctx.createLinearGradient(pad, titleTop, W - pad, titleTop + Math.min(titleMaxH, 220));
   tGrad.addColorStop(0, theme.brandGradient[0]);
   tGrad.addColorStop(0.5, theme.brandGradient[1]);
   tGrad.addColorStop(1, theme.brandGradient[2]);
-  fitDrawLines(ctx, data.title || "GRAN TORNEO", pad + innerW / 2, titleTop + titleMaxH / 2, titleMaxW, titleMaxH, 2, "center", 142, tGrad, 75);
+  fitDrawLines(ctx, data.title || "GRAN TORNEO", pad + innerW / 2, titleTop + titleMaxH / 2, titleMaxW, titleMaxH, 2, "center", titleFS, tGrad, 75);
 
   function drawMagBand(top: number, h: number, label: string, value: string, accent: string) {
     ctx.save();
