@@ -432,7 +432,7 @@ function renderLayoutSplitCard(
   tGrad.addColorStop(0, theme.brandGradient[0]);
   tGrad.addColorStop(0.5, theme.brandGradient[1]);
   tGrad.addColorStop(1, theme.brandGradient[2]);
-  fitDrawLines(ctx, data.title || "GRAN TORNEO", leftX, titleTop + titleMaxH / 2, leftW, titleMaxH, 3, "left", 130, tGrad, 36);
+  fitDrawLines(ctx, data.title || "GRAN TORNEO", leftX + leftW / 2, titleTop + titleMaxH / 2, leftW, titleMaxH, 3, "center", 130, tGrad, 36);
 
   // Card fondo (3 bandas que llenan verticalmente de pad a H-pad)
   const cardTop = pad;
@@ -451,11 +451,11 @@ function renderLayoutSplitCard(
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    drawBandLabel(ctx, label, rightX + 34, top + 44, labelColor, rightW - 68);
+    drawBandLabel(ctx, label, rightX + rightW / 2, top + 44, labelColor, rightW - 68, "center");
     const valueMaxW = rightW - 68;
     const valueTop = top + 62;
     const valueH = h - 78;
-    fitDrawLines(ctx, value, rightX + 34, valueTop + valueH / 2, valueMaxW, valueH, 2, "left", 66, "#ffffff", 20);
+    fitDrawLines(ctx, value, rightX + rightW / 2, valueTop + valueH / 2, valueMaxW, valueH, 2, "center", 66, "#ffffff", 20);
   }
 
   const s0 = stackSlot(cardTop, cardBot, 3, gap, 0);
@@ -610,7 +610,7 @@ function renderLayoutSplitInverted(
   tGrad.addColorStop(0, theme.brandGradient[2]);
   tGrad.addColorStop(0.5, theme.brandGradient[1]);
   tGrad.addColorStop(1, theme.brandGradient[0]);
-  fitDrawLines(ctx, data.title || "GRAN TORNEO", rightX + rightW, titleTop + titleMaxH / 2, rightW, titleMaxH, 3, "right", 130, tGrad, 36);
+  fitDrawLines(ctx, data.title || "GRAN TORNEO", rightX + rightW / 2, titleTop + titleMaxH / 2, rightW, titleMaxH, 3, "center", 130, tGrad, 36);
 
   // 3 bandas a la izquierda, simetría vertical exacta
   const cardTop = pad;
@@ -629,10 +629,10 @@ function renderLayoutSplitInverted(
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    drawBandLabel(ctx, label, leftX + 34, top + 44, labelColor, leftW - 68);
+    drawBandLabel(ctx, label, leftX + leftW / 2, top + 44, labelColor, leftW - 68, "center");
     const valueTop = top + 62;
     const valueH = h - 78;
-    fitDrawLines(ctx, value, leftX + 34, valueTop + valueH / 2, leftW - 68, valueH, 2, "left", 66, "#ffffff", 20);
+    fitDrawLines(ctx, value, leftX + leftW / 2, valueTop + valueH / 2, leftW - 68, valueH, 2, "center", 66, "#ffffff", 20);
   }
 
   const s0 = stackSlot(cardTop, cardBot, 3, gap, 0);
@@ -716,7 +716,7 @@ function renderLayoutMagazineBold(
   tGrad.addColorStop(0, theme.brandGradient[0]);
   tGrad.addColorStop(0.5, theme.brandGradient[1]);
   tGrad.addColorStop(1, theme.brandGradient[2]);
-  fitDrawLines(ctx, data.title || "GRAN TORNEO", pad, titleTop + titleMaxH / 2, titleMaxW, titleMaxH, 2, "left", 142, tGrad, 36);
+  fitDrawLines(ctx, data.title || "GRAN TORNEO", pad + innerW / 2, titleTop + titleMaxH / 2, titleMaxW, titleMaxH, 2, "center", 142, tGrad, 36);
 
   function drawMagBand(top: number, h: number, label: string, value: string, accent: string) {
     ctx.save();
@@ -730,10 +730,10 @@ function renderLayoutMagazineBold(
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    drawBandLabel(ctx, label, pad + 36, top + 38, accent, innerW - 72, "left");
+    drawBandLabel(ctx, label, pad + innerW / 2, top + 38, accent, innerW - 72, "center");
     const vTop = top + 54;
     const vH = h - 54 - 22;
-    fitDrawLines(ctx, value, pad + 36, vTop + vH / 2, innerW - 72, vH, 1, "left", 62, "#ffffff", 20);
+    fitDrawLines(ctx, value, pad + innerW / 2, vTop + vH / 2, innerW - 72, vH, 1, "center", 62, "#ffffff", 20);
   }
 
   const m0 = stackSlot(bandsTop, bandsBot, 3, bandsGap, 0);
