@@ -646,8 +646,8 @@ function renderLayoutSplitInverted(
 
 /**
  * LAYOUT 4: magazine_bold (Editorial Deportivo)
- * Cinta superior (badge categoría izquierda + logo derecha), titular masivo
- * alineado a la izquierda y 3 bandas de datos que cierran exactamente en H-pad.
+ * Cinta superior (logo derecha), badge categoría centrado bajo la cinta, titular masivo
+ * centrado y 3 bandas de datos que cierran exactamente en H-pad.
  * Todo dentro de 0..1920 × 0..1080 (margen pad en los 4 bordes → simetría).
  */
 function renderLayoutMagazineBold(
@@ -675,30 +675,6 @@ function renderLayoutMagazineBold(
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // Badge categoría más grande y visible, centrado arriba del título
-  const catText = (data.category || "CATEGORÍA ABIERTA").toUpperCase();
-  const badgeH = 92;
-  const badgeY = bannerY + (bannerH - badgeH) / 2;
-  ctx.font = "900 46px 'Montserrat', 'Inter', sans-serif";
-  const badgeMaxW = 700;
-  const badgeW = Math.min(ctx.measureText(catText).width + 76, badgeMaxW);
-  ctx.save();
-  setBlackShadow(ctx, 45, 14, 0.97);
-  roundRect(ctx, pad + 30, badgeY, badgeW, badgeH, 40);
-  ctx.fillStyle = theme.badgeBg;
-  ctx.fill();
-  ctx.restore();
-  roundRect(ctx, pad + 30, badgeY, badgeW, badgeH, 40);
-  ctx.strokeStyle = theme.badgeBorder;
-  ctx.lineWidth = 3;
-  ctx.stroke();
-  ctx.fillStyle = theme.badgeText;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = "900 46px 'Montserrat', 'Inter', sans-serif";
-  ctx.fillText(catText, pad + 30 + badgeW / 2, badgeY + badgeH / 2);
-  ctx.textBaseline = "alphabetic";
-
   // Logo derecha de la cinta (respetando aspect ratio, nunca deformado)
   const logoBoxW = 700;
   const logoBoxH = bannerH - 32;
@@ -710,8 +686,32 @@ function renderLayoutMagazineBold(
   const bandsBot = H - pad;
   const bandsTop = bandsBot - bandsH;
 
+  // Badge categoría más grande y visible, centrado arriba del título
+  const catText = (data.category || "CATEGORÍA ABIERTA").toUpperCase();
+  const badgeH = 92;
+  const badgeY = bannerY + bannerH + 28;
+  ctx.font = "900 46px 'Montserrat', 'Inter', sans-serif";
+  const badgeMaxW = 700;
+  const badgeW = Math.min(ctx.measureText(catText).width + 76, badgeMaxW);
+  ctx.save();
+  setBlackShadow(ctx, 45, 14, 0.97);
+  roundRect(ctx, pad + innerW / 2 - badgeW / 2, badgeY, badgeW, badgeH, 40);
+  ctx.fillStyle = theme.badgeBg;
+  ctx.fill();
+  ctx.restore();
+  roundRect(ctx, pad + innerW / 2 - badgeW / 2, badgeY, badgeW, badgeH, 40);
+  ctx.strokeStyle = theme.badgeBorder;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.fillStyle = theme.badgeText;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "900 46px 'Montserrat', 'Inter', sans-serif";
+  ctx.fillText(catText, pad + innerW / 2, badgeY + badgeH / 2);
+  ctx.textBaseline = "alphabetic";
+
   // ── TITULAR EDITORIAL masivo, centrado ──
-  const titleTop = bannerY + bannerH + 34;
+  const titleTop = badgeY + badgeH + 34;
   const titleMaxW = innerW;
   const titleMaxH = bandsTop - 34 - titleTop;
   const tGrad = ctx.createLinearGradient(pad, titleTop, W - pad, titleTop + Math.min(titleMaxH, 220));
