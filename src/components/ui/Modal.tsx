@@ -7,7 +7,7 @@ interface ModalProps {
   onClose: () => void;
   title?: string;
   children: ReactNode;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
 }
 
 export default function Modal({
@@ -33,6 +33,7 @@ export default function Modal({
     sm: "max-w-sm",
     md: "max-w-lg",
     lg: "max-w-2xl",
+    xl: "max-w-4xl",
   };
 
   return (
@@ -69,7 +70,7 @@ export default function Modal({
             </button>
           </div>
         )}
-        <div className="p-6">{children}</div>
+        <div className="p-6 overflow-y-auto" style={{ maxHeight: "calc(100vh - 200px)" }}>{children}</div>
       </div>
     </div>
   );

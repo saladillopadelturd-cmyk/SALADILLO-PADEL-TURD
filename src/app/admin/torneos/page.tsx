@@ -443,11 +443,11 @@ export default function AdminTorneosPage() {
         </div>
       )}
 
-      <Modal
+<Modal
         isOpen={showCreate}
         onClose={() => setShowCreate(false)}
-        title="Crear Nuevo Torneo"
-        size="lg"
+        title="Nuevo Torneo"
+        size="xl"
       >
         <div className="space-y-4">
           <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs space-y-1">
@@ -549,7 +549,7 @@ export default function AdminTorneosPage() {
         isOpen={!!editing}
         onClose={() => setEditing(null)}
         title="Editar Torneo"
-        size="lg"
+        size="xl"
       >
         <div className="space-y-4">
           <div className="p-3 bg-dark-800/80 border border-dark-700 rounded-xl text-xs space-y-1.5 text-dark-300">
