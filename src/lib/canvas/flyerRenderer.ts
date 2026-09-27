@@ -323,7 +323,7 @@ function fitDrawTwoLines(
 /**
  * Dibuja un bloque de hasta 2 líneas escalando la fuente para que entre 100%
  * dentro del rectángulo (maxW × maxH), centrado verticalmente en centerY.
- * Devuelve el tamaño de fuente usado. Usado para máximos de ancho y alto.
+ * Devuelve la posición Y de la primer línea del texto.
  */
 function fitDrawLines(
   ctx: CanvasRenderingContext2D,
@@ -418,7 +418,7 @@ function fitDrawLines(
   ctx.restore();
   ctx.textBaseline = "alphabetic";
 
-  return drawYs[drawYs.length - 1] + lh / 2;
+  return drawYs[0];
 }
 
 /** Etiqueta pequeña estilo "chips" (📅 FECHA) fijada arriba de una banda. */
@@ -470,9 +470,21 @@ function renderLayoutSplitCard(
   const logoBoxH = 240;
   if (logoImage) drawImageProportional(ctx, logoImage, leftX, pad, leftW, logoBoxH, "left");
 
-  // Badge categoría (más grande y visible, centrado arriba del título)
+  // Título principal (escala a 3 líneas máx dentro del espacio libre)
+  const titleFS = 130;
+  const titleGap = titleFS * 1.14;
+  const titleTop = pad + logoBoxH + 30 + 88 + titleGap;
+  const titleMaxH = H - pad - titleTop;
+  const tGrad = ctx.createLinearGradient(leftX, titleTop, leftX + leftW, titleTop + Math.min(titleMaxH, 260));
+  tGrad.addColorStop(0, theme.brandGradient[0]);
+  tGrad.addColorStop(0.5, theme.brandGradient[1]);
+  tGrad.addColorStop(1, theme.brandGradient[2]);
+  const titleFirstLineY = fitDrawLines(ctx, data.title || "GRAN TORNEO", leftX + leftW / 2, titleTop + titleMaxH / 2, leftW, titleMaxH, 3, "center", titleFS, tGrad, 90);
+
+  // Badge categoría (una línea por encima de la primer línea del título)
   const badgeH = 88;
-  const badgeY = pad + logoBoxH + 30;
+  const badgeGap = 12;
+  const badgeY = titleFirstLineY - badgeH - badgeGap;
   const badgeMaxW = Math.min(leftW, 720);
   const catText = (data.category || "TORNEO OFICIAL").toUpperCase();
   ctx.font = "900 44px 'Montserrat', 'Inter', sans-serif";
@@ -493,17 +505,6 @@ function renderLayoutSplitCard(
   ctx.font = "900 44px 'Montserrat', 'Inter', sans-serif";
   ctx.fillText(catText, leftX + leftW / 2, badgeY + badgeH / 2);
   ctx.textBaseline = "alphabetic";
-
-    // Título principal (escala a 3 líneas máx dentro del espacio libre)
-  const titleFS = 130;
-  const titleGap = titleFS * 1.14;
-  const titleTop = badgeY + badgeH + titleGap;
-  const titleMaxH = H - pad - titleTop;
-  const tGrad = ctx.createLinearGradient(leftX, titleTop, leftX + leftW, titleTop + Math.min(titleMaxH, 260));
-  tGrad.addColorStop(0, theme.brandGradient[0]);
-  tGrad.addColorStop(0.5, theme.brandGradient[1]);
-  tGrad.addColorStop(1, theme.brandGradient[2]);
-  fitDrawLines(ctx, data.title || "GRAN TORNEO", leftX + leftW / 2, titleTop + titleMaxH / 2, leftW, titleMaxH, 3, "center", titleFS, tGrad, 90);
   // Card fondo (3 bandas que llenan verticalmente de pad a H-pad)
   const cardTop = pad;
   const cardBot = H - pad;
@@ -558,9 +559,30 @@ function renderLayoutHeroCenter(
   const logoBoxH = 200;
   if (logoImage) drawImageProportional(ctx, logoImage, cx - logoBoxW / 2, pad, logoBoxW, logoBoxH, "center");
 
-  // ── BADGE CATEGORÍA más grande y visible, centrado bajo el logo ──
+  // ── 3 BANDAS DE ANCHO COMPLETO, rellenan exactamente hasta H-pad (simetría) ──
+  const bandsH = 430;
+  const bandsTop = H - pad - bandsH;
+  const bandX = pad;
+  const bandW = innerW;
+  const gap = 20;
+
+  // ── TÍTULO masivo centrado entre el badge y las bandas ──
+  const titleFS = 150;
+  const titleGap = titleFS * 1.14;
+  const titleTop = pad + logoBoxH + 18 + 84 + titleGap;
+  const titleMaxW = innerW;
+  const titleMaxH = bandsTop - 40 - titleTop;
+  const titleCY = titleTop + titleMaxH / 2;
+  const tGrad = ctx.createLinearGradient(pad, titleCY - titleMaxH / 2, W - pad, titleCY + titleMaxH / 2);
+  tGrad.addColorStop(0, theme.brandGradient[0]);
+  tGrad.addColorStop(0.5, theme.brandGradient[1]);
+  tGrad.addColorStop(1, theme.brandGradient[2]);
+  const titleFirstLineY = fitDrawLines(ctx, data.title || "GRAN TORNEO", cx, titleCY, titleMaxW, titleMaxH, 2, "center", titleFS, tGrad, 90);
+
+  // ── BADGE CATEGORÍA más grande y visible, una línea por encima del título ──
   const badgeH = 84;
-  const badgeY = pad + logoBoxH + 18;
+  const badgeGap = 12;
+  const badgeY = titleFirstLineY - badgeH - badgeGap;
   const catText = (data.category || "TORNEO OFICIAL").toUpperCase();
   ctx.font = "900 42px 'Montserrat', 'Inter', sans-serif";
   const catW = Math.min(ctx.measureText(catText).width + 72, 820);
@@ -580,26 +602,6 @@ function renderLayoutHeroCenter(
   ctx.font = "900 42px 'Montserrat', 'Inter', sans-serif";
   ctx.fillText(catText, cx, badgeY + badgeH / 2);
   ctx.textBaseline = "alphabetic";
-
-  // ── 3 BANDAS DE ANCHO COMPLETO, rellenan exactamente hasta H-pad (simetría) ──
-  const bandsH = 430;
-  const bandsTop = H - pad - bandsH;
-  const bandX = pad;
-  const bandW = innerW;
-  const gap = 20;
-
-  // ── TÍTULO masivo centrado entre el badge y las bandas ──
-  const titleFS = 150;
-  const titleGap = titleFS * 1.14;
-  const titleTop = badgeY + badgeH + titleGap;
-  const titleMaxW = innerW;
-  const titleMaxH = bandsTop - 40 - titleTop;
-  const titleCY = titleTop + titleMaxH / 2;
-  const tGrad = ctx.createLinearGradient(pad, titleCY - titleMaxH / 2, W - pad, titleCY + titleMaxH / 2);
-  tGrad.addColorStop(0, theme.brandGradient[0]);
-  tGrad.addColorStop(0.5, theme.brandGradient[1]);
-  tGrad.addColorStop(1, theme.brandGradient[2]);
-  fitDrawLines(ctx, data.title || "GRAN TORNEO", cx, titleCY, titleMaxW, titleMaxH, 2, "center", titleFS, tGrad, 90);
 
   function drawFullBand(top: number, h: number, label: string, value: string, accent: string) {
     ctx.save();
@@ -651,9 +653,21 @@ function renderLayoutSplitInverted(
   const logoBoxH = 240;
   if (logoImage) drawImageProportional(ctx, logoImage, rightX, pad, rightW, logoBoxH, "right");
 
-  // Badge categoría más grande y visible, centrado arriba del título
+  // Título centrado
+  const titleFS = 130;
+  const titleGap = titleFS * 1.14;
+  const titleTop = pad + logoBoxH + 30 + 88 + titleGap;
+  const titleMaxH = H - pad - titleTop;
+  const tGrad = ctx.createLinearGradient(rightX, titleTop, rightX + rightW, titleTop + Math.min(titleMaxH, 260));
+  tGrad.addColorStop(0, theme.brandGradient[2]);
+  tGrad.addColorStop(0.5, theme.brandGradient[1]);
+  tGrad.addColorStop(1, theme.brandGradient[0]);
+  const titleFirstLineY = fitDrawLines(ctx, data.title || "GRAN TORNEO", rightX + rightW / 2, titleTop + titleMaxH / 2, rightW, titleMaxH, 3, "center", titleFS, tGrad, 90);
+
+  // Badge categoría más grande y visible, una línea por encima del título
   const badgeH = 88;
-  const badgeY = pad + logoBoxH + 30;
+  const badgeGap = 12;
+  const badgeY = titleFirstLineY - badgeH - badgeGap;
   const badgeMaxW = Math.min(rightW, 720);
   const catText = (data.category || "TORNEO OFICIAL").toUpperCase();
   ctx.font = "900 44px 'Montserrat', 'Inter', sans-serif";
@@ -675,17 +689,6 @@ function renderLayoutSplitInverted(
   ctx.font = "900 44px 'Montserrat', 'Inter', sans-serif";
   ctx.fillText(catText, badgeX + badgeW / 2, badgeY + badgeH / 2);
   ctx.textBaseline = "alphabetic";
-
-  // Título centrado
-  const titleFS = 130;
-  const titleGap = titleFS * 1.14;
-  const titleTop = badgeY + badgeH + titleGap;
-  const titleMaxH = H - pad - titleTop;
-  const tGrad = ctx.createLinearGradient(rightX, titleTop, rightX + rightW, titleTop + Math.min(titleMaxH, 260));
-  tGrad.addColorStop(0, theme.brandGradient[2]);
-  tGrad.addColorStop(0.5, theme.brandGradient[1]);
-  tGrad.addColorStop(1, theme.brandGradient[0]);
-  fitDrawLines(ctx, data.title || "GRAN TORNEO", rightX + rightW / 2, titleTop + titleMaxH / 2, rightW, titleMaxH, 3, "center", titleFS, tGrad, 90);
 
   // 3 bandas a la izquierda, simetría vertical exacta
   const cardTop = pad;
@@ -760,10 +763,23 @@ function renderLayoutMagazineBold(
   const bandsBot = H - pad;
   const bandsTop = bandsBot - bandsH;
 
-  // Badge categoría más grande y visible, centrado arriba del título
+  // ── TITULAR EDITORIAL masivo, centrado ──
+  const titleFS = 142;
+  const titleGap = titleFS * 1.14;
+  const titleTop = bannerY + bannerH + 28 + 92 + titleGap;
+  const titleMaxW = innerW;
+  const titleMaxH = bandsTop - 34 - titleTop;
+  const tGrad = ctx.createLinearGradient(pad, titleTop, W - pad, titleTop + Math.min(titleMaxH, 220));
+  tGrad.addColorStop(0, theme.brandGradient[0]);
+  tGrad.addColorStop(0.5, theme.brandGradient[1]);
+  tGrad.addColorStop(1, theme.brandGradient[2]);
+  const titleFirstLineY = fitDrawLines(ctx, data.title || "GRAN TORNEO", pad + innerW / 2, titleTop + titleMaxH / 2, titleMaxW, titleMaxH, 2, "center", titleFS, tGrad, 75);
+
+  // Badge categoría más grande y visible, una línea por encima del título
   const catText = (data.category || "CATEGORÍA ABIERTA").toUpperCase();
   const badgeH = 92;
-  const badgeY = bannerY + bannerH + 28;
+  const badgeGap = 12;
+  const badgeY = titleFirstLineY - badgeH - badgeGap;
   ctx.font = "900 46px 'Montserrat', 'Inter', sans-serif";
   const badgeMaxW = 700;
   const badgeW = Math.min(ctx.measureText(catText).width + 76, badgeMaxW);
@@ -783,18 +799,6 @@ function renderLayoutMagazineBold(
   ctx.font = "900 46px 'Montserrat', 'Inter', sans-serif";
   ctx.fillText(catText, pad + innerW / 2, badgeY + badgeH / 2);
   ctx.textBaseline = "alphabetic";
-
-  // ── TITULAR EDITORIAL masivo, centrado ──
-  const titleFS = 142;
-  const titleGap = titleFS * 1.14;
-  const titleTop = badgeY + badgeH + titleGap;
-  const titleMaxW = innerW;
-  const titleMaxH = bandsTop - 34 - titleTop;
-  const tGrad = ctx.createLinearGradient(pad, titleTop, W - pad, titleTop + Math.min(titleMaxH, 220));
-  tGrad.addColorStop(0, theme.brandGradient[0]);
-  tGrad.addColorStop(0.5, theme.brandGradient[1]);
-  tGrad.addColorStop(1, theme.brandGradient[2]);
-  fitDrawLines(ctx, data.title || "GRAN TORNEO", pad + innerW / 2, titleTop + titleMaxH / 2, titleMaxW, titleMaxH, 2, "center", titleFS, tGrad, 75);
 
   function drawMagBand(top: number, h: number, label: string, value: string, accent: string) {
     ctx.save();
