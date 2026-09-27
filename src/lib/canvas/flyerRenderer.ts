@@ -742,7 +742,7 @@ function renderLayoutMagazineBold(
     drawBandLabel(ctx, label, pad + innerW / 2, top + 38, accent, innerW - 72, "center");
     const vTop = top + 54;
     const vH = h - 54 - 22;
-    fitDrawLines(ctx, value, pad + innerW / 2, vTop + vH / 2, innerW - 72, vH, 1, "center", 62, "#ffffff", 20);
+    fitDrawLines(ctx, value, pad + innerW / 2, vTop + vH / 2, innerW - 72, vH, 2, "center", 62, "#ffffff", 20);
   }
 
   const m0 = stackSlot(bandsTop, bandsBot, 3, bandsGap, 0);
