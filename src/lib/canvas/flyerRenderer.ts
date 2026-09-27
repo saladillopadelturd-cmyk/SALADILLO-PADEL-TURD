@@ -432,7 +432,7 @@ function drawBandLabel(
   align: "left" | "center" = "left"
 ): number {
   const label = String(text).toUpperCase();
-  let fontSize = 22;
+  let fontSize = 33;
   ctx.font = `700 ${fontSize}px 'Inter', sans-serif`;
   while (fontSize > 12 && ctx.measureText(label).width > maxWidth) {
     fontSize -= 1;
@@ -523,9 +523,9 @@ function renderLayoutSplitCard(
 
     drawBandLabel(ctx, label, rightX + rightW / 2, top + 44, labelColor, rightW - 68, "center");
     const valueMaxW = rightW - 68;
-    const valueTop = top + 62;
-    const valueH = h - 78;
-    fitDrawTwoLines(ctx, value, rightX + rightW / 2, valueTop + valueH / 2, valueMaxW, valueH, 66, "#ffffff", 20);
+    const valueTop = top + 40;
+    const valueH = h - 50;
+    fitDrawTwoLines(ctx, value, rightX + rightW / 2, valueTop + valueH / 2, valueMaxW, valueH, 99, "#ffffff", 20);
   }
 
   const s0 = stackSlot(cardTop, cardBot, 3, gap, 0);
@@ -614,9 +614,9 @@ function renderLayoutHeroCenter(
     ctx.stroke();
 
     drawBandLabel(ctx, label, cx, top + 42, accent, bandW - 52, "center");
-    const vTop = top + 56;
-    const vH = h - 56 - 18;
-    fitDrawTwoLines(ctx, value, cx, vTop + vH / 2, bandW - 52, vH, 62, "#ffffff", 20);
+    const vTop = top + 36;
+    const vH = h - 36 - 12;
+    fitDrawTwoLines(ctx, value, cx, vTop + vH / 2, bandW - 52, vH, 93, "#ffffff", 20);
   }
 
   const b0 = stackSlot(bandsTop, H - pad, 3, gap, 0);
@@ -705,9 +705,9 @@ function renderLayoutSplitInverted(
     ctx.stroke();
 
     drawBandLabel(ctx, label, leftX + leftW / 2, top + 44, labelColor, leftW - 68, "center");
-    const valueTop = top + 62;
-    const valueH = h - 78;
-    fitDrawTwoLines(ctx, value, leftX + leftW / 2, valueTop + valueH / 2, leftW - 68, valueH, 66, "#ffffff", 20);
+    const valueTop = top + 40;
+    const valueH = h - 50;
+    fitDrawTwoLines(ctx, value, leftX + leftW / 2, valueTop + valueH / 2, leftW - 68, valueH, 99, "#ffffff", 20);
   }
 
   const s0 = stackSlot(cardTop, cardBot, 3, gap, 0);
@@ -809,9 +809,9 @@ function renderLayoutMagazineBold(
     ctx.stroke();
 
     drawBandLabel(ctx, label, pad + innerW / 2, top + 38, accent, innerW - 72, "center");
-    const vTop = top + 54;
-    const vH = h - 54 - 22;
-    fitDrawTwoLines(ctx, value, pad + innerW / 2, vTop + vH / 2, innerW - 72, vH, 62, "#ffffff", 20);
+    const vTop = top + 36;
+    const vH = h - 36 - 14;
+    fitDrawTwoLines(ctx, value, pad + innerW / 2, vTop + vH / 2, innerW - 72, vH, 93, "#ffffff", 20);
   }
 
   const m0 = stackSlot(bandsTop, bandsBot, 3, bandsGap, 0);
