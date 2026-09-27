@@ -201,7 +201,6 @@ export default function AdminFlyersPage() {
     loadTournaments();
   }, [supabase]);
 
-  // Escuchar datos de torneo guardados desde la gestión de torneos
   useEffect(() => {
     const handlePendingFlyerData = (event?: Event) => {
       let raw: string | null = null;
@@ -209,21 +208,20 @@ export default function AdminFlyersPage() {
         const customEvent = event as CustomEvent;
         if (customEvent.detail) {
           const data = customEvent.detail;
-          setTitle(data.title);
-          setCategory(data.category);
-          if (data.location) setLocation(data.location);
+          setTitle(data.title || "");
+          setCategory(data.category || "");
+          setDate(data.date || "");
           if (data.tournamentId) setSelectedTournamentId(data.tournamentId);
           return;
         }
       }
-      // Fallback: leer de localStorage (para cuando se abre la página después de crear)
       raw = localStorage.getItem("spt_pending_flyer_data");
       if (raw) {
         try {
           const data = JSON.parse(raw);
-          setTitle(data.title);
-          setCategory(data.category);
-          if (data.location) setLocation(data.location);
+          setTitle(data.title || "");
+          setCategory(data.category || "");
+          setDate(data.date || "");
           if (data.tournamentId) setSelectedTournamentId(data.tournamentId);
           localStorage.removeItem("spt_pending_flyer_data");
         } catch (e) {
@@ -232,19 +230,42 @@ export default function AdminFlyersPage() {
       }
     };
 
-    // Verificar al montar si hay datos pendientes
-    handlePendingFlyerData();
+    async function loadLatestTournament() {
+      try {
+        const { data } = await supabase
+          .from("tournaments")
+          .select("id, name, category, date")
+          .order("created_at", { ascending: false })
+          .limit(1);
+        if (data && data.length > 0) {
+          const t = data[0];
+          setTitle((t.name || "").toUpperCase());
+          setCategory((t.category || "").toUpperCase());
+          if (t.date) {
+            const parsedDate = new Date(t.date).toLocaleDateString("es-AR", {
+              day: "numeric",
+              month: "long",
+            });
+            setDate(parsedDate.toUpperCase());
+          }
+          setSelectedTournamentId(t.id);
+        }
+      } catch (err) {
+        console.error("Error al cargar torneo más reciente:", err);
+      }
+    }
 
-    // Escuchar cambios en localStorage de otras pestañas
+    handlePendingFlyerData();
+    loadLatestTournament();
+
     window.addEventListener("storage", handlePendingFlyerData as EventListener);
-    // Escuchar CustomEvent de la misma pestaña
     window.addEventListener("spt-pending-flyer-data", handlePendingFlyerData as EventListener);
 
     return () => {
       window.removeEventListener("storage", handlePendingFlyerData as EventListener);
       window.removeEventListener("spt-pending-flyer-data", handlePendingFlyerData as EventListener);
     };
-  }, []);
+  }, [supabase]);
 
   // Autocompletar desde torneo existente
   const handleTournamentSelect = (tourId: string) => {

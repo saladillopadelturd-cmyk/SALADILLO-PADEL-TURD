@@ -228,6 +228,7 @@ export default function AdminTorneosPage() {
             title: result.data.name.toUpperCase(),
             category: result.data.category.toUpperCase(),
             location: result.data.location ? result.data.location.toUpperCase() : "",
+            date: result.data.date || "",
             tournamentId: result.data.id,
           };
           localStorage.setItem("spt_pending_flyer_data", JSON.stringify(flyerData));
@@ -296,6 +297,8 @@ export default function AdminTorneosPage() {
             title: result.data.name.toUpperCase(),
             category: result.data.category.toUpperCase(),
             location: result.data.location ? result.data.location.toUpperCase() : "",
+            date: result.data.date || "",
+            tournamentId: result.data.id,
           };
           localStorage.setItem("spt_pending_flyer_data", JSON.stringify(flyerData));
           window.dispatchEvent(new CustomEvent("spt-pending-flyer-data", { detail: flyerData }));
