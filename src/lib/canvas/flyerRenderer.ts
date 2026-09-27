@@ -483,7 +483,7 @@ function renderLayoutSplitCard(
 
   // Badge categoría (una línea por encima de la primer línea del título)
   const badgeH = 88;
-  const badgeGap = 82;
+  const badgeGap = 102;
   const badgeY = titleFirstLineY - badgeH - badgeGap;
   const badgeMaxW = Math.min(leftW, 720);
   const catText = (data.category || "TORNEO OFICIAL").toUpperCase();
@@ -581,7 +581,7 @@ function renderLayoutHeroCenter(
 
   // ── BADGE CATEGORÍA más grande y visible, una línea por encima del título ──
   const badgeH = 84;
-  const badgeGap = 82;
+  const badgeGap = 102;
   const badgeY = titleFirstLineY - badgeH - badgeGap;
   const catText = (data.category || "TORNEO OFICIAL").toUpperCase();
   ctx.font = "900 42px 'Montserrat', 'Inter', sans-serif";
@@ -666,7 +666,7 @@ function renderLayoutSplitInverted(
 
   // Badge categoría más grande y visible, una línea por encima del título
   const badgeH = 88;
-  const badgeGap = 82;
+  const badgeGap = 102;
   const badgeY = titleFirstLineY - badgeH - badgeGap;
   const badgeMaxW = Math.min(rightW, 720);
   const catText = (data.category || "TORNEO OFICIAL").toUpperCase();
@@ -778,7 +778,7 @@ function renderLayoutMagazineBold(
   // Badge categoría más grande y visible, una línea por encima del título
   const catText = (data.category || "CATEGORÍA ABIERTA").toUpperCase();
   const badgeH = 92;
-  const badgeGap = 82;
+  const badgeGap = 102;
   const badgeY = titleFirstLineY - badgeH - badgeGap;
   ctx.font = "900 46px 'Montserrat', 'Inter', sans-serif";
   const badgeMaxW = 700;
