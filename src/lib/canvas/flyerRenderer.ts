@@ -252,6 +252,75 @@ function stackSlot(top: number, bottom: number, count: number, gap: number, i: n
 }
 
 /**
+ * Divide un texto en exactamente 2 líneas, usando palabras o caracteres.
+ */
+function splitTextIntoTwoLines(text: string): string[] {
+  const words = String(text || "").trim().toUpperCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return ["", ""];
+  if (words.length === 1) {
+    const w = words[0];
+    const mid = Math.ceil(w.length / 2);
+    return [w.slice(0, mid), w.slice(mid)];
+  }
+  const mid = Math.ceil(words.length / 2);
+  return [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
+}
+
+/**
+ * Dibuja exactamente 2 líneas escalando la fuente para llenar el rectángulo.
+ */
+function fitDrawTwoLines(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  centerY: number,
+  maxW: number,
+  maxH: number,
+  maxFS: number,
+  fillStyle: string | CanvasGradient | CanvasPattern,
+  shadowBlur = 30
+): number {
+  const lines = splitTextIntoTwoLines(text);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = fillStyle;
+
+  let bestFS = 14;
+  for (let fs = maxFS; fs >= 14; fs -= 2) {
+    ctx.font = `900 ${fs}px 'Montserrat', 'Inter', sans-serif`;
+    const lh = fs * 1.14;
+    if (ctx.measureText(lines[0]).width > maxW || ctx.measureText(lines[1]).width > maxW) continue;
+    if (2 * lh <= maxH * 1.08) {
+      bestFS = fs;
+      break;
+    }
+  }
+
+  if (bestFS === 14) {
+    for (let fs = maxFS; fs >= 14; fs -= 2) {
+      ctx.font = `900 ${fs}px 'Montserrat', 'Inter', sans-serif`;
+      if (ctx.measureText(lines[0]).width <= maxW && ctx.measureText(lines[1]).width <= maxW) {
+        bestFS = fs;
+        break;
+      }
+    }
+  }
+
+  ctx.font = `900 ${bestFS}px 'Montserrat', 'Inter', sans-serif`;
+  const lh = bestFS * 1.14;
+  const totalH = 2 * lh;
+  const startY = centerY - totalH / 2 + lh / 2;
+
+  ctx.save();
+  setBlackShadow(ctx, shadowBlur, 12, 0.99);
+  ctx.fillText(lines[0], x, startY);
+  ctx.fillText(lines[1], x, startY + lh);
+  ctx.restore();
+  ctx.textBaseline = "alphabetic";
+  return startY + lh + lh / 2;
+}
+
+/**
  * Dibuja un bloque de hasta 2 líneas escalando la fuente para que entre 100%
  * dentro del rectángulo (maxW × maxH), centrado verticalmente en centerY.
  * Devuelve el tamaño de fuente usado. Usado para máximos de ancho y alto.
@@ -456,7 +525,7 @@ function renderLayoutSplitCard(
     const valueMaxW = rightW - 68;
     const valueTop = top + 62;
     const valueH = h - 78;
-    fitDrawLines(ctx, value, rightX + rightW / 2, valueTop + valueH / 2, valueMaxW, valueH, 2, "center", 66, "#ffffff", 20);
+    fitDrawTwoLines(ctx, value, rightX + rightW / 2, valueTop + valueH / 2, valueMaxW, valueH, 66, "#ffffff", 20);
   }
 
   const s0 = stackSlot(cardTop, cardBot, 3, gap, 0);
@@ -547,7 +616,7 @@ function renderLayoutHeroCenter(
     drawBandLabel(ctx, label, cx, top + 42, accent, bandW - 52, "center");
     const vTop = top + 56;
     const vH = h - 56 - 18;
-    fitDrawLines(ctx, value, cx, vTop + vH / 2, bandW - 52, vH, 2, "center", 62, "#ffffff", 20);
+    fitDrawTwoLines(ctx, value, cx, vTop + vH / 2, bandW - 52, vH, 62, "#ffffff", 20);
   }
 
   const b0 = stackSlot(bandsTop, H - pad, 3, gap, 0);
@@ -638,7 +707,7 @@ function renderLayoutSplitInverted(
     drawBandLabel(ctx, label, leftX + leftW / 2, top + 44, labelColor, leftW - 68, "center");
     const valueTop = top + 62;
     const valueH = h - 78;
-    fitDrawLines(ctx, value, leftX + leftW / 2, valueTop + valueH / 2, leftW - 68, valueH, 2, "center", 66, "#ffffff", 20);
+    fitDrawTwoLines(ctx, value, leftX + leftW / 2, valueTop + valueH / 2, leftW - 68, valueH, 66, "#ffffff", 20);
   }
 
   const s0 = stackSlot(cardTop, cardBot, 3, gap, 0);
@@ -742,7 +811,7 @@ function renderLayoutMagazineBold(
     drawBandLabel(ctx, label, pad + innerW / 2, top + 38, accent, innerW - 72, "center");
     const vTop = top + 54;
     const vH = h - 54 - 22;
-    fitDrawLines(ctx, value, pad + innerW / 2, vTop + vH / 2, innerW - 72, vH, 2, "center", 62, "#ffffff", 20);
+    fitDrawTwoLines(ctx, value, pad + innerW / 2, vTop + vH / 2, innerW - 72, vH, 62, "#ffffff", 20);
   }
 
   const m0 = stackSlot(bandsTop, bandsBot, 3, bandsGap, 0);
