@@ -222,6 +222,16 @@ export default function AdminTorneosPage() {
             type: "success",
             text: `Torneo "${result.data.name}" (${formSexo} - ${formCategoria}) creado con éxito.`,
           });
+
+          // Notificar al generador de flyers con los datos del nuevo torneo
+          const flyerData = {
+            title: result.data.name.toUpperCase(),
+            category: result.data.category.toUpperCase(),
+            location: result.data.location ? result.data.location.toUpperCase() : "",
+            tournamentId: result.data.id,
+          };
+          localStorage.setItem("spt_pending_flyer_data", JSON.stringify(flyerData));
+          window.dispatchEvent(new CustomEvent("spt-pending-flyer-data", { detail: flyerData }));
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Error al crear el torneo";
@@ -280,6 +290,15 @@ export default function AdminTorneosPage() {
           );
           setEditing(null);
           setNotification({ type: "success", text: `Torneo "${result.data.name}" actualizado con éxito.` });
+
+          // Notificar al generador de flyers con los datos del torneo editado
+          const flyerData = {
+            title: result.data.name.toUpperCase(),
+            category: result.data.category.toUpperCase(),
+            location: result.data.location ? result.data.location.toUpperCase() : "",
+          };
+          localStorage.setItem("spt_pending_flyer_data", JSON.stringify(flyerData));
+          window.dispatchEvent(new CustomEvent("spt-pending-flyer-data", { detail: flyerData }));
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Error al actualizar el torneo";

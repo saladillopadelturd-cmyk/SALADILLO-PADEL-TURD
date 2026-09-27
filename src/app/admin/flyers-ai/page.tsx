@@ -201,6 +201,51 @@ export default function AdminFlyersPage() {
     loadTournaments();
   }, [supabase]);
 
+  // Escuchar datos de torneo guardados desde la gestión de torneos
+  useEffect(() => {
+    const handlePendingFlyerData = (event?: Event) => {
+      let raw: string | null = null;
+      if (event && "detail" in event) {
+        const customEvent = event as CustomEvent;
+        if (customEvent.detail) {
+          const data = customEvent.detail;
+          setTitle(data.title);
+          setCategory(data.category);
+          if (data.location) setLocation(data.location);
+          if (data.tournamentId) setSelectedTournamentId(data.tournamentId);
+          return;
+        }
+      }
+      // Fallback: leer de localStorage (para cuando se abre la página después de crear)
+      raw = localStorage.getItem("spt_pending_flyer_data");
+      if (raw) {
+        try {
+          const data = JSON.parse(raw);
+          setTitle(data.title);
+          setCategory(data.category);
+          if (data.location) setLocation(data.location);
+          if (data.tournamentId) setSelectedTournamentId(data.tournamentId);
+          localStorage.removeItem("spt_pending_flyer_data");
+        } catch (e) {
+          console.error("Error al parsear datos del torneo pendiente:", e);
+        }
+      }
+    };
+
+    // Verificar al montar si hay datos pendientes
+    handlePendingFlyerData();
+
+    // Escuchar cambios en localStorage de otras pestañas
+    window.addEventListener("storage", handlePendingFlyerData as EventListener);
+    // Escuchar CustomEvent de la misma pestaña
+    window.addEventListener("spt-pending-flyer-data", handlePendingFlyerData as EventListener);
+
+    return () => {
+      window.removeEventListener("storage", handlePendingFlyerData as EventListener);
+      window.removeEventListener("spt-pending-flyer-data", handlePendingFlyerData as EventListener);
+    };
+  }, []);
+
   // Autocompletar desde torneo existente
   const handleTournamentSelect = (tourId: string) => {
     setSelectedTournamentId(tourId);
