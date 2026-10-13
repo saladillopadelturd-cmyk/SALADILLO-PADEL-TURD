@@ -82,7 +82,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
 
   // Sync tab with URL parameter when parameter changes
   useEffect(() => {
-    if (tabParam && ["config", "zonas", "fixture", "results"].includes(tabParam)) {
+    if (tabParam && ["config", "parejas", "zonas", "fixture", "results"].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [tabParam]);
@@ -597,9 +597,9 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
               </div>
 
               <div className="flex items-center gap-3">
-                <Link href={`/admin/parejas`}>
-                  <Button variant="secondary" size="sm" className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-primary-400" />
+                <Link href={`/admin/parejas?torneo=${tournament.id}`}>
+                  <Button variant="secondary" size="sm" className="flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
+                    <Users className="w-4 h-4 text-emerald-400" />
                     Parejas ({couples.length})
                   </Button>
                 </Link>
@@ -615,13 +615,14 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
 
           {/* Main Navigation Tabs */}
           <Tabs value={activeTab} onValueChange={handleTabChange}>
-            <TabsList className="mb-6">
+            <TabsList className="mb-6 flex-wrap">
               <TabsTrigger value="config">Configuración</TabsTrigger>
               <TabsTrigger value="zonas">Zonas ({zones.length})</TabsTrigger>
               <TabsTrigger value="fixture">Fixture ({matches.length})</TabsTrigger>
               <TabsTrigger value="results">
                 Resultados ({matches.filter((m) => m.status === "completed").length}/{matches.length})
               </TabsTrigger>
+              <TabsTrigger value="parejas">Parejas ({couples.length})</TabsTrigger>
             </TabsList>
 
             {/* TAB 1: CONFIGURACIÓN */}
@@ -663,6 +664,36 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                   </div>
                 </div>
 
+                {/* Sección Parejas del Torneo en la Ficha Técnica */}
+                <div className="mt-8 pt-6 border-t border-dark-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-dark-900/60 p-5 rounded-2xl border border-dark-750">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
+                      <Users className="w-6 h-6 text-emerald-400" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-bold text-white flex items-center gap-2">
+                        Parejas del Torneo
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          {couples.length} {couples.length === 1 ? "pareja" : "parejas"}
+                        </span>
+                      </h4>
+                      <p className="text-dark-400 text-xs mt-0.5">
+                        {couples.length === 0
+                          ? "El torneo fue creado pero aún no tiene parejas inscriptas. Gestiona o sortea las parejas desde el editor."
+                          : `Hay ${couples.length} parejas conformadas respetando las reglas de categoría del torneo.`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Link href={`/admin/parejas?torneo=${tournament.id}`}>
+                      <Button variant="secondary" size="sm" className="bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 font-bold flex items-center gap-2">
+                        <Users className="w-4 h-4 text-emerald-400" />
+                        Parejas
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+
                 <div className="mt-8 pt-6 border-t border-dark-700 flex items-center justify-between">
                   <div>
                     <h4 className="text-sm font-bold text-rose-400">Zona de Peligro</h4>
@@ -676,6 +707,82 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                   </Button>
                 </div>
               </Card>
+            </TabsContent>
+
+            {/* TAB: PAREJAS */}
+            <TabsContent value="parejas">
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-dark-900/90 border border-dark-700/80 rounded-2xl p-5 shadow-xl">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
+                      <Users className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-white">
+                        Parejas del Torneo ({couples.length})
+                      </h3>
+                      <p className="text-dark-400 text-xs">
+                        Gestión, conformación y validación reglamentaria de parejas de {tournament.name}.
+                      </p>
+                    </div>
+                  </div>
+                  <Link href={`/admin/parejas?torneo=${tournament.id}`}>
+                    <Button className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-dark-950 font-black">
+                      <Users className="w-4 h-4" />
+                      Editor de Parejas
+                    </Button>
+                  </Link>
+                </div>
+
+                {couples.length === 0 ? (
+                  <Card className="p-12 text-center">
+                    <Users className="w-12 h-12 text-dark-500 mx-auto mb-3" />
+                    <h4 className="text-base font-bold text-white mb-2">No hay parejas inscriptas todavía</h4>
+                    <p className="text-dark-400 text-sm max-w-md mx-auto mb-6">
+                      El torneo está creado y listo para recibir competidores. Puedes crear parejas manualmente o mediante sorteo automático en el editor.
+                    </p>
+                    <Link href={`/admin/parejas?torneo=${tournament.id}`}>
+                      <Button className="flex items-center gap-2 mx-auto bg-emerald-500 hover:bg-emerald-600 text-dark-950 font-black">
+                        <Users className="w-4 h-4" />
+                        Ir a Parejas
+                      </Button>
+                    </Link>
+                  </Card>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {couples.map((couple) => {
+                      const num = coupleNumberMap.get(couple.id);
+                      return (
+                        <Card key={couple.id} className="p-4 border-dark-700/80 bg-dark-900/80 flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                                Pareja {num ?? "-"}
+                              </span>
+                              <span className="text-xs text-dark-400">
+                                {couple.player1?.category ?? "?"} / {couple.player2?.category ?? "?"}
+                              </span>
+                            </div>
+                            <h4 className="text-sm font-bold text-white mb-1">
+                              {getCoupleLabel(couple)}
+                            </h4>
+                            <p className="text-xs text-dark-400">
+                              {couple.player1?.first_name} {couple.player1?.last_name} &amp; {couple.player2?.first_name} {couple.player2?.last_name}
+                            </p>
+                          </div>
+                          <div className="mt-4 pt-3 border-t border-dark-800 flex justify-end">
+                            <Link href={`/admin/parejas?torneo=${tournament.id}`}>
+                              <Button variant="ghost" size="sm" className="text-xs text-emerald-400 hover:text-emerald-300">
+                                Modificar en Parejas →
+                              </Button>
+                            </Link>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </TabsContent>
 
             {/* TAB 2: ZONAS */}
@@ -783,7 +890,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                         </div>
                       </div>
                       <Link
-                        href={`/admin/parejas?tournamentId=${tournamentId}`}
+                        href={`/admin/parejas?torneo=${tournamentId}`}
                         className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-semibold whitespace-nowrap self-start sm:self-center transition-colors"
                       >
                         Inscribir Parejas
@@ -845,14 +952,25 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                       Hay {couples.length} parejas inscritas. Con la configuración seleccionada arriba, se crearán{" "}
                       <strong>{zoneDistribution.summary}</strong>. Haz clic en el botón para sortear.
                     </p>
-                    <Button
-                      onClick={handleShuffleZones}
-                      disabled={isPending || couples.length < 2}
-                      className="flex items-center gap-2 mx-auto"
-                    >
-                      <Shuffle className="w-4 h-4" />
-                      {isPending ? "Sorteando..." : "Realizar Sorteo Automático"}
-                    </Button>
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                      <Link href={`/admin/parejas?torneo=${tournamentId}`}>
+                        <Button
+                          variant="secondary"
+                          className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold flex items-center gap-2"
+                        >
+                          <Users className="w-4 h-4 text-emerald-400" />
+                          Parejas ({couples.length})
+                        </Button>
+                      </Link>
+                      <Button
+                        onClick={handleShuffleZones}
+                        disabled={isPending || couples.length < 2}
+                        className="flex items-center gap-2"
+                      >
+                        <Shuffle className="w-4 h-4" />
+                        {isPending ? "Sorteando..." : "Realizar Sorteo Automático"}
+                      </Button>
+                    </div>
                   </Card>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

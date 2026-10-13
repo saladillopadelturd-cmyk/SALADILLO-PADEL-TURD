@@ -1,6 +1,7 @@
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/Tabs";
+import PlayerAvatar from "@/components/player/PlayerAvatar";
 import { createClient } from "@/lib/supabase/server";
 import { formatPlayerShortName } from "@/lib/tournament/couples";
 import { syncAllTournamentsRankings } from "@/lib/tournament/rankings";
@@ -21,6 +22,9 @@ interface CoupleRankingItem {
 interface IndividualRankingItem {
   id: string;
   name: string;
+  firstName: string;
+  lastName: string;
+  photoUrl?: string | null;
   category: string;
   tournaments: number;
   points: number;
@@ -61,53 +65,104 @@ export default async function RankingsPage({
       .order("points", { ascending: false })
       .order("matches_won", { ascending: false });
 
+    // 3. Extraer categorías disponibles combinando registros existentes y jugadores de la BD
+    const catsSet = new Set<string>();
     if (allRankings && allRankings.length > 0) {
-      const catsSet = new Set<string>();
       allRankings.forEach((r) => {
         if (r.category) catsSet.add(r.category);
       });
-      availableCategories = Array.from(catsSet).sort();
-
-      const filtered = selectedCategory === "all"
-        ? allRankings
-        : allRankings.filter((r) => r.category === selectedCategory);
-
-      // Separar parejas e individuales
-      coupleRankings = filtered
-        .filter((r) => r.ranking_type === "couple")
-        .map((r) => {
-          const p1 = r.player1_id ? playersMap.get(r.player1_id) : null;
-          const p2 = r.player2_id ? playersMap.get(r.player2_id) : null;
-          const p1Name = p1 ? formatPlayerShortName(p1) : "Jugador 1";
-          const p2Name = p2 ? formatPlayerShortName(p2) : "Jugador 2";
-          return {
-            id: r.id,
-            name: `${p1Name} / ${p2Name}`,
-            category: r.category || "General",
-            tournaments: r.tournaments_played,
-            points: r.points,
-            matchesWon: r.matches_won,
-            matchesLost: r.matches_lost,
-          };
-        });
-
-      individualRankings = filtered
-        .filter((r) => r.ranking_type === "individual")
-        .map((r) => {
-          const p = r.player_id ? playersMap.get(r.player_id) : null;
-          const pName = p ? formatPlayerShortName(p) : "Jugador";
-          return {
-            id: r.id,
-            name: pName,
-            category: r.category || "General",
-            tournaments: r.tournaments_played,
-            points: r.points,
-            matchesWon: r.matches_won,
-            matchesLost: r.matches_lost,
-            isObserved: !!p?.is_observed,
-          };
-        });
     }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (allPlayers || []).forEach((p: any) => {
+      if (p.category) catsSet.add(p.category);
+    });
+    availableCategories = Array.from(catsSet).sort();
+
+    const filtered = (allRankings || []).filter((r) => {
+      if (selectedCategory === "all") return true;
+      return r.category === selectedCategory;
+    });
+
+    // Separar parejas
+    coupleRankings = filtered
+      .filter((r) => r.ranking_type === "couple")
+      .map((r) => {
+        const p1 = r.player1_id ? playersMap.get(r.player1_id) : null;
+        const p2 = r.player2_id ? playersMap.get(r.player2_id) : null;
+        const p1Name = p1 ? formatPlayerShortName(p1) : "Jugador 1";
+        const p2Name = p2 ? formatPlayerShortName(p2) : "Jugador 2";
+        return {
+          id: r.id,
+          name: `${p1Name} / ${p2Name}`,
+          category: r.category || "General",
+          tournaments: r.tournaments_played,
+          points: r.points,
+          matchesWon: r.matches_won,
+          matchesLost: r.matches_lost,
+        };
+      });
+
+    // Separar individuales con puntos
+    const existingIndiv = filtered
+      .filter((r) => r.ranking_type === "individual")
+      .map((r) => {
+        const p = r.player_id ? playersMap.get(r.player_id) : null;
+        const pName = p ? formatPlayerShortName(p) : "Jugador";
+        return {
+          id: r.id,
+          playerId: r.player_id,
+          name: pName,
+          firstName: p?.first_name || "J",
+          lastName: p?.last_name || "",
+          photoUrl: p?.photo_url || p?.avatar_url || null,
+          category: r.category || p?.category || "General",
+          tournaments: r.tournaments_played || 0,
+          points: r.points || 0,
+          matchesWon: r.matches_won || 0,
+          matchesLost: r.matches_lost || 0,
+          isObserved: !!p?.is_observed,
+        };
+      });
+
+    const includedPlayerIds = new Set(existingIndiv.map((item) => item.playerId).filter(Boolean));
+
+    // Agregar a TODOS los jugadores de la base de datos que aún no figuren (0 puntos)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const zeroPointsPlayers: typeof existingIndiv = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (allPlayers || []).forEach((p: any) => {
+      if (includedPlayerIds.has(p.id)) return;
+
+      const playerCat = p.category || "General";
+      if (selectedCategory !== "all" && playerCat !== selectedCategory) {
+        return;
+      }
+
+      zeroPointsPlayers.push({
+        id: `p-${p.id}`,
+        playerId: p.id,
+        name: formatPlayerShortName(p),
+        firstName: p.first_name || "J",
+        lastName: p.last_name || "",
+        photoUrl: p.photo_url || p.avatar_url || null,
+        category: playerCat,
+        tournaments: 0,
+        points: 0,
+        matchesWon: 0,
+        matchesLost: 0,
+        isObserved: !!p.is_observed,
+      });
+    });
+
+    // Unir y ordenar ranking individual
+    individualRankings = [...existingIndiv, ...zeroPointsPlayers].sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      if (b.matchesWon !== a.matchesWon) return b.matchesWon - a.matchesWon;
+      if (b.tournaments !== a.tournaments) return b.tournaments - a.tournaments;
+      const compLast = (a.lastName || "").localeCompare(b.lastName || "");
+      if (compLast !== 0) return compLast;
+      return (a.firstName || "").localeCompare(b.firstName || "");
+    });
   } catch (err) {
     console.error("Error fetching rankings from Supabase:", err);
   }
@@ -308,16 +363,26 @@ export default async function RankingsPage({
                           </div>
                         </td>
                         <td className="px-6 py-4 text-white font-bold text-sm sm:text-base">
-                          <div className="flex items-center gap-2">
-                            <span>{p.name}</span>
-                            {p.isObserved && (
-                              <span
-                                title="Jugador en observación para ascenso de categoría"
-                                className="text-amber-400 text-[11px] inline-flex items-center gap-1 font-semibold bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30"
-                              >
-                                👁️ Observado
-                              </span>
-                            )}
+                          <div className="flex items-center gap-3">
+                            <PlayerAvatar
+                              photoUrl={p.photoUrl}
+                              firstName={p.firstName}
+                              lastName={p.lastName}
+                              category={p.category}
+                              size="sm"
+                              showCategoryBorder
+                            />
+                            <div className="flex items-center gap-2">
+                              <span>{p.name}</span>
+                              {p.isObserved && (
+                                <span
+                                  title="Jugador en observación para ascenso de categoría"
+                                  className="text-amber-400 text-[11px] inline-flex items-center gap-1 font-semibold bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30"
+                                >
+                                  👁️ Observado
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td className="px-4 py-4 text-center text-xs font-semibold text-emerald-400">{p.category}</td>

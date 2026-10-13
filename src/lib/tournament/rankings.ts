@@ -278,14 +278,12 @@ export function processDoubleRankingUpdate(params: {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function syncAllTournamentsRankings(supabase: any) {
   // 1. Obtener todos los torneos excepto borradores
-  const { data: tournaments, error: tourErr } = await supabase
+  const { data: tournaments } = await supabase
     .from("tournaments")
     .select("*")
     .neq("status", "draft");
 
-  if (tourErr || !tournaments || tournaments.length === 0) {
-    return { success: false, message: "No hay torneos disponibles para procesar rankings" };
-  }
+  const validTournaments = tournaments || [];
 
   const coupleRankingsMap = new Map<
     string,
@@ -315,7 +313,7 @@ export async function syncAllTournamentsRankings(supabase: any) {
     }
   >();
 
-  for (const tour of tournaments) {
+  for (const tour of validTournaments) {
     const category = tour.category || "General";
 
     // Obtener parejas del torneo
@@ -399,6 +397,26 @@ export async function syncAllTournamentsRankings(supabase: any) {
             matches_lost: stats.matchesLost,
           });
         }
+      }
+    }
+  }
+
+  // 2. Garantizar que TODOS los jugadores disponibles en la base de datos figuren en individualRankingsMap aun cuando tengan 0 puntos
+  const { data: allDbPlayers } = await supabase.from("players").select("id, category");
+  if (allDbPlayers && allDbPlayers.length > 0) {
+    for (const p of allDbPlayers) {
+      const pCat = p.category || "General";
+      const indivCompositeKey = `${p.id}__${pCat}`;
+      if (!individualRankingsMap.has(indivCompositeKey)) {
+        individualRankingsMap.set(indivCompositeKey, {
+          ranking_type: "individual",
+          player_id: p.id,
+          category: pCat,
+          points: 0,
+          tournaments_played: 0,
+          matches_won: 0,
+          matches_lost: 0,
+        });
       }
     }
   }

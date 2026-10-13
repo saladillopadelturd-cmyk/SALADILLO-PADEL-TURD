@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo, useTransition } from "react";
+import { useEffect, useState, useCallback, useMemo, useTransition, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
@@ -23,7 +24,7 @@ import {
 import { calculateOptimalZones } from "@/lib/tournament/zones";
 import { AlertCircle, AlertTriangle, CheckCircle2, Users, Filter, Plus, Shuffle, Sparkles, Trophy } from "lucide-react";
 
-export default function AdminParejasPage() {
+function AdminParejasContent() {
   const [couples, setCouples] = useState<Couple[]>([]);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -36,12 +37,24 @@ export default function AdminParejasPage() {
   const [isPending, startTransition] = useTransition();
   const [notification, setNotification] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  const searchParams = useSearchParams();
+  const torneoParam = searchParams.get("torneo");
+
   const [formTorneo, setFormTorneo] = useState("");
   const [formJugador1, setFormJugador1] = useState("");
   const [formJugador2, setFormJugador2] = useState("");
   const [autoTorneo, setAutoTorneo] = useState("");
 
   const supabase = createClient();
+
+  // Sincronizar parámetro de torneo en la URL si está presente
+  useEffect(() => {
+    if (torneoParam) {
+      setFilterTorneo(torneoParam);
+      setFormTorneo(torneoParam);
+      setAutoTorneo(torneoParam);
+    }
+  }, [torneoParam]);
 
   const loadData = useCallback(async () => {
     try {
@@ -105,13 +118,21 @@ export default function AdminParejasPage() {
 
   const handleTorneoChange = (newTorneoId: string) => {
     setFormTorneo(newTorneoId);
-    // Si algún jugador seleccionado ya pertenece a otra pareja en el nuevo torneo, limpiarlo
+    const tour = tournaments.find((t) => t.id === newTorneoId) || null;
     const assigned = getAssignedPlayerIdsInTournament(couples, newTorneoId, editing?.id);
-    if (formJugador1 && assigned.has(formJugador1)) {
-      setFormJugador1("");
+    
+    // Si algún jugador seleccionado ya pertenece a otra pareja en el nuevo torneo o no cumple las reglas de categoría, limpiarlo
+    if (formJugador1) {
+      const p1 = players.find((p) => p.id === formJugador1);
+      if (assigned.has(formJugador1) || (tour && p1 && !isPlayerEligibleForTournament(p1, tour).eligible)) {
+        setFormJugador1("");
+      }
     }
-    if (formJugador2 && assigned.has(formJugador2)) {
-      setFormJugador2("");
+    if (formJugador2) {
+      const p2 = players.find((p) => p.id === formJugador2);
+      if (assigned.has(formJugador2) || (tour && p2 && !isPlayerEligibleForTournament(p2, tour).eligible)) {
+        setFormJugador2("");
+      }
     }
   };
 
@@ -140,10 +161,18 @@ export default function AdminParejasPage() {
     return count + 1;
   }, [couples, formTorneo]);
 
-  // Jugadores disponibles para el torneo seleccionado (los que no integran ya una pareja)
+  // Jugadores disponibles para el torneo seleccionado: SOLOS los que cumplen con las reglas de categoría del torneo creado y no integran otra pareja
   const availablePlayersInSelectedTorneo = useMemo(() => {
-    return getAvailablePlayersForTournament(players, couples, formTorneo, editing?.id);
-  }, [players, couples, formTorneo, editing]);
+    return getAvailablePlayersForTournament(
+      players,
+      couples,
+      formTorneo,
+      editing?.id,
+      null,
+      selectedTournament,
+      true // Filtrado estricto por reglas de categoría y género del torneo
+    );
+  }, [players, couples, formTorneo, editing, selectedTournament]);
 
   // Jugadores disponibles para generación automática en autoTorneo (filtrados estrictamente por elegibilidad)
   const availablePlayersForAuto = useMemo(() => {
@@ -170,86 +199,68 @@ export default function AdminParejasPage() {
     return players.find((p) => p.id === formJugador2) || null;
   }, [players, formJugador2]);
 
-  // Opciones para Jugador 1: excluye los ya asignados y al Jugador 2 (si fue seleccionado)
+  // Opciones para Jugador 1: SOLOS los jugadores que cumplen con las reglas de categoría del torneo creado
   const player1Options = useMemo(() => {
+    if (!selectedTournament) return [];
+
     const available = getAvailablePlayersForTournament(
       players,
       couples,
       formTorneo,
       editing?.id,
-      formJugador2 || null
+      formJugador2 || null,
+      selectedTournament,
+      true // Solo jugadores elegibles según las reglas del torneo
     );
-    const isSuma = selectedTournament ? isSumaCategory(selectedTournament.category) : false;
+    const isSuma = isSumaCategory(selectedTournament.category);
 
     return available.map((p) => {
       const cat = p.category ? ` (${p.category})` : "";
       const sex = p.gender ? ` [${p.gender}]` : "";
       const obs = p.is_observed ? " 👁️ [Observado]" : "";
-      let eligibilityNote = "";
-      let isDisabled = false;
+      let sumaNote = "";
 
-      if (selectedTournament) {
-        const check = isPlayerEligibleForTournament(p, selectedTournament);
-        if (!check.eligible) {
-          eligibilityNote = " 🚫 (No elegible)";
-          isDisabled = true;
-        } else if (isSuma && partner2) {
-          const sumaCheck = validateCoupleCategorySuma(p, partner2, selectedTournament);
-          if (!sumaCheck.isValid) {
-            eligibilityNote = ` [Suma: ${sumaCheck.sum} 🚫 Mínimo ${sumaCheck.target}]`;
-            isDisabled = true;
-          } else {
-            eligibilityNote = ` [Suma: ${sumaCheck.sum} ✔]`;
-          }
-        }
+      if (isSuma && partner2) {
+        const sumaCheck = validateCoupleCategorySuma(p, partner2, selectedTournament);
+        sumaNote = ` [Suma: ${sumaCheck.sum} ✔]`;
       }
 
       return {
         value: p.id,
-        label: `${p.first_name} ${p.last_name}${sex}${cat}${obs}${eligibilityNote}`,
-        disabled: isDisabled,
+        label: `${p.first_name} ${p.last_name}${sex}${cat}${obs}${sumaNote}`,
       };
     });
   }, [players, couples, formTorneo, editing, formJugador2, selectedTournament, partner2]);
 
-  // Opciones para Jugador 2: excluye los ya asignados y al Jugador 1 (si fue seleccionado)
+  // Opciones para Jugador 2: SOLOS los jugadores que cumplen con las reglas de categoría del torneo creado
   const player2Options = useMemo(() => {
+    if (!selectedTournament) return [];
+
     const available = getAvailablePlayersForTournament(
       players,
       couples,
       formTorneo,
       editing?.id,
-      formJugador1 || null
+      formJugador1 || null,
+      selectedTournament,
+      true // Solo jugadores elegibles según las reglas del torneo (y si es SUMA, compatibles con Jugador 1)
     );
-    const isSuma = selectedTournament ? isSumaCategory(selectedTournament.category) : false;
+    const isSuma = isSumaCategory(selectedTournament.category);
 
     return available.map((p) => {
       const cat = p.category ? ` (${p.category})` : "";
       const sex = p.gender ? ` [${p.gender}]` : "";
       const obs = p.is_observed ? " 👁️ [Observado]" : "";
-      let eligibilityNote = "";
-      let isDisabled = false;
+      let sumaNote = "";
 
-      if (selectedTournament) {
-        const check = isPlayerEligibleForTournament(p, selectedTournament);
-        if (!check.eligible) {
-          eligibilityNote = " 🚫 (No elegible)";
-          isDisabled = true;
-        } else if (isSuma && partner1) {
-          const sumaCheck = validateCoupleCategorySuma(partner1, p, selectedTournament);
-          if (!sumaCheck.isValid) {
-            eligibilityNote = ` [Suma: ${sumaCheck.sum} 🚫 Mínimo ${sumaCheck.target}]`;
-            isDisabled = true;
-          } else {
-            eligibilityNote = ` [Suma: ${sumaCheck.sum} ✔]`;
-          }
-        }
+      if (isSuma && partner1) {
+        const sumaCheck = validateCoupleCategorySuma(partner1, p, selectedTournament);
+        sumaNote = ` [Suma: ${sumaCheck.sum} ✔]`;
       }
 
       return {
         value: p.id,
-        label: `${p.first_name} ${p.last_name}${sex}${cat}${obs}${eligibilityNote}`,
-        disabled: isDisabled,
+        label: `${p.first_name} ${p.last_name}${sex}${cat}${obs}${sumaNote}`,
       };
     });
   }, [players, couples, formTorneo, editing, formJugador1, selectedTournament, partner1]);
@@ -727,23 +738,29 @@ export default function AdminParejasPage() {
           )}
 
           {/* Información de disponibilidad */}
-          <div className="p-3 bg-dark-800/80 border border-dark-700 rounded-lg text-xs space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-dark-300">Jugadores disponibles en este torneo:</span>
-              <span className="font-bold text-primary-400">
-                {availablePlayersInSelectedTorneo.length} de {players.length}
-              </span>
+          {selectedTournament && (
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-emerald-300">
+                  Jugadores habilitados ({selectedTournament.category || "6ta"} - {selectedTournament.gender || "Masculino"}):
+                </span>
+                <span className="font-mono font-black text-white px-2 py-0.5 rounded-md bg-dark-900 border border-dark-700">
+                  {availablePlayersInSelectedTorneo.length} de {players.length}
+                </span>
+              </div>
+              <p className="text-dark-400 text-[11px]">
+                * Solo están disponibles los jugadores del padrón que cumplen con las reglas de categoría del torneo y no integran otra pareja.
+              </p>
             </div>
-            <p className="text-dark-400 text-[11px]">
-              * Regla: cada jugador no puede integrar más de una pareja. Los jugadores ya asignados no aparecen en la lista.
-            </p>
-          </div>
+          )}
 
-          {availablePlayersInSelectedTorneo.length < 2 && (
+          {selectedTournament && availablePlayersInSelectedTorneo.length < 2 && (
             <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               <span>
-                No hay suficientes jugadores libres en este torneo (mínimo 2 requeridos). Todos los jugadores ya forman una pareja o faltan registrar jugadores.
+                {availablePlayersInSelectedTorneo.length === 0
+                  ? `No hay jugadores en la base de datos que cumplan con las reglas de categoría de este torneo (${selectedTournament.category} - ${selectedTournament.gender || "Masculino"}).`
+                  : `Solo hay 1 jugador disponible habilitado para este torneo. Se requieren al menos 2 para formar una pareja.`}
               </span>
             </div>
           )}
@@ -751,27 +768,31 @@ export default function AdminParejasPage() {
           <Select
             label="Jugador 1"
             placeholder={
-              player1Options.length === 0
-                ? "No hay jugadores libres disponibles"
-                : "Seleccionar jugador"
+              !selectedTournament
+                ? "Seleccionar torneo primero"
+                : player1Options.length === 0
+                ? "No hay jugadores habilitados para este torneo"
+                : "Seleccionar jugador habilitado"
             }
             options={player1Options}
             value={formJugador1}
             onChange={(e) => setFormJugador1(e.target.value)}
-            disabled={player1Options.length === 0}
+            disabled={!selectedTournament || player1Options.length === 0}
           />
 
           <Select
             label="Jugador 2"
             placeholder={
-              player2Options.length === 0
-                ? "No hay jugadores libres disponibles"
-                : "Seleccionar jugador"
+              !selectedTournament
+                ? "Seleccionar torneo primero"
+                : player2Options.length === 0
+                ? "No hay jugadores habilitados para este torneo"
+                : "Seleccionar jugador habilitado"
             }
             options={player2Options}
             value={formJugador2}
             onChange={(e) => setFormJugador2(e.target.value)}
-            disabled={player2Options.length === 0}
+            disabled={!selectedTournament || player2Options.length === 0}
           />
 
           {formJugador1 && formJugador2 && (
@@ -962,13 +983,13 @@ export default function AdminParejasPage() {
 
           <div className="p-3 bg-dark-800/80 border border-dark-700 rounded-lg text-xs space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-dark-300">Jugadores disponibles para esta pareja:</span>
+              <span className="text-dark-300">Jugadores habilitados según categoría y género:</span>
               <span className="font-bold text-primary-400">
                 {availablePlayersInSelectedTorneo.length} jugadores
               </span>
             </div>
             <p className="text-dark-400 text-[11px]">
-              * Se muestran los jugadores integrantes actuales y aquellos que no pertenezcan a ninguna otra pareja en este torneo.
+              * Solo están disponibles los jugadores de la BD que cumplen con las reglas de categoría del torneo y no integran otra pareja.
             </p>
           </div>
 
@@ -1044,4 +1065,19 @@ export default function AdminParejasPage() {
     </div>
   );
 }
+
+export default function AdminParejasPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20">
+          <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <AdminParejasContent />
+    </Suspense>
+  );
+}
+
 

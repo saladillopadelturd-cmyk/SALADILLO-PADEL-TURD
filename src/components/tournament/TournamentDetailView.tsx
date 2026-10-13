@@ -289,12 +289,22 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
         >
           <ArrowLeft className="w-4 h-4" /> Volver a torneos
         </Link>
-        <Link
-          href={`/admin/torneos/${id}`}
-          className="text-xs text-primary-400 hover:underline"
-        >
-          Panel de administración
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href={`/admin/parejas?torneo=${id}`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold transition-all"
+            title="Ir al editor de parejas para este torneo"
+          >
+            <Users className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Parejas ({couples.length})</span>
+          </Link>
+          <Link
+            href={`/admin/torneos/${id}`}
+            className="text-xs text-primary-400 hover:underline"
+          >
+            Panel de administración
+          </Link>
+        </div>
       </div>
 
       {/* Tournament Header */}
@@ -351,13 +361,24 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
               </span>
             </div>
           </div>
+
+          <div className="flex items-center gap-3 self-start md:self-center">
+            <Link
+              href={`/admin/parejas?torneo=${id}`}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600/20 via-teal-600/20 to-emerald-600/30 hover:from-emerald-600/30 hover:to-teal-600/40 text-emerald-300 border border-emerald-500/30 font-bold text-xs sm:text-sm transition-all shadow-md active:scale-95"
+            >
+              <Users className="w-4 h-4 text-emerald-400" />
+              <span>Editor de Parejas ({couples.length})</span>
+            </Link>
+          </div>
         </div>
       </div>
 
       {/* Main Content Tabs */}
       <Tabs defaultValue="zonas">
-        <TabsList>
+        <TabsList className="flex-wrap">
           <TabsTrigger value="zonas">Zonas</TabsTrigger>
+          <TabsTrigger value="parejas">Parejas ({couples.length})</TabsTrigger>
           <TabsTrigger value="fixture">Fixture / Horarios</TabsTrigger>
           <TabsTrigger value="playoffs">Cuadro de Eliminación</TabsTrigger>
           <TabsTrigger value="posiciones">Posiciones</TabsTrigger>
@@ -377,8 +398,17 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
             </div>
 
             {zones.length === 0 ? (
-              <Card className="p-8 text-center text-dark-400">
-                Aún no se han configurado las zonas para este torneo.
+              <Card className="p-8 text-center text-dark-400 space-y-4">
+                <p className="text-sm">Aún no se han configurado las zonas para este torneo.</p>
+                <div className="flex justify-center">
+                  <Link
+                    href={`/admin/parejas?torneo=${id}`}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold transition-all"
+                  >
+                    <Users className="w-4 h-4 text-emerald-400" />
+                    <span>Parejas ({couples.length})</span>
+                  </Link>
+                </div>
               </Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -485,6 +515,79 @@ export default function TournamentDetailView({ id }: TournamentDetailProps) {
                           </tbody>
                         </table>
                       </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* TAB: PAREJAS */}
+        <TabsContent value="parejas">
+          <div className="mt-6 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-dark-900/80 p-5 rounded-2xl border border-dark-700/80">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
+                  <Users className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-white">
+                    Parejas Inscriptas ({couples.length})
+                  </h2>
+                  <p className="text-xs text-dark-400 mt-0.5">
+                    Duplas confirmadas para competir en {tournament.name}.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href={`/admin/parejas?torneo=${id}`}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-xs font-bold transition-all self-start sm:self-center"
+              >
+                <Users className="w-4 h-4 text-emerald-400" />
+                <span>Editor de Parejas</span>
+              </Link>
+            </div>
+
+            {couples.length === 0 ? (
+              <Card className="p-12 text-center text-dark-400 space-y-4">
+                <Users className="w-12 h-12 text-dark-500 mx-auto" />
+                <div>
+                  <h4 className="text-white font-bold text-base">Sin parejas registradas</h4>
+                  <p className="text-xs text-dark-400 mt-1 max-w-sm mx-auto">
+                    Aún no se han conformado las parejas para este torneo.
+                  </p>
+                </div>
+                <div className="pt-2">
+                  <Link
+                    href={`/admin/parejas?torneo=${id}`}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500 text-dark-950 font-black text-xs hover:bg-emerald-400 transition-all"
+                  >
+                    <Users className="w-4 h-4" />
+                    <span>Cargar Parejas</span>
+                  </Link>
+                </div>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {couples.map((c) => {
+                  const num = coupleNumberMap.get(c.id);
+                  return (
+                    <Card key={c.id} className="p-4 border-dark-700/80 bg-dark-900/90 hover:border-emerald-500/40 transition-colors">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                          Pareja {num ?? "-"}
+                        </span>
+                        <span className="text-xs text-dark-400 font-semibold">
+                          Cat. {c.player1?.category ?? "?"} + {c.player2?.category ?? "?"}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-bold text-white mb-1">
+                        {coupleNamesMap[c.id] || getCoupleLabelWithNumber(c, num)}
+                      </h4>
+                      <p className="text-xs text-dark-400">
+                        {c.player1?.first_name} {c.player1?.last_name} &amp; {c.player2?.first_name} {c.player2?.last_name}
+                      </p>
                     </Card>
                   );
                 })}

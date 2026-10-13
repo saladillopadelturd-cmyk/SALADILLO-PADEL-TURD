@@ -6,6 +6,7 @@ import type { Tournament } from "@/types/tournament";
 import { Trophy, Calendar, MapPin, ArrowRight, ShieldCheck, Clock, Users, Activity, Sparkles, Flame } from "lucide-react";
 import RulesSection from "@/components/home/RulesSection";
 import NewsCarousel from "@/components/home/NewsCarousel";
+import PlayerRegistrationBanner from "@/components/player/PlayerRegistrationBanner";
 import type { Flyer } from "@/types/flyer";
 
 export const revalidate = 0; // Fresh tournament data on each load
@@ -145,7 +146,7 @@ export default async function HomePage() {
           <NewsCarousel flyers={flyers} />
 
           {/* Quick Action CTA */}
-          <div className="mt-2 sm:mt-8 flex flex-row gap-3 justify-center w-full mx-auto sm:max-w-none">
+          <div className="mt-2 sm:mt-8 flex flex-row gap-2 sm:gap-3 justify-center w-full mx-auto sm:max-w-none">
             <Link
               href="#torneos-activos"
               className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-6 py-3 bg-gradient-to-r from-emerald-500 to-lime-500 text-dark-950 font-black text-xs sm:text-sm rounded-xl hover:from-emerald-400 hover:to-lime-400 active:scale-95 transition-all shadow-lg shadow-emerald-500/25 cursor-pointer min-h-[44px] sm:min-h-[48px]"
@@ -160,9 +161,19 @@ export default async function HomePage() {
               <Trophy className="w-4 h-4 text-amber-400" />
               <span>RANKINGS</span>
             </Link>
+            <Link
+              href="/jugadores"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-6 py-3 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 hover:text-white font-bold text-xs sm:text-sm rounded-xl transition-all border border-blue-500/30 active:scale-95 shadow-md cursor-pointer min-h-[44px] sm:min-h-[48px]"
+            >
+              <Users className="w-4 h-4 text-blue-400" />
+              <span>JUGADORES</span>
+            </Link>
           </div>
         </div>
       </section>
+
+      {/* Banner de Registro Autónomo de Jugador (solo visible si el email del navegador no existe en BD) */}
+      <PlayerRegistrationBanner />
 
       {/* Tournaments Section */}
       <section id="torneos-activos" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">

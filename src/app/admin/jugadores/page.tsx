@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useTransition, useMemo } from "react";
+import { useEffect, useState, useCallback, useTransition, useMemo, useRef } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -8,9 +8,12 @@ import Select from "@/components/ui/Select";
 import Badge from "@/components/ui/Badge";
 import Modal from "@/components/ui/Modal";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import PhotoCropModal from "@/components/player/PhotoCropModal";
+import PlayerAvatar from "@/components/player/PlayerAvatar";
+import PlayerProfileModal from "@/components/player/PlayerProfileModal";
 import { createClient } from "@/lib/supabase/client";
 import type { Player } from "@/types/tournament";
-import { AlertCircle, CheckCircle2, Eye, Search, Filter, ShieldCheck, UserCheck } from "lucide-react";
+import { AlertCircle, CheckCircle2, Eye, Search, Filter, ShieldCheck, UserCheck, Camera, Upload, Trash2, Move, Sparkles, User } from "lucide-react";
 
 const CATEGORY_OPTIONS = [
   { value: "8va", label: "8va Categoría (Iniciación)" },
@@ -45,6 +48,17 @@ export default function AdminJugadoresPage() {
   const [formSexo, setFormSexo] = useState<string>("Masculino");
   const [formCategoria, setFormCategoria] = useState<string>("5ta");
   const [formObservado, setFormObservado] = useState<boolean>(false);
+  const [formPhotoUrl, setFormPhotoUrl] = useState<string | null>(null);
+  const [formPhotoBlob, setFormPhotoBlob] = useState<Blob | null>(null);
+
+  // Estados de recorte de foto (Zona útil cuadrada)
+  const [rawSelectedImage, setRawSelectedImage] = useState<string | null>(null);
+  const [showCropModal, setShowCropModal] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Estado para ver Ficha Oficial de Perfil del Jugador
+  const [viewingProfilePlayer, setViewingProfilePlayer] = useState<Player | null>(null);
+  const [playerStatsMap, setPlayerStatsMap] = useState<Map<string, { points: number; tournamentsPlayed: number; matchesWon: number; matchesLost: number }>>(new Map());
 
   // Filtros de tabla
   const [searchFilter, setSearchFilter] = useState("");
@@ -64,6 +78,32 @@ export default function AdminJugadoresPage() {
 
       if (error) throw error;
       if (data) setPlayers(data);
+
+      // Traer estadísticas individuales para la ficha de perfil
+      try {
+        const { data: rankData } = await supabase
+          .from("rankings")
+          .select("player_id, points, tournaments_played, matches_won, matches_lost")
+          .eq("ranking_type", "individual");
+
+        if (rankData) {
+          const map = new Map<string, { points: number; tournamentsPlayed: number; matchesWon: number; matchesLost: number }>();
+          rankData.forEach((r) => {
+            if (r.player_id) {
+              const current = map.get(r.player_id) || { points: 0, tournamentsPlayed: 0, matchesWon: 0, matchesLost: 0 };
+              map.set(r.player_id, {
+                points: current.points + (r.points || 0),
+                tournamentsPlayed: current.tournamentsPlayed + (r.tournaments_played || 0),
+                matchesWon: current.matchesWon + (r.matches_won || 0),
+                matchesLost: current.matchesLost + (r.matches_lost || 0),
+              });
+            }
+          });
+          setPlayerStatsMap(map);
+        }
+      } catch (rankErr) {
+        console.warn("Rankings fetch warning:", rankErr);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error al cargar jugadores";
       console.error("Error cargando jugadores:", err);
@@ -77,6 +117,56 @@ export default function AdminJugadoresPage() {
     loadPlayers();
   }, [loadPlayers]);
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setNotification({ type: "error", text: "Por favor selecciona un archivo de imagen válido (JPG, PNG, WebP)." });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (result) {
+        setRawSelectedImage(result);
+        setShowCropModal(true);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleCropConfirm = (croppedDataUrl: string, croppedBlob: Blob) => {
+    setFormPhotoUrl(croppedDataUrl);
+    setFormPhotoBlob(croppedBlob);
+    setShowCropModal(false);
+  };
+
+  const uploadPhotoIfAvailable = async (playerId?: string): Promise<string | null> => {
+    if (!formPhotoBlob) return formPhotoUrl;
+
+    try {
+      const formData = new FormData();
+      formData.append("file", formPhotoBlob, "avatar.jpg");
+      if (playerId) formData.append("player_id", playerId);
+
+      const res = await fetch("/api/players/avatar", {
+        method: "POST",
+        body: formData,
+      });
+
+      const json = await res.json();
+      if (json.success && json.photo_url) {
+        return json.photo_url;
+      }
+    } catch (uploadErr) {
+      console.warn("Error al subir foto a la API:", uploadErr);
+    }
+    return formPhotoUrl;
+  };
+
   const openCreate = () => {
     setFormNombre("");
     setFormApellido("");
@@ -85,6 +175,8 @@ export default function AdminJugadoresPage() {
     setFormSexo("Masculino");
     setFormCategoria("5ta");
     setFormObservado(false);
+    setFormPhotoUrl(null);
+    setFormPhotoBlob(null);
     setShowCreate(true);
   };
 
@@ -96,6 +188,8 @@ export default function AdminJugadoresPage() {
     setFormSexo(player.gender || "Masculino");
     setFormCategoria(player.category || "5ta");
     setFormObservado(!!player.is_observed);
+    setFormPhotoUrl(player.photo_url || player.avatar_url || null);
+    setFormPhotoBlob(null);
     setEditing(player);
   };
 
@@ -107,6 +201,8 @@ export default function AdminJugadoresPage() {
 
     startTransition(async () => {
       try {
+        const finalPhotoUrl = await uploadPhotoIfAvailable();
+
         const payloadWithAllFields = {
           first_name: formNombre.trim(),
           last_name: formApellido.trim(),
@@ -115,6 +211,7 @@ export default function AdminJugadoresPage() {
           gender: formSexo,
           category: formCategoria,
           is_observed: formObservado,
+          photo_url: finalPhotoUrl,
         };
 
         let result = await supabase
@@ -123,7 +220,7 @@ export default function AdminJugadoresPage() {
           .select()
           .single();
 
-        // Resiliencia: Si la base de datos remota aún no corrió la migración de las 3 columnas
+        // Resiliencia: Si la base de datos remota aún no corrió la migración de las columnas extras
         if (result.error && (result.error.message.includes("column") || result.error.code === "PGRST204")) {
           console.warn("Columnas no migradas aún en Supabase, reintentando con campos base:", result.error);
           const fallbackPayload = {
@@ -145,6 +242,7 @@ export default function AdminJugadoresPage() {
             gender: formSexo,
             category: formCategoria,
             is_observed: formObservado,
+            photo_url: finalPhotoUrl,
           };
           setPlayers((prev) => [localData, ...prev]);
           setShowCreate(false);
@@ -176,6 +274,8 @@ export default function AdminJugadoresPage() {
 
     startTransition(async () => {
       try {
+        const finalPhotoUrl = await uploadPhotoIfAvailable(editing.id);
+
         const payloadWithAllFields = {
           first_name: formNombre.trim(),
           last_name: formApellido.trim(),
@@ -184,6 +284,7 @@ export default function AdminJugadoresPage() {
           gender: formSexo,
           category: formCategoria,
           is_observed: formObservado,
+          photo_url: finalPhotoUrl,
         };
 
         let result = await supabase
@@ -193,7 +294,7 @@ export default function AdminJugadoresPage() {
           .select()
           .single();
 
-        // Resiliencia: Si la base de datos remota aún no tiene las 3 columnas
+        // Resiliencia: Si la base de datos remota aún no tiene las columnas extras
         if (result.error && (result.error.message.includes("column") || result.error.code === "PGRST204")) {
           console.warn("Columnas no migradas aún en Supabase, reintentando actualización base:", result.error);
           const fallbackPayload = {
@@ -216,6 +317,7 @@ export default function AdminJugadoresPage() {
             gender: formSexo,
             category: formCategoria,
             is_observed: formObservado,
+            photo_url: finalPhotoUrl,
           };
           setPlayers((prev) =>
             prev.map((p) => (p.id === editing.id ? updatedLocal : p))
@@ -500,20 +602,41 @@ export default function AdminJugadoresPage() {
                         player.is_observed ? "bg-amber-500/[0.03]" : ""
                       }`}
                     >
-                      {/* Nombre del Jugador */}
+                      {/* Nombre y Foto Cuadrada del Jugador (Zona Útil) */}
                       <td className="px-5 py-4">
-                        <div className="flex flex-col">
-                          <span className="text-white font-bold text-sm tracking-tight flex items-center gap-2">
-                            {player.first_name} {player.last_name}
-                            {player.is_observed && (
-                              <span title="Jugador en observación para ascenso">
-                                <Eye className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-[11px] text-dark-500 sm:hidden">
-                            {player.phone || player.email || "Sin contacto"}
-                          </span>
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setViewingProfilePlayer(player)}
+                            className="transition-transform hover:scale-105 active:scale-95 cursor-pointer focus:outline-none"
+                            title="Ver perfil oficial del jugador"
+                          >
+                            <PlayerAvatar
+                              photoUrl={player.photo_url || player.avatar_url}
+                              firstName={player.first_name}
+                              lastName={player.last_name}
+                              category={playerCat}
+                              size="md"
+                              showCategoryBorder
+                            />
+                          </button>
+                          <div className="flex flex-col">
+                            <button
+                              type="button"
+                              onClick={() => setViewingProfilePlayer(player)}
+                              className="text-white hover:text-emerald-400 font-bold text-sm tracking-tight flex items-center gap-2 text-left cursor-pointer transition-colors"
+                            >
+                              <span>{player.first_name} {player.last_name}</span>
+                              {player.is_observed && (
+                                <span title="Jugador en observación para ascenso">
+                                  <Eye className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                                </span>
+                              )}
+                            </button>
+                            <span className="text-[11px] text-dark-500 sm:hidden">
+                              {player.phone || player.email || "Sin contacto"}
+                            </span>
+                          </div>
                         </div>
                       </td>
 
@@ -577,6 +700,16 @@ export default function AdminJugadoresPage() {
                       <td className="px-5 py-4 text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setViewingProfilePlayer(player)}
+                            className="text-xs h-8 px-2.5 flex items-center gap-1 text-emerald-400 hover:text-white border-emerald-500/30 hover:bg-emerald-500/10"
+                            title="Ver Perfil Oficial"
+                          >
+                            <User className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Perfil</span>
+                          </Button>
+                          <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => openEdit(player)}
@@ -611,6 +744,76 @@ export default function AdminJugadoresPage() {
         title="Registrar Nuevo Jugador"
       >
         <div className="space-y-4">
+          {/* Selector y Previsualización de Foto de Perfil (Zona útil cuadrada) */}
+          <div className="flex flex-col sm:flex-row items-center gap-4 p-3.5 rounded-xl bg-dark-900 border border-dark-700/80">
+            <div className="relative group">
+              <PlayerAvatar
+                photoUrl={formPhotoUrl}
+                firstName={formNombre || "J"}
+                lastName={formApellido || "P"}
+                category={formCategoria}
+                size="xl"
+                showCategoryBorder
+                className="shadow-md"
+              />
+            </div>
+            <div className="flex-1 text-center sm:text-left space-y-1.5">
+              <div className="flex items-center justify-center sm:justify-start gap-1.5">
+                <span className="text-xs font-bold text-white">Foto de Perfil</span>
+                <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                  Zona Útil Cuadrada (1:1)
+                </span>
+              </div>
+              <p className="text-[11px] text-dark-400 leading-relaxed">
+                Al subir tu foto podrás ampliar, reducir y reencuadrar para que tu rostro quede en la zona útil cuadrada.
+              </p>
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-xs h-7 px-2.5 flex items-center gap-1.5 border-emerald-500/40 text-emerald-400 font-bold hover:bg-emerald-500/10"
+                >
+                  <Camera className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>{formPhotoUrl ? "Cambiar Foto" : "Subir Foto"}</span>
+                </Button>
+
+                {formPhotoUrl && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setRawSelectedImage(formPhotoUrl);
+                        setShowCropModal(true);
+                      }}
+                      className="text-xs h-7 px-2.5 text-dark-300 hover:text-white flex items-center gap-1"
+                    >
+                      <Move className="w-3 h-3 text-emerald-400" />
+                      <span>Reencuadrar</span>
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="sm"
+                      onClick={() => {
+                        setFormPhotoUrl(null);
+                        setFormPhotoBlob(null);
+                      }}
+                      className="text-xs h-7 px-2 text-rose-400 hover:text-rose-300"
+                      title="Quitar foto"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label="Nombre *"
@@ -702,6 +905,76 @@ export default function AdminJugadoresPage() {
         title="Editar Jugador"
       >
         <div className="space-y-4">
+          {/* Selector y Previsualización de Foto de Perfil en Edición */}
+          <div className="flex flex-col sm:flex-row items-center gap-4 p-3.5 rounded-xl bg-dark-900 border border-dark-700/80">
+            <div className="relative group">
+              <PlayerAvatar
+                photoUrl={formPhotoUrl}
+                firstName={formNombre || "J"}
+                lastName={formApellido || "P"}
+                category={formCategoria}
+                size="xl"
+                showCategoryBorder
+                className="shadow-md"
+              />
+            </div>
+            <div className="flex-1 text-center sm:text-left space-y-1.5">
+              <div className="flex items-center justify-center sm:justify-start gap-1.5">
+                <span className="text-xs font-bold text-white">Foto de Perfil</span>
+                <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                  Zona Útil Cuadrada (1:1)
+                </span>
+              </div>
+              <p className="text-[11px] text-dark-400 leading-relaxed">
+                Amplía, reduce y reencuadra para que tu rostro quede en la zona útil cuadrada.
+              </p>
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-xs h-7 px-2.5 flex items-center gap-1.5 border-emerald-500/40 text-emerald-400 font-bold hover:bg-emerald-500/10"
+                >
+                  <Camera className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>{formPhotoUrl ? "Cambiar Foto" : "Subir Foto"}</span>
+                </Button>
+
+                {formPhotoUrl && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setRawSelectedImage(formPhotoUrl);
+                        setShowCropModal(true);
+                      }}
+                      className="text-xs h-7 px-2.5 text-dark-300 hover:text-white flex items-center gap-1"
+                    >
+                      <Move className="w-3 h-3 text-emerald-400" />
+                      <span>Reencuadrar</span>
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="sm"
+                      onClick={() => {
+                        setFormPhotoUrl(null);
+                        setFormPhotoBlob(null);
+                      }}
+                      className="text-xs h-7 px-2 text-rose-400 hover:text-rose-300"
+                      title="Quitar foto"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label="Nombre *"
@@ -794,6 +1067,36 @@ export default function AdminJugadoresPage() {
         loading={isPending}
         title="Eliminar Jugador"
         message={`¿Estás seguro de eliminar a ${deleting?.first_name} ${deleting?.last_name}? Esta acción no se puede deshacer.`}
+      />
+
+      {/* INPUT FILE INVISIBLE PARA CARGAR FOTOS DE PERFIL */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept="image/png, image/jpeg, image/webp"
+        className="hidden"
+      />
+
+      {/* MODAL INTERACTIVO DE RECORTE Y ENCUADRE (ZONA ÚTIL CUADRADA) */}
+      <PhotoCropModal
+        isOpen={showCropModal}
+        imageSrc={rawSelectedImage}
+        onConfirm={handleCropConfirm}
+        onClose={() => setShowCropModal(false)}
+        onSelectNewFile={() => fileInputRef.current?.click()}
+      />
+
+      {/* MODAL DE FICHA OFICIAL DE PERFIL DE JUGADOR */}
+      <PlayerProfileModal
+        isOpen={!!viewingProfilePlayer}
+        onClose={() => setViewingProfilePlayer(null)}
+        player={viewingProfilePlayer}
+        onEdit={(p) => {
+          setViewingProfilePlayer(null);
+          openEdit(p);
+        }}
+        stats={viewingProfilePlayer ? playerStatsMap.get(viewingProfilePlayer.id) : undefined}
       />
     </div>
   );

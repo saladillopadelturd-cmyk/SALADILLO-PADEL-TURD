@@ -11,7 +11,7 @@ import Modal from "@/components/ui/Modal";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { createClient } from "@/lib/supabase/client";
 import type { Tournament, TournamentStatus } from "@/types/tournament";
-import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Users } from "lucide-react";
 
 const INITIAL_TOURNAMENTS: Tournament[] = [
   {
@@ -93,7 +93,11 @@ export default function AdminTorneosPage() {
   const [editing, setEditing] = useState<Tournament | null>(null);
   const [deleting, setDeleting] = useState<Tournament | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [notification, setNotification] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [notification, setNotification] = useState<{
+    type: "success" | "error";
+    text: string;
+    action?: { label: string; href: string };
+  } | null>(null);
 
   const [formNombre, setFormNombre] = useState("");
   const [formFecha, setFormFecha] = useState("");
@@ -210,6 +214,10 @@ export default function AdminTorneosPage() {
           setNotification({
             type: "success",
             text: `Torneo "${localData.name}" (${formSexo} - ${formCategoria}) creado con éxito.`,
+            action: {
+              label: "Cargar Parejas",
+              href: `/admin/parejas?torneo=${localData.id}`,
+            },
           });
           return;
         }
@@ -221,6 +229,10 @@ export default function AdminTorneosPage() {
           setNotification({
             type: "success",
             text: `Torneo "${result.data.name}" (${formSexo} - ${formCategoria}) creado con éxito.`,
+            action: {
+              label: "Cargar Parejas",
+              href: `/admin/parejas?torneo=${result.data.id}`,
+            },
           });
 
           // Notificar al generador de flyers con los datos del nuevo torneo
@@ -350,7 +362,7 @@ export default function AdminTorneosPage() {
 
       {notification && (
         <div
-          className={`mb-6 p-4 rounded-xl border flex items-center justify-between gap-3 text-sm ${
+          className={`mb-6 p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm ${
             notification.type === "success"
               ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
               : "bg-red-500/10 border-red-500/30 text-red-400"
@@ -364,12 +376,22 @@ export default function AdminTorneosPage() {
             )}
             <span>{notification.text}</span>
           </div>
-          <button
-            onClick={() => setNotification(null)}
-            className="text-xs uppercase font-bold tracking-wider hover:opacity-80 px-2 py-1"
-          >
-            Cerrar
-          </button>
+          <div className="flex items-center gap-2">
+            {notification.action && (
+              <Link href={notification.action.href}>
+                <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-dark-950 font-black flex items-center gap-1.5 text-xs">
+                  <Users className="w-3.5 h-3.5" />
+                  {notification.action.label}
+                </Button>
+              </Link>
+            )}
+            <button
+              onClick={() => setNotification(null)}
+              className="text-xs uppercase font-bold tracking-wider hover:opacity-80 px-2 py-1 text-dark-400 hover:text-white"
+            >
+              Cerrar
+            </button>
+          </div>
         </div>
       )}
 
@@ -439,6 +461,9 @@ export default function AdminTorneosPage() {
                 )}
               </div>
               <div className="flex flex-wrap gap-2 pt-2 border-t border-dark-800">
+                <Button variant="ghost" size="sm" onClick={() => openEdit(tournament)}>
+                  Editar
+                </Button>
                 <Link href={`/admin/torneos/${tournament.id}?tab=zonas`}>
                   <Button variant="secondary" size="sm">Zonas</Button>
                 </Link>
@@ -448,9 +473,12 @@ export default function AdminTorneosPage() {
                 <Link href={`/admin/torneos/${tournament.id}?tab=results`}>
                   <Button variant="secondary" size="sm">Resultados</Button>
                 </Link>
-                <Button variant="ghost" size="sm" onClick={() => openEdit(tournament)}>
-                  Editar
-                </Button>
+                <Link href={`/admin/parejas?torneo=${tournament.id}`}>
+                  <Button variant="secondary" size="sm" className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
+                    <Users className="w-3.5 h-3.5 mr-1" />
+                    Parejas
+                  </Button>
+                </Link>
                 <Button
                   variant="danger"
                   size="sm"
@@ -649,13 +677,27 @@ export default function AdminTorneosPage() {
               onChange={(e) => setFormNumZonas(e.target.value)}
             />
           </div>
-          <div className="flex justify-end gap-3 pt-4">
-            <Button variant="ghost" onClick={() => setEditing(null)} disabled={isPending}>
-              Cancelar
-            </Button>
-            <Button onClick={handleEdit} disabled={isPending}>
-              {isPending ? "Guardando..." : "Guardar Cambios"}
-            </Button>
+          <div className="flex items-center justify-between pt-4 border-t border-dark-800">
+            {editing ? (
+              <Link href={`/admin/parejas?torneo=${editing.id}`}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold flex items-center gap-1.5"
+                >
+                  <Users className="w-4 h-4 text-emerald-400" />
+                  Parejas
+                </Button>
+              </Link>
+            ) : <div />}
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" onClick={() => setEditing(null)} disabled={isPending}>
+                Cancelar
+              </Button>
+              <Button onClick={handleEdit} disabled={isPending}>
+                {isPending ? "Guardando..." : "Guardar Cambios"}
+              </Button>
+            </div>
           </div>
         </div>
       </Modal>

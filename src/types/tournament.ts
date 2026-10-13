@@ -62,6 +62,8 @@ export interface Player {
   gender?: PlayerGender | string | null;
   category?: string | null;
   is_observed?: boolean | null;
+  photo_url?: string | null;
+  avatar_url?: string | null;
   created_at: string;
 }
 

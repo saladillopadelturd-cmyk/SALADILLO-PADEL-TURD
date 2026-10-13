@@ -4,11 +4,21 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Activity, Trophy, Shield, Menu, X, Calendar } from "lucide-react";
+import { Activity, Trophy, Shield, Menu, X, Calendar, Users } from "lucide-react";
+import { usePlayerIdentity } from "@/context/PlayerIdentityContext";
+import PlayerAvatar from "@/components/player/PlayerAvatar";
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
+  const { player, isIdentified, openFicha } = usePlayerIdentity();
+
+  const headerPlayerPhoto =
+    player?.photo_url ||
+    player?.avatar_url ||
+    (typeof window !== "undefined" && player?.email
+      ? localStorage.getItem(`spt_player_photo_${player.email.toLowerCase()}`)
+      : null);
 
   const navLinks = [
     { href: "/", label: "Inicio", icon: Activity },
@@ -58,6 +68,49 @@ export default function Header() {
                 </Link>
               );
             })}
+
+            {/* Opción Jugadores / Mi Ficha en Header */}
+            {isIdentified && player ? (
+              <button
+                type="button"
+                onClick={openFicha}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all min-h-[38px] cursor-pointer ${
+                  pathname.startsWith("/jugadores")
+                    ? "bg-gradient-to-r from-blue-600 to-emerald-600 text-white shadow-sm shadow-blue-500/30"
+                    : "text-emerald-300 hover:text-white hover:bg-dark-800/80 bg-emerald-500/10 border border-emerald-500/30"
+                }`}
+                title="Ver o editar tu Ficha de Jugador"
+              >
+                <PlayerAvatar
+                  photoUrl={headerPlayerPhoto}
+                  firstName={player.first_name}
+                  lastName={player.last_name}
+                  category={player.category}
+                  size="xs"
+                  showCategoryBorder
+                />
+                <span className="truncate max-w-[100px]">
+                  {player.first_name}
+                </span>
+                <span
+                  className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"
+                  title="Identidad reconocida"
+                />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={openFicha}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all min-h-[38px] cursor-pointer ${
+                  pathname.startsWith("/jugadores")
+                    ? "bg-gradient-to-r from-blue-600 to-emerald-600 text-white shadow-sm shadow-blue-500/30"
+                    : "text-dark-300 hover:text-white hover:bg-dark-800/80"
+                }`}
+              >
+                <Users className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Jugadores</span>
+              </button>
+            )}
           </nav>
 
           {/* Desktop Actions & Admin */}
@@ -91,6 +144,40 @@ export default function Header() {
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-dark-800 bg-dark-950/95 backdrop-blur-2xl animate-in">
           <div className="px-4 py-4 space-y-2">
+            {/* Si está identificado, mostrar tarjeta superior de identidad en el menú móvil */}
+            {isIdentified && player && (
+              <div
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  openFicha();
+                }}
+                className="p-3 mb-2 rounded-xl bg-gradient-to-r from-emerald-950/70 to-dark-900 border border-emerald-500/30 flex items-center justify-between cursor-pointer active:scale-98 transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <PlayerAvatar
+                    photoUrl={headerPlayerPhoto}
+                    firstName={player.first_name}
+                    lastName={player.last_name}
+                    category={player.category}
+                    size="md"
+                    showCategoryBorder
+                  />
+                  <div>
+                    <div className="text-sm font-bold text-white leading-tight">
+                      {player.first_name} {player.last_name}
+                    </div>
+                    <div className="text-[11px] text-emerald-400 flex items-center gap-1 font-medium mt-0.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      {player.category || "5ta"} • Identidad activa
+                    </div>
+                  </div>
+                </div>
+                <span className="text-xs px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                  Ficha
+                </span>
+              </div>
+            )}
+
             {navLinks.map((link) => {
               const Icon = link.icon;
               const isActive =
@@ -114,6 +201,20 @@ export default function Header() {
                 </Link>
               );
             })}
+
+            {/* Opción Jugadores en menú móvil */}
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                openFicha();
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold min-h-[48px] text-dark-300 hover:text-white hover:bg-dark-900 transition-all text-left cursor-pointer"
+            >
+              <Users className="w-4 h-4 text-emerald-400" />
+              <span>{isIdentified ? "Mi Ficha de Jugador" : "Jugadores (Cargar Ficha)"}</span>
+            </button>
+
             <div className="pt-2 border-t border-dark-800">
               <Link
                 href="/admin"
@@ -130,4 +231,3 @@ export default function Header() {
     </header>
   );
 }
-

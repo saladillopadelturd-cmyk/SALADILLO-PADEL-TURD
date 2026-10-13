@@ -70,6 +70,47 @@ export async function GET(request: Request) {
     }
   });
 
+  // Si se solicitó ranking individual (o general sin filtro de tipo), incluir a todos los jugadores de la base de datos con 0 puntos
+  if (!type || type === "individual") {
+    const includedPlayerIds = new Set<string>();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    enrichedRankings.forEach((r: any) => {
+      if (r.ranking_type === "individual" && r.player_id) {
+        includedPlayerIds.add(r.player_id);
+      }
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (allPlayers || []).forEach((p: any) => {
+      if (includedPlayerIds.has(p.id)) return;
+      if (category && category !== "all" && category !== "Todas" && p.category !== category) {
+        return;
+      }
+
+      enrichedRankings.push({
+        id: `p-${p.id}`,
+        ranking_type: "individual",
+        player_id: p.id,
+        category: p.category || (category && category !== "all" ? category : "General"),
+        points: 0,
+        tournaments_played: 0,
+        matches_won: 0,
+        matches_lost: 0,
+        name: formatPlayerShortName(p),
+        player: p,
+      });
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    enrichedRankings.sort((a: any, b: any) => {
+      if ((b.points || 0) !== (a.points || 0)) return (b.points || 0) - (a.points || 0);
+      if ((b.matches_won || 0) !== (a.matches_won || 0)) return (b.matches_won || 0) - (a.matches_won || 0);
+      const lastA = a.player?.last_name || a.name || "";
+      const lastB = b.player?.last_name || b.name || "";
+      return lastA.localeCompare(lastB);
+    });
+  }
+
   return NextResponse.json({
     success: true,
     rankings: enrichedRankings,

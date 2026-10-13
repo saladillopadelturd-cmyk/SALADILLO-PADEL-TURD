@@ -5,6 +5,8 @@ import "./globals.css";
 import Header from "@/components/layout/Header";
 import ServiceWorkerRegister from "@/components/pwa/ServiceWorkerRegister";
 import InstallButton from "@/components/pwa/InstallButton";
+import { PlayerIdentityProvider } from "@/context/PlayerIdentityContext";
+import PlayerFichaModal from "@/components/player/PlayerFichaModal";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -53,8 +55,11 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-dark-950 text-dark-200">
         <ServiceWorkerRegister />
-        <Header />
-        <main className="flex-1">{children}</main>
+        <PlayerIdentityProvider>
+          <Header />
+          <PlayerFichaModal />
+          <main className="flex-1">{children}</main>
+        </PlayerIdentityProvider>
         <footer className="border-t border-dark-700 bg-dark-900 py-6">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
