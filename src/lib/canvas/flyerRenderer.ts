@@ -1,6 +1,6 @@
 /**
  * SPT (Saladillo Padel Tour) - Canvas Flyer Compositor
- * Renderiza composiciones vectoriales en formato HORIZONTAL (1920x1080 px - 16:9)
+ * Renderiza composiciones vectoriales en formato HORIZONTAL (1920x864 px - 20:9)
  *
  * ESPECIFICACIONES DE DISEÑO Y PROPORCIONES:
  * - Logo LOGOSPT.png con un ancho exacto del 35% del total del flyer (672 px),
@@ -69,23 +69,23 @@ export const LAYOUT_CONFIGS: Record<
 > = {
   split_card: {
     name: "Clásico Asimétrico",
-    description: "Logo destacado superior izquierda (35% ancho), títulos y tarjeta vertical lateral",
-    logoPosition: "Superior Izquierda (35% Ancho)",
+    description: "Logo superior izquierda, títulos jerárquicos y 3 tarjetas verticales a la derecha",
+    logoPosition: "Superior Izquierda",
   },
   hero_center: {
     name: "Impacto Central",
-    description: "Logo central panorámico (35% ancho) con halo dorado, títulos y 3 módulos podio",
-    logoPosition: "Centro Superior (35% Ancho)",
+    description: "Logo central panorámico con halo, títulos masivos y 3 podios horizontales en la base",
+    logoPosition: "Centro Superior",
   },
   split_inverted: {
     name: "Invertido Vanguardia",
-    description: "Logo superior derecha (35% ancho), tarjeta vertical izquierda y títulos a derecha",
-    logoPosition: "Superior Derecha (35% Ancho)",
+    description: "3 tarjetas verticales a la izquierda, logo superior derecha y títulos a derecha",
+    logoPosition: "Superior Derecha",
   },
   magazine_bold: {
     name: "Editorial Deportivo",
-    description: "Logo panorámico superior (35% ancho) con titular imponente y módulos gemelos",
-    logoPosition: "Superior Panorámica (35% Ancho)",
+    description: "Cinta panorámica superior con logo, titular imponente y 3 podios en la base",
+    logoPosition: "Cinta Superior",
   },
 };
 
@@ -252,22 +252,35 @@ function stackSlot(top: number, bottom: number, count: number, gap: number, i: n
 }
 
 /**
- * Divide un texto en exactamente 2 líneas, usando palabras o caracteres.
+ * Divide un texto en 1 o 2 líneas equilibradas por palabras completas.
+ * Si es 1 sola palabra, nunca la divide a la mitad.
  */
 function splitTextIntoTwoLines(text: string): string[] {
   const words = String(text || "").trim().toUpperCase().split(/\s+/).filter(Boolean);
   if (words.length === 0) return ["", ""];
-  if (words.length === 1) {
-    const w = words[0];
-    const mid = Math.ceil(w.length / 2);
-    return [w.slice(0, mid), w.slice(mid)];
+  if (words.length === 1) return [words[0], ""];
+
+  // Encuentra la partición por palabras que minimiza la diferencia de longitud entre ambas líneas
+  let bestSplit = [
+    words.slice(0, Math.ceil(words.length / 2)).join(" "),
+    words.slice(Math.ceil(words.length / 2)).join(" "),
+  ];
+  let minDiff = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const l1 = words.slice(0, i).join(" ");
+    const l2 = words.slice(i).join(" ");
+    const diff = Math.abs(l1.length - l2.length);
+    if (diff < minDiff) {
+      minDiff = diff;
+      bestSplit = [l1, l2];
+    }
   }
-  const mid = Math.ceil(words.length / 2);
-  return [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
+  return bestSplit;
 }
 
 /**
- * Dibuja exactamente 2 líneas escalando la fuente para llenar el rectángulo.
+ * Dibuja texto de datos (1 o 2 líneas) escalando dinámicamente la fuente para llenar
+ * el rectángulo disponible sin colisiones verticales ni desbordes.
  */
 function fitDrawTwoLines(
   ctx: CanvasRenderingContext2D,
@@ -278,41 +291,45 @@ function fitDrawTwoLines(
   maxH: number,
   maxFS: number,
   fillStyle: string | CanvasGradient | CanvasPattern,
-  shadowBlur = 30
+  shadowBlur = 25
 ): number {
-  const lines = splitTextIntoTwoLines(text);
+  const lines = splitTextIntoTwoLines(text).filter(Boolean);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = fillStyle;
 
+  if (lines.length === 0) return centerY;
+
+  const isSingleLine = lines.length === 1;
   let bestFS = 14;
+
   for (let fs = maxFS; fs >= 14; fs -= 2) {
     ctx.font = `900 ${fs}px 'Montserrat', 'Inter', sans-serif`;
     const lh = fs * 1.14;
-    if (ctx.measureText(lines[0]).width > maxW || ctx.measureText(lines[1]).width > maxW) continue;
-    if (2 * lh <= maxH * 1.08) {
+    const tooWide = lines.some((l) => ctx.measureText(l).width > maxW);
+    if (tooWide) continue;
+    const totalTextH = isSingleLine ? fs : 2 * lh;
+    if (totalTextH <= maxH) {
       bestFS = fs;
       break;
     }
   }
 
-  if (bestFS === 14) {
-    for (let fs = maxFS; fs >= 14; fs -= 2) {
-      ctx.font = `900 ${fs}px 'Montserrat', 'Inter', sans-serif`;
-      if (ctx.measureText(lines[0]).width <= maxW && ctx.measureText(lines[1]).width <= maxW) {
-        bestFS = fs;
-        break;
-      }
-    }
+  ctx.font = `900 ${bestFS}px 'Montserrat', 'Inter', sans-serif`;
+  ctx.save();
+  setBlackShadow(ctx, shadowBlur, 10, 0.98);
+
+  if (isSingleLine) {
+    ctx.fillText(lines[0], x, centerY);
+    ctx.restore();
+    ctx.textBaseline = "alphabetic";
+    return centerY;
   }
 
-  ctx.font = `900 ${bestFS}px 'Montserrat', 'Inter', sans-serif`;
   const lh = bestFS * 1.14;
   const totalH = 2 * lh;
   const startY = centerY - totalH / 2 + lh / 2;
 
-  ctx.save();
-  setBlackShadow(ctx, shadowBlur, 12, 0.99);
   ctx.fillText(lines[0], x, startY);
   ctx.fillText(lines[1], x, startY + lh);
   ctx.restore();
@@ -321,7 +338,7 @@ function fitDrawTwoLines(
 }
 
 /**
- * Dibuja un bloque de hasta 2 líneas escalando la fuente para que entre 100%
+ * Dibuja un bloque de hasta 3 líneas escalando la fuente para que entre 100%
  * dentro del rectángulo (maxW × maxH), centrado verticalmente en centerY.
  * Devuelve la posición Y de la primer línea del texto.
  */
@@ -421,7 +438,7 @@ function fitDrawLines(
   return drawYs[0];
 }
 
-/** Etiqueta pequeña estilo "chips" (📅 FECHA) fijada arriba de una banda. */
+/** Etiqueta pequeña estilo "chips" (📅 FECHA) fijada arriba de una tarjeta con alineación exacta. */
 function drawBandLabel(
   ctx: CanvasRenderingContext2D,
   text: string,
@@ -429,26 +446,31 @@ function drawBandLabel(
   y: number,
   color: string,
   maxWidth: number,
-  align: "left" | "center" = "left"
+  align: "left" | "center" = "left",
+  initialFontSize = 24
 ): number {
   const label = String(text).toUpperCase();
-  let fontSize = 26;
-  ctx.font = `700 ${fontSize}px 'Inter', sans-serif`;
+  let fontSize = initialFontSize;
+  ctx.font = `800 ${fontSize}px 'Montserrat', 'Inter', sans-serif`;
   while (fontSize > 12 && ctx.measureText(label).width > maxWidth) {
     fontSize -= 1;
-    ctx.font = `700 ${fontSize}px 'Inter', sans-serif`;
+    ctx.font = `800 ${fontSize}px 'Montserrat', 'Inter', sans-serif`;
   }
+  ctx.save();
   ctx.fillStyle = color;
   ctx.textAlign = align;
+  ctx.textBaseline = "middle";
+  setBlackShadow(ctx, 20, 4, 0.92);
   ctx.fillText(label, x, y);
+  ctx.restore();
+  ctx.textBaseline = "alphabetic";
   return fontSize;
 }
 
 /**
  * LAYOUT 1: split_card (Clásico Asimétrico)
- * Columna izquierda: logo + badge categoría + título.
- * Columna derecha: 3 bandas (fecha/lugar/premios) que llenan desde pad hasta H-pad,
- * alineadas y simétricas. Todo dentro del lienzo (0..1920 × 0..1080) con margen `pad`.
+ * Columna izquierda: Logo SPT, badge categoría y título principal.
+ * Columna derecha: 3 tarjetas verticales calibradas para la proporción panorámica 20:9.
  */
 function renderLayoutSplitCard(
   ctx: CanvasRenderingContext2D,
@@ -458,75 +480,78 @@ function renderLayoutSplitCard(
   theme: ThemeConfig,
   logoImage?: HTMLImageElement | null
 ) {
-  const pad = 70;
+  const pad = 48;
   const innerW = W - pad * 2;
-  // Card derecha ocupa 46% (883) — simétrica verticalmente, margen inferior = pad.
-  const rightW = 900;
+  const rightW = 780;
   const leftX = pad;
-  const leftW = innerW - rightW - 40;
+  const leftW = innerW - rightW - 44;
   const rightX = W - pad - rightW;
 
-  // Logo
-  const logoBoxH = 240;
-  if (logoImage) drawImageProportional(ctx, logoImage, leftX, pad, leftW, logoBoxH, "left");
+  // ── LOGO SPT (Columna izquierda) ──
+  // Altura 175 px → ancho proporcional ~450 px (relación nativa 2.57:1)
+  const logoBoxH = 175;
+  if (logoImage) drawImageProportional(ctx, logoImage, leftX, pad, leftW, logoBoxH, "center");
 
-  // Título principal (escala a 3 líneas máx dentro del espacio libre)
-  const titleFS = 130;
-  const titleGap = titleFS * 1.14;
-  const titleTop = pad + logoBoxH + 30 + 88 + titleGap;
-  const titleMaxH = H - pad - titleTop;
-  const tGrad = ctx.createLinearGradient(leftX, titleTop, leftX + leftW, titleTop + Math.min(titleMaxH, 260));
-  tGrad.addColorStop(0, theme.brandGradient[0]);
-  tGrad.addColorStop(0.5, theme.brandGradient[1]);
-  tGrad.addColorStop(1, theme.brandGradient[2]);
-  const titleFirstLineY = fitDrawLines(ctx, data.title || "GRAN TORNEO", leftX + leftW / 2, titleTop + titleMaxH / 2, leftW, titleMaxH, 3, "center", titleFS, tGrad, 90);
-
-  // Badge categoría (una línea por encima de la primer línea del título)
-  const badgeH = 88;
-  const badgeGap = 102;
-  const badgeY = titleFirstLineY - badgeH - badgeGap;
-  const badgeMaxW = Math.min(leftW, 720);
+  // ── BADGE CATEGORÍA ──
+  const badgeH = 56;
+  const badgeY = pad + logoBoxH + 16;
+  const badgeMaxW = Math.min(leftW, 680);
   const catText = (data.category || "TORNEO OFICIAL").toUpperCase();
-  ctx.font = "900 44px 'Montserrat', 'Inter', sans-serif";
-  const badgeW = Math.min(ctx.measureText(catText).width + 72, badgeMaxW);
+  ctx.font = "900 30px 'Montserrat', 'Inter', sans-serif";
+  const badgeW = Math.min(ctx.measureText(catText).width + 60, badgeMaxW);
   ctx.save();
-  setBlackShadow(ctx, 45, 14, 0.97);
-  roundRect(ctx, leftX + leftW / 2 - badgeW / 2, badgeY, badgeW, badgeH, 36);
+  setBlackShadow(ctx, 40, 10, 0.96);
+  roundRect(ctx, leftX + leftW / 2 - badgeW / 2, badgeY, badgeW, badgeH, 28);
   ctx.fillStyle = theme.badgeBg;
   ctx.fill();
   ctx.restore();
-  roundRect(ctx, leftX + leftW / 2 - badgeW / 2, badgeY, badgeW, badgeH, 36);
+  roundRect(ctx, leftX + leftW / 2 - badgeW / 2, badgeY, badgeW, badgeH, 28);
   ctx.strokeStyle = theme.badgeBorder;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2.5;
   ctx.stroke();
   ctx.fillStyle = theme.badgeText;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = "900 44px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 30px 'Montserrat', 'Inter', sans-serif";
   ctx.fillText(catText, leftX + leftW / 2, badgeY + badgeH / 2);
   ctx.textBaseline = "alphabetic";
-  // Card fondo (3 bandas que llenan verticalmente de pad a H-pad)
+
+  // ── TÍTULO PRINCIPAL (Centrado en el área inferior) ──
+  const titleTop = badgeY + badgeH + 16;
+  const titleBot = H - pad;
+  const titleMaxH = titleBot - titleTop;
+  const titleCY = titleTop + titleMaxH / 2;
+  const titleFS = 110;
+  const tGrad = ctx.createLinearGradient(leftX, titleTop, leftX + leftW, titleTop + Math.min(titleMaxH, 220));
+  tGrad.addColorStop(0, theme.brandGradient[0]);
+  tGrad.addColorStop(0.5, theme.brandGradient[1]);
+  tGrad.addColorStop(1, theme.brandGradient[2]);
+  fitDrawLines(ctx, data.title || "GRAN TORNEO", leftX + leftW / 2, titleCY, leftW, titleMaxH, 3, "center", titleFS, tGrad, 85);
+
+  // ── COLUMNA DERECHA: 3 TARJETAS VERTICALES ──
   const cardTop = pad;
   const cardBot = H - pad;
-  const gap = 22;
+  const gap = 16;
 
   function drawInfoBand(top: number, h: number, label: string, value: string, accent: string, labelColor: string) {
     ctx.save();
-    setBlackShadow(ctx, 45, 12, 0.95);
-    roundRect(ctx, rightX, top, rightW, h, 26);
-    ctx.fillStyle = "rgba(6, 12, 26, 0.86)";
+    setBlackShadow(ctx, 40, 10, 0.95);
+    roundRect(ctx, rightX, top, rightW, h, 20);
+    ctx.fillStyle = "rgba(6, 12, 26, 0.88)";
     ctx.fill();
     ctx.restore();
-    roundRect(ctx, rightX, top, rightW, h, 26);
+    roundRect(ctx, rightX, top, rightW, h, 20);
     ctx.strokeStyle = accent;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.5;
     ctx.stroke();
 
-    drawBandLabel(ctx, label, rightX + rightW / 2, top + 44, labelColor, rightW - 68, "center");
-    const valueMaxW = rightW - 68;
-    const valueTop = top + 50;
-    const valueH = h - 62;
-    fitDrawTwoLines(ctx, value, rightX + rightW / 2, valueTop + valueH / 2, valueMaxW, valueH, 79, "#ffffff", 20);
+    const labelY = top + 34;
+    drawBandLabel(ctx, label, rightX + rightW / 2, labelY, labelColor, rightW - 60, "center", 24);
+
+    const valueCY = top + 48 + (h - 48) / 2;
+    const valueMaxH = h - 64;
+    const valueMaxW = rightW - 60;
+    fitDrawTwoLines(ctx, value, rightX + rightW / 2, valueCY, valueMaxW, valueMaxH, 58, "#ffffff", 20);
   }
 
   const s0 = stackSlot(cardTop, cardBot, 3, gap, 0);
@@ -539,8 +564,8 @@ function renderLayoutSplitCard(
 
 /**
  * LAYOUT 2: hero_center (Impacto Central)
- * Logo centrado arriba, badge categoría, título masivo y 3 columnas (fecha/lugar/premios).
- * Balance vertical exacto: margen superior = margen inferior = pad. Nada desborda 0..1920 × 0..1080.
+ * Logo central panorámico, badge categoría, título central de alto impacto
+ * y 3 podios inferiores horizontales en la base 20:9.
  */
 function renderLayoutHeroCenter(
   ctx: CanvasRenderingContext2D,
@@ -551,88 +576,88 @@ function renderLayoutHeroCenter(
   logoImage?: HTMLImageElement | null
 ) {
   const cx = W / 2;
-  const pad = 60;
+  const pad = 48;
   const innerW = W - pad * 2;
 
-  // ── LOGO CENTRAL SUPERIOR (35% del ancho) ──
-  const logoBoxW = 672;
-  const logoBoxH = 200;
+  // ── LOGO CENTRAL SUPERIOR ──
+  const logoBoxW = 600;
+  const logoBoxH = 165;
   if (logoImage) drawImageProportional(ctx, logoImage, cx - logoBoxW / 2, pad, logoBoxW, logoBoxH, "center");
 
-  // ── 3 BANDAS DE ANCHO COMPLETO, rellenan exactamente hasta H-pad (simetría) ──
-  const bandsH = 430;
-  const bandsTop = H - pad - bandsH;
-  const bandX = pad;
-  const bandW = innerW;
+  // ── 3 PODIOS INFERIORES HORIZONTALES (Base panorámica 20:9) ──
+  const podioH = 180;
+  const podioTop = H - pad - podioH;
   const gap = 20;
+  const podioW = (innerW - gap * 2) / 3;
 
-  // ── TÍTULO masivo centrado entre el badge y las bandas ──
-  const titleFS = 150;
-  const titleGap = titleFS * 1.14;
-  const titleTop = pad + logoBoxH + 18 + 84 + titleGap;
-  const titleMaxW = innerW;
-  const titleMaxH = bandsTop - 40 - titleTop;
-  const titleCY = titleTop + titleMaxH / 2;
-  const tGrad = ctx.createLinearGradient(pad, titleCY - titleMaxH / 2, W - pad, titleCY + titleMaxH / 2);
-  tGrad.addColorStop(0, theme.brandGradient[0]);
-  tGrad.addColorStop(0.5, theme.brandGradient[1]);
-  tGrad.addColorStop(1, theme.brandGradient[2]);
-  const titleFirstLineY = fitDrawLines(ctx, data.title || "GRAN TORNEO", cx, titleCY, titleMaxW, titleMaxH, 2, "center", titleFS, tGrad, 90);
+  function drawPodioCard(x: number, y: number, w: number, h: number, label: string, value: string, accent: string, labelColor: string) {
+    ctx.save();
+    setBlackShadow(ctx, 35, 10, 0.94);
+    roundRect(ctx, x, y, w, h, 18);
+    ctx.fillStyle = "rgba(6, 12, 26, 0.88)";
+    ctx.fill();
+    ctx.restore();
+    roundRect(ctx, x, y, w, h, 18);
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
 
-  // ── BADGE CATEGORÍA más grande y visible, una línea por encima del título ──
-  const badgeH = 84;
-  const badgeGap = 102;
-  const badgeY = titleFirstLineY - badgeH - badgeGap;
+    const labelY = y + 30;
+    drawBandLabel(ctx, label, x + w / 2, labelY, labelColor, w - 40, "center", 22);
+
+    const valueCY = y + 44 + (h - 44) / 2;
+    const valueMaxH = h - 56;
+    const valueMaxW = w - 40;
+    fitDrawTwoLines(ctx, value, x + w / 2, valueCY, valueMaxW, valueMaxH, 46, "#ffffff", 18);
+  }
+
+  // ── BADGE CATEGORÍA centrado bajo el logo ──
+  const badgeY = pad + logoBoxH + 14;
+  const badgeH = 56;
   const catText = (data.category || "TORNEO OFICIAL").toUpperCase();
-  ctx.font = "900 42px 'Montserrat', 'Inter', sans-serif";
-  const catW = Math.min(ctx.measureText(catText).width + 72, 820);
+  ctx.font = "900 30px 'Montserrat', 'Inter', sans-serif";
+  const catW = Math.min(ctx.measureText(catText).width + 60, 700);
   ctx.save();
-  setBlackShadow(ctx, 45, 14, 0.97);
-  roundRect(ctx, cx - catW / 2, badgeY, catW, badgeH, 34);
+  setBlackShadow(ctx, 40, 10, 0.96);
+  roundRect(ctx, cx - catW / 2, badgeY, catW, badgeH, 28);
   ctx.fillStyle = theme.badgeBg;
   ctx.fill();
   ctx.restore();
-  roundRect(ctx, cx - catW / 2, badgeY, catW, badgeH, 34);
+  roundRect(ctx, cx - catW / 2, badgeY, catW, badgeH, 28);
   ctx.strokeStyle = theme.badgeBorder;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2.5;
   ctx.stroke();
   ctx.fillStyle = theme.badgeText;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = "900 42px 'Montserrat', 'Inter', sans-serif";
+  ctx.font = "900 30px 'Montserrat', 'Inter', sans-serif";
   ctx.fillText(catText, cx, badgeY + badgeH / 2);
   ctx.textBaseline = "alphabetic";
 
-  function drawFullBand(top: number, h: number, label: string, value: string, accent: string) {
-    ctx.save();
-    setBlackShadow(ctx, 45, 12, 0.95);
-    roundRect(ctx, bandX, top, bandW, h, 22);
-    ctx.fillStyle = "rgba(6, 12, 26, 0.86)";
-    ctx.fill();
-    ctx.restore();
-    roundRect(ctx, bandX, top, bandW, h, 22);
-    ctx.strokeStyle = accent;
-    ctx.lineWidth = 2;
-    ctx.stroke();
+  // ── TÍTULO masivo centrado en el espacio entre badge y podios ──
+  const titleTop = badgeY + badgeH + 14;
+  const titleBot = podioTop - 18;
+  const titleMaxH = titleBot - titleTop;
+  const titleCY = titleTop + titleMaxH / 2;
+  const titleFS = 115;
+  const tGrad = ctx.createLinearGradient(pad, titleCY - titleMaxH / 2, W - pad, titleCY + titleMaxH / 2);
+  tGrad.addColorStop(0, theme.brandGradient[0]);
+  tGrad.addColorStop(0.5, theme.brandGradient[1]);
+  tGrad.addColorStop(1, theme.brandGradient[2]);
+  fitDrawLines(ctx, data.title || "GRAN TORNEO", cx, titleCY, innerW, titleMaxH, 2, "center", titleFS, tGrad, 85);
 
-    drawBandLabel(ctx, label, cx, top + 42, accent, bandW - 52, "center");
-    const vTop = top + 45;
-    const vH = h - 45 - 15;
-    fitDrawTwoLines(ctx, value, cx, vTop + vH / 2, bandW - 52, vH, 74, "#ffffff", 20);
-  }
-
-  const b0 = stackSlot(bandsTop, H - pad, 3, gap, 0);
-  const b1 = stackSlot(bandsTop, H - pad, 3, gap, 1);
-  const b2 = stackSlot(bandsTop, H - pad, 3, gap, 2);
-  drawFullBand(b0.y, b0.h, "📅 FECHA", data.date || "PRÓXIMAMENTE", theme.accentColor);
-  drawFullBand(b1.y, b1.h, "📍 LUGAR", data.location || "SALADILLO, B.A.", theme.badgeText);
-  drawFullBand(b2.y, b2.h, "🏆 PREMIOS", data.prizes || "TROFEOS + EFECTIVO", "#fbbf24");
+  const p0X = pad;
+  const p1X = pad + podioW + gap;
+  const p2X = pad + (podioW + gap) * 2;
+  drawPodioCard(p0X, podioTop, podioW, podioH, "📅 FECHA", data.date || "PRÓXIMAMENTE", theme.accentColor, theme.accentColor);
+  drawPodioCard(p1X, podioTop, podioW, podioH, "📍 LUGAR", data.location || "SALADILLO, B.A.", theme.accentColor, theme.badgeText);
+  drawPodioCard(p2X, podioTop, podioW, podioH, "🏆 PREMIOS", data.prizes || "TROFEOS + EFECTIVO", "#fbbf24", "#fbbf24");
 }
 
 /**
  * LAYOUT 3: split_inverted (Invertido Vanguardia)
- * Espejo exacto de split_card: card de 3 bandas a la IZQUIERDA llenando de
- * pad a H-pad (simetría vertical), columna derecha logo + badge + título.
+ * Espejo de split_card: 3 tarjetas verticales a la izquierda,
+ * y columna derecha con logo, badge y títulos perfectamente proporcionados.
  */
 function renderLayoutSplitInverted(
   ctx: CanvasRenderingContext2D,
@@ -642,75 +667,37 @@ function renderLayoutSplitInverted(
   theme: ThemeConfig,
   logoImage?: HTMLImageElement | null
 ) {
-  const pad = 70;
+  const pad = 48;
   const innerW = W - pad * 2;
-  const leftW = 900;
+  const leftW = 780;
   const leftX = pad;
-  const rightX = pad + leftW + 40;
-  const rightW = W - pad - rightX;
+  const rightX = pad + leftW + 44;
+  const rightW = innerW - leftW - 44;
 
-  // Logo alineado a la derecha
-  const logoBoxH = 240;
-  if (logoImage) drawImageProportional(ctx, logoImage, rightX, pad, rightW, logoBoxH, "right");
-
-  // Título centrado
-  const titleFS = 130;
-  const titleGap = titleFS * 1.14;
-  const titleTop = pad + logoBoxH + 30 + 88 + titleGap;
-  const titleMaxH = H - pad - titleTop;
-  const tGrad = ctx.createLinearGradient(rightX, titleTop, rightX + rightW, titleTop + Math.min(titleMaxH, 260));
-  tGrad.addColorStop(0, theme.brandGradient[2]);
-  tGrad.addColorStop(0.5, theme.brandGradient[1]);
-  tGrad.addColorStop(1, theme.brandGradient[0]);
-  const titleFirstLineY = fitDrawLines(ctx, data.title || "GRAN TORNEO", rightX + rightW / 2, titleTop + titleMaxH / 2, rightW, titleMaxH, 3, "center", titleFS, tGrad, 90);
-
-  // Badge categoría más grande y visible, una línea por encima del título
-  const badgeH = 88;
-  const badgeGap = 102;
-  const badgeY = titleFirstLineY - badgeH - badgeGap;
-  const badgeMaxW = Math.min(rightW, 720);
-  const catText = (data.category || "TORNEO OFICIAL").toUpperCase();
-  ctx.font = "900 44px 'Montserrat', 'Inter', sans-serif";
-  const badgeW = Math.min(ctx.measureText(catText).width + 72, badgeMaxW);
-  const badgeX = rightX + rightW / 2 - badgeW / 2;
-  ctx.save();
-  setBlackShadow(ctx, 45, 14, 0.97);
-  roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 36);
-  ctx.fillStyle = theme.badgeBg;
-  ctx.fill();
-  ctx.restore();
-  roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 36);
-  ctx.strokeStyle = theme.badgeBorder;
-  ctx.lineWidth = 3;
-  ctx.stroke();
-  ctx.fillStyle = theme.badgeText;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = "900 44px 'Montserrat', 'Inter', sans-serif";
-  ctx.fillText(catText, badgeX + badgeW / 2, badgeY + badgeH / 2);
-  ctx.textBaseline = "alphabetic";
-
-  // 3 bandas a la izquierda, simetría vertical exacta
+  // ── COLUMNA IZQUIERDA: 3 TARJETAS VERTICALES ──
   const cardTop = pad;
   const cardBot = H - pad;
-  const gap = 22;
+  const gap = 16;
 
   function drawInfoBand(top: number, h: number, label: string, value: string, accent: string, labelColor: string) {
     ctx.save();
-    setBlackShadow(ctx, 45, 12, 0.95);
-    roundRect(ctx, leftX, top, leftW, h, 26);
-    ctx.fillStyle = "rgba(6, 12, 26, 0.86)";
+    setBlackShadow(ctx, 40, 10, 0.95);
+    roundRect(ctx, leftX, top, leftW, h, 20);
+    ctx.fillStyle = "rgba(6, 12, 26, 0.88)";
     ctx.fill();
     ctx.restore();
-    roundRect(ctx, leftX, top, leftW, h, 26);
+    roundRect(ctx, leftX, top, leftW, h, 20);
     ctx.strokeStyle = accent;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.5;
     ctx.stroke();
 
-    drawBandLabel(ctx, label, leftX + leftW / 2, top + 44, labelColor, leftW - 68, "center");
-    const valueTop = top + 50;
-    const valueH = h - 62;
-    fitDrawTwoLines(ctx, value, leftX + leftW / 2, valueTop + valueH / 2, leftW - 68, valueH, 79, "#ffffff", 20);
+    const labelY = top + 34;
+    drawBandLabel(ctx, label, leftX + leftW / 2, labelY, labelColor, leftW - 60, "center", 24);
+
+    const valueCY = top + 48 + (h - 48) / 2;
+    const valueMaxH = h - 64;
+    const valueMaxW = leftW - 60;
+    fitDrawTwoLines(ctx, value, leftX + leftW / 2, valueCY, valueMaxW, valueMaxH, 58, "#ffffff", 20);
   }
 
   const s0 = stackSlot(cardTop, cardBot, 3, gap, 0);
@@ -719,13 +706,53 @@ function renderLayoutSplitInverted(
   drawInfoBand(s0.y, s0.h, "📅 FECHA", data.date || "PRÓXIMAMENTE", theme.accentColor, theme.accentColor);
   drawInfoBand(s1.y, s1.h, "📍 LUGAR", data.location || "SALADILLO, B.A.", theme.accentColor, theme.badgeText);
   drawInfoBand(s2.y, s2.h, "🏆 PREMIOS", data.prizes || "TROFEOS + EFECTIVO", "#fbbf24", "#fbbf24");
+
+  // ── LOGO (Columna derecha) ──
+  const logoBoxH = 175;
+  if (logoImage) drawImageProportional(ctx, logoImage, rightX, pad, rightW, logoBoxH, "center");
+
+  // ── BADGE CATEGORÍA ──
+  const badgeH = 56;
+  const badgeY = pad + logoBoxH + 16;
+  const badgeMaxW = Math.min(rightW, 680);
+  const catText = (data.category || "TORNEO OFICIAL").toUpperCase();
+  ctx.font = "900 30px 'Montserrat', 'Inter', sans-serif";
+  const badgeW = Math.min(ctx.measureText(catText).width + 60, badgeMaxW);
+  const badgeX = rightX + rightW / 2 - badgeW / 2;
+  ctx.save();
+  setBlackShadow(ctx, 40, 10, 0.96);
+  roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 28);
+  ctx.fillStyle = theme.badgeBg;
+  ctx.fill();
+  ctx.restore();
+  roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 28);
+  ctx.strokeStyle = theme.badgeBorder;
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  ctx.fillStyle = theme.badgeText;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "900 30px 'Montserrat', 'Inter', sans-serif";
+  ctx.fillText(catText, badgeX + badgeW / 2, badgeY + badgeH / 2);
+  ctx.textBaseline = "alphabetic";
+
+  // ── TÍTULO (Columna derecha) ──
+  const titleTop = badgeY + badgeH + 16;
+  const titleBot = H - pad;
+  const titleMaxH = titleBot - titleTop;
+  const titleCY = titleTop + titleMaxH / 2;
+  const titleFS = 110;
+  const tGrad = ctx.createLinearGradient(rightX, titleTop, rightX + rightW, titleTop + Math.min(titleMaxH, 220));
+  tGrad.addColorStop(0, theme.brandGradient[2]);
+  tGrad.addColorStop(0.5, theme.brandGradient[1]);
+  tGrad.addColorStop(1, theme.brandGradient[0]);
+  fitDrawLines(ctx, data.title || "GRAN TORNEO", rightX + rightW / 2, titleCY, rightW, titleMaxH, 3, "center", titleFS, tGrad, 85);
 }
 
 /**
  * LAYOUT 4: magazine_bold (Editorial Deportivo)
- * Cinta superior (logo derecha), badge categoría centrado bajo la cinta, titular masivo
- * centrado y 3 bandas de datos que cierran exactamente en H-pad.
- * Todo dentro de 0..1920 × 0..1080 (margen pad en los 4 bordes → simetría).
+ * Cinta superior con logo y sello de circuito, badge categoría centrado,
+ * titular masivo y 3 podios horizontales en la base 20:9.
  */
 function renderLayoutMagazineBold(
   ctx: CanvasRenderingContext2D,
@@ -735,99 +762,111 @@ function renderLayoutMagazineBold(
   theme: ThemeConfig,
   logoImage?: HTMLImageElement | null
 ) {
-  const pad = 70;
+  const pad = 48;
   const innerW = W - pad * 2;
 
-  // ── CINTA SUPERIOR ──
+  // ── CINTA SUPERIOR PANORÁMICA ──
   const bannerY = pad;
-  const bannerH = 130;
+  const bannerH = 90;
   ctx.save();
-  setBlackShadow(ctx, 35, 8, 0.9);
-  roundRect(ctx, pad, bannerY, innerW, bannerH, 18);
-  ctx.fillStyle = "rgba(6, 12, 26, 0.75)";
+  setBlackShadow(ctx, 30, 8, 0.9);
+  roundRect(ctx, pad, bannerY, innerW, bannerH, 16);
+  ctx.fillStyle = "rgba(6, 12, 26, 0.78)";
   ctx.fill();
   ctx.restore();
-  roundRect(ctx, pad, bannerY, innerW, bannerH, 18);
+  roundRect(ctx, pad, bannerY, innerW, bannerH, 16);
   ctx.strokeStyle = theme.accentColor;
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // Logo derecha de la cinta (respetando aspect ratio, nunca deformado)
-  const logoBoxW = 700;
-  const logoBoxH = bannerH - 32;
-  if (logoImage) drawImageProportional(ctx, logoImage, W - pad - 30 - logoBoxW, bannerY + 16, logoBoxW, logoBoxH, "right");
-
-  // ── 3 BANDAS INFERIORES que terminan exactamente en H-pad ──
-  const bandsGap = 20;
-  const bandsH = 470;
-  const bandsBot = H - pad;
-  const bandsTop = bandsBot - bandsH;
-
-  // ── TITULAR EDITORIAL masivo, centrado ──
-  const titleFS = 142;
-  const titleGap = titleFS * 1.14;
-  const titleTop = bannerY + bannerH + 28 + 92 + titleGap;
-  const titleMaxW = innerW;
-  const titleMaxH = bandsTop - 34 - titleTop;
-  const tGrad = ctx.createLinearGradient(pad, titleTop, W - pad, titleTop + Math.min(titleMaxH, 220));
-  tGrad.addColorStop(0, theme.brandGradient[0]);
-  tGrad.addColorStop(0.5, theme.brandGradient[1]);
-  tGrad.addColorStop(1, theme.brandGradient[2]);
-  const titleFirstLineY = fitDrawLines(ctx, data.title || "GRAN TORNEO", pad + innerW / 2, titleTop + titleMaxH / 2, titleMaxW, titleMaxH, 2, "center", titleFS, tGrad, 75);
-
-  // Badge categoría más grande y visible, una línea por encima del título
-  const catText = (data.category || "CATEGORÍA ABIERTA").toUpperCase();
-  const badgeH = 92;
-  const badgeGap = 102;
-  const badgeY = titleFirstLineY - badgeH - badgeGap;
-  ctx.font = "900 46px 'Montserrat', 'Inter', sans-serif";
-  const badgeMaxW = 700;
-  const badgeW = Math.min(ctx.measureText(catText).width + 76, badgeMaxW);
+  // Texto oficial circuito a la izquierda de la cinta
   ctx.save();
-  setBlackShadow(ctx, 45, 14, 0.97);
-  roundRect(ctx, pad + innerW / 2 - badgeW / 2, badgeY, badgeW, badgeH, 40);
-  ctx.fillStyle = theme.badgeBg;
-  ctx.fill();
-  ctx.restore();
-  roundRect(ctx, pad + innerW / 2 - badgeW / 2, badgeY, badgeW, badgeH, 40);
-  ctx.strokeStyle = theme.badgeBorder;
-  ctx.lineWidth = 3;
-  ctx.stroke();
-  ctx.fillStyle = theme.badgeText;
-  ctx.textAlign = "center";
+  ctx.font = "900 24px 'Montserrat', 'Inter', sans-serif";
+  ctx.fillStyle = theme.accentColor;
+  ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  ctx.font = "900 46px 'Montserrat', 'Inter', sans-serif";
-  ctx.fillText(catText, pad + innerW / 2, badgeY + badgeH / 2);
-  ctx.textBaseline = "alphabetic";
+  setBlackShadow(ctx, 20, 4, 0.9);
+  ctx.fillText("🏆 SALADILLO PADEL TOUR • CIRCUITO OFICIAL 2026", pad + 32, bannerY + bannerH / 2);
+  ctx.restore();
 
-  function drawMagBand(top: number, h: number, label: string, value: string, accent: string) {
+  // Logo derecha de la cinta
+  const logoBoxW = 240;
+  const logoBoxH = bannerH - 24;
+  if (logoImage) drawImageProportional(ctx, logoImage, W - pad - 20 - logoBoxW, bannerY + 12, logoBoxW, logoBoxH, "right");
+
+  // ── 3 PODIOS INFERIORES HORIZONTALES LADO A LADO ──
+  const podioH = 180;
+  const podioTop = H - pad - podioH;
+  const gap = 20;
+  const podioW = (innerW - gap * 2) / 3;
+
+  function drawMagPodio(x: number, y: number, w: number, h: number, label: string, value: string, accent: string) {
     ctx.save();
-    setBlackShadow(ctx, 40, 10, 0.94);
-    roundRect(ctx, pad, top, innerW, h, 20);
-    ctx.fillStyle = "rgba(6, 12, 26, 0.85)";
+    setBlackShadow(ctx, 35, 10, 0.94);
+    roundRect(ctx, x, y, w, h, 18);
+    ctx.fillStyle = "rgba(6, 12, 26, 0.88)";
     ctx.fill();
     ctx.restore();
-    roundRect(ctx, pad, top, innerW, h, 20);
+    roundRect(ctx, x, y, w, h, 18);
     ctx.strokeStyle = accent;
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    drawBandLabel(ctx, label, pad + innerW / 2, top + 38, accent, innerW - 72, "center");
-    const vTop = top + 45;
-    const vH = h - 45 - 17;
-    fitDrawTwoLines(ctx, value, pad + innerW / 2, vTop + vH / 2, innerW - 72, vH, 74, "#ffffff", 20);
+    const labelY = y + 30;
+    drawBandLabel(ctx, label, x + w / 2, labelY, accent, w - 40, "center", 22);
+
+    const valueCY = y + 44 + (h - 44) / 2;
+    const valueMaxH = h - 56;
+    const valueMaxW = w - 40;
+    fitDrawTwoLines(ctx, value, x + w / 2, valueCY, valueMaxW, valueMaxH, 46, "#ffffff", 18);
   }
 
-  const m0 = stackSlot(bandsTop, bandsBot, 3, bandsGap, 0);
-  const m1 = stackSlot(bandsTop, bandsBot, 3, bandsGap, 1);
-  const m2 = stackSlot(bandsTop, bandsBot, 3, bandsGap, 2);
-  drawMagBand(m0.y, m0.h, "📅 FECHA", data.date || "PRÓXIMAMENTE", theme.accentColor);
-  drawMagBand(m1.y, m1.h, "📍 LUGAR", data.location || "SALADILLO, B.A.", theme.badgeText);
-  drawMagBand(m2.y, m2.h, "🏆 PREMIOS", data.prizes || "TROFEOS + EFECTIVO", "#fbbf24");
+  // ── BADGE CATEGORÍA ──
+  const badgeY = bannerY + bannerH + 16;
+  const badgeH = 56;
+  const catText = (data.category || "CATEGORÍA ABIERTA").toUpperCase();
+  ctx.font = "900 30px 'Montserrat', 'Inter', sans-serif";
+  const badgeMaxW = 650;
+  const badgeW = Math.min(ctx.measureText(catText).width + 60, badgeMaxW);
+  ctx.save();
+  setBlackShadow(ctx, 40, 10, 0.96);
+  roundRect(ctx, pad + innerW / 2 - badgeW / 2, badgeY, badgeW, badgeH, 28);
+  ctx.fillStyle = theme.badgeBg;
+  ctx.fill();
+  ctx.restore();
+  roundRect(ctx, pad + innerW / 2 - badgeW / 2, badgeY, badgeW, badgeH, 28);
+  ctx.strokeStyle = theme.badgeBorder;
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  ctx.fillStyle = theme.badgeText;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "900 30px 'Montserrat', 'Inter', sans-serif";
+  ctx.fillText(catText, pad + innerW / 2, badgeY + badgeH / 2);
+  ctx.textBaseline = "alphabetic";
+
+  // ── TITULAR EDITORIAL ──
+  const titleTop = badgeY + badgeH + 16;
+  const titleBot = podioTop - 18;
+  const titleMaxH = titleBot - titleTop;
+  const titleCY = titleTop + titleMaxH / 2;
+  const titleFS = 120;
+  const tGrad = ctx.createLinearGradient(pad, titleTop, W - pad, titleTop + Math.min(titleMaxH, 200));
+  tGrad.addColorStop(0, theme.brandGradient[0]);
+  tGrad.addColorStop(0.5, theme.brandGradient[1]);
+  tGrad.addColorStop(1, theme.brandGradient[2]);
+  fitDrawLines(ctx, data.title || "GRAN TORNEO", pad + innerW / 2, titleCY, innerW, titleMaxH, 2, "center", titleFS, tGrad, 80);
+
+  const p0X = pad;
+  const p1X = pad + podioW + gap;
+  const p2X = pad + (podioW + gap) * 2;
+  drawMagPodio(p0X, podioTop, podioW, podioH, "📅 FECHA", data.date || "PRÓXIMAMENTE", theme.accentColor);
+  drawMagPodio(p1X, podioTop, podioW, podioH, "📍 LUGAR", data.location || "SALADILLO, B.A.", theme.badgeText);
+  drawMagPodio(p2X, podioTop, podioW, podioH, "🏆 PREMIOS", data.prizes || "TROFEOS + EFECTIVO", "#fbbf24");
 }
 
 /**
- * Función principal de renderizado en Canvas (1920x1080)
+ * Función principal de renderizado en Canvas (1920x864 - 20:9)
  */
 export function renderFlyerOnCanvas(
   canvas: HTMLCanvasElement,
@@ -839,7 +878,7 @@ export function renderFlyerOnCanvas(
   if (!ctx) return;
 
   const W = (canvas.width = 1920);
-  const H = (canvas.height = 1080);
+  const H = (canvas.height = 864);
   const activeTheme = THEMES[data.theme || "neon_emerald"] || THEMES.neon_emerald;
   const activeLayout = data.layout || "split_card";
 

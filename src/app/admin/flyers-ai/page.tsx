@@ -419,7 +419,7 @@ export default function AdminFlyersPage() {
 
       setStatusMsg({
         type: "success",
-        text: "Flyer horizontal descargado en alta resolución (1920x1080 px - 16:9).",
+        text: "Flyer horizontal descargado en alta resolución (1920x864 px - 20:9).",
       });
     } catch (err) {
       console.error("Error al descargar:", err);
@@ -501,14 +501,14 @@ export default function AdminFlyersPage() {
               <span>LOGO OFICIAL SPT INTEGRADO</span>
             </div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
-              <span>1920 × 1080 PX (16:9)</span>
+              <span>1920 × 864 PX (20:9)</span>
             </div>
           </div>
           <h1 className="text-3xl font-black text-white tracking-tight flex items-center gap-3">
             Generador de Flyers
           </h1>
           <p className="text-dark-400 mt-1 text-sm">
-            Diseña flyers oficiales de pádel en formato horizontal (16:9) con fondos locales y composiciones dinámicas exclusivas.
+            Diseña flyers oficiales de pádel en formato horizontal panorámico (20:9) con fondos locales y composiciones dinámicas exclusivas.
           </p>
         </div>
 
@@ -538,7 +538,7 @@ export default function AdminFlyersPage() {
             className="flex items-center gap-2 text-xs bg-dark-800 hover:bg-dark-700 text-white font-bold border border-dark-700"
           >
             <Download className="w-4 h-4" />
-            Descargar Flyer (16:9)
+            Descargar Flyer (20:9)
           </Button>
         </div>
       </div>
@@ -575,11 +575,11 @@ export default function AdminFlyersPage() {
       )}
 
       {/* SECCIÓN 1: VISTA PREVIA DEL CANVAS HORIZONTAL EN VIVO (16:9) */}
-      <Card className="p-4 sm:p-6 border-dark-800 bg-dark-900/90 shadow-2xl overflow-hidden">
+      <Card className="p-3 sm:p-6 border-dark-800 bg-dark-900/90 shadow-2xl overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <span className="text-xs font-bold text-dark-300 uppercase tracking-wider flex items-center gap-2">
             <Eye className="w-4 h-4 text-emerald-400" />
-            Vista Previa • Resolución 1920 × 1080 px (16:9)
+            Vista Previa • Resolución 1920 × 864 px (20:9)
           </span>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -609,8 +609,8 @@ export default function AdminFlyersPage() {
           </div>
         </div>
 
-        {/* Contenedor Responsivo del Canvas 16:9 */}
-        <div className="relative w-full aspect-video rounded-2xl overflow-hidden shadow-2xl border border-dark-700/80 bg-black flex items-center justify-center">
+        {/* Contenedor Responsivo del Canvas 20:9 */}
+        <div className="relative w-full aspect-[20/9] rounded-xl sm:rounded-2xl overflow-hidden shadow-2xl border border-dark-700/80 bg-black flex items-center justify-center">
           <canvas
             ref={canvasRef}
             className="w-full h-full object-contain pointer-events-none"
@@ -647,7 +647,7 @@ export default function AdminFlyersPage() {
               className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 text-xs py-2 bg-gradient-to-r from-emerald-500 to-lime-500 text-dark-950 font-bold"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Descargar Flyer (PNG 1920x1080)</span>
+              <span>Descargar Flyer (PNG 1920x864)</span>
             </Button>
           </div>
 

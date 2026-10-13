@@ -10,6 +10,7 @@ interface NewsCarouselProps {
   showThumbnails?: boolean;
   onDelete?: (id: string, imageUrl: string) => void;
   isAdmin?: boolean;
+  fullWidthOnMobile?: boolean;
 }
 
 const DEFAULT_FLYER: Flyer = {
@@ -26,7 +27,8 @@ export default function NewsCarousel({
   flyers: initialFlyers, 
   showThumbnails = false, 
   onDelete,
-  isAdmin = false 
+  isAdmin = false,
+  fullWidthOnMobile = !isAdmin
 }: NewsCarouselProps) {
   const [flyers, setFlyers] = useState<Flyer[]>(
     initialFlyers && initialFlyers.length > 0 ? initialFlyers : [DEFAULT_FLYER]
@@ -149,12 +151,12 @@ export default function NewsCarousel({
   };
 
   const content = (
-    <div className="relative w-full aspect-video sm:aspect-[21/9] rounded-2xl overflow-hidden shadow-2xl bg-dark-900 border border-emerald-500/30 group">
+    <div className={`relative w-full aspect-[20/9] ${fullWidthOnMobile ? "rounded-none sm:rounded-2xl border-y sm:border" : "rounded-2xl border"} overflow-hidden shadow-2xl bg-dark-900 border-emerald-500/30 group`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={currentFlyer.image_url}
         alt={currentFlyer.title || "Flyer Oficial SPT"}
-        className="w-full h-full object-contain"
+        className="w-full h-full object-cover"
         loading="eager"
       />
       
@@ -166,19 +168,21 @@ export default function NewsCarousel({
         <>
           <button 
             onClick={(e) => { e.preventDefault(); handlePrev(); }}
-            className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 backdrop-blur-md cursor-pointer"
+            className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-black/80 backdrop-blur-md cursor-pointer z-10"
+            aria-label="Flyer anterior"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
           <button 
             onClick={(e) => { e.preventDefault(); handleNext(); }}
-            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 backdrop-blur-md cursor-pointer"
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-black/80 backdrop-blur-md cursor-pointer z-10"
+            aria-label="Siguiente flyer"
           >
             <ChevronRight className="w-5 h-5" />
           </button>
           
           {/* Indicators */}
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none z-10">
             {flyers.map((_, idx) => (
               <span
                 key={idx}
@@ -193,8 +197,12 @@ export default function NewsCarousel({
     </div>
   );
 
+  const wrapperClass = fullWidthOnMobile
+    ? "w-[calc(100%+2rem)] -mx-4 sm:w-full sm:mx-0 mt-3 sm:mt-6 mb-4 sm:mb-6"
+    : "w-full mt-3 sm:mt-6 mb-4 sm:mb-6";
+
   return (
-    <div className="w-full mt-3 sm:mt-6 mb-4 sm:mb-6">
+    <div className={wrapperClass}>
       {currentFlyer.link_url ? (
         <Link href={currentFlyer.link_url} className="block w-full">
           {content}
@@ -205,7 +213,7 @@ export default function NewsCarousel({
 
       {/* Miniaturas visibles - Solo en admin o cuando showThumbnails=true */}
       {showThumbnails && flyers.length > 0 && (
-        <div className="mt-4">
+        <div className={`mt-4 ${fullWidthOnMobile ? "px-4 sm:px-0" : ""}`}>
           <h3 className="text-xs font-bold text-dark-400 uppercase tracking-wider mb-2">
             {isAdmin ? "Flyers en carrusel (clic en X para eliminar)" : "Flyers disponibles"}
           </h3>
@@ -213,7 +221,7 @@ export default function NewsCarousel({
             {flyers.map((flyer, idx) => (
               <div
                 key={flyer.id}
-                className={`relative aspect-video rounded-xl overflow-hidden bg-dark-900 border-2 transition-all ${
+                className={`relative aspect-[20/9] rounded-xl overflow-hidden bg-dark-900 border-2 transition-all ${
                   idx === currentIndex
                     ? "border-emerald-400 ring-2 ring-emerald-500/30"
                     : "border-dark-700 hover:border-dark-500"
