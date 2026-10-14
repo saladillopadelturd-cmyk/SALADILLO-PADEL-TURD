@@ -7,11 +7,15 @@ import { useState } from "react";
 import { Activity, Trophy, Shield, Menu, X, Calendar, Users } from "lucide-react";
 import { usePlayerIdentity } from "@/context/PlayerIdentityContext";
 import PlayerAvatar from "@/components/player/PlayerAvatar";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const { player, isIdentified, openFicha } = usePlayerIdentity();
+  const { isAdmin } = useAuth();
+
+  const isAdminMode = Boolean(isAdmin || pathname.startsWith("/admin"));
 
   const headerPlayerPhoto =
     player?.photo_url ||
@@ -117,10 +121,25 @@ export default function Header() {
           <div className="flex items-center gap-3">
             <Link
               href="/admin"
-              className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-dark-400 hover:text-white bg-dark-900/80 hover:bg-dark-800 border border-dark-800 rounded-xl transition-all"
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-xl transition-all cursor-pointer ${
+                isAdminMode
+                  ? "bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-black border border-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.45)] ring-1 ring-emerald-400/50"
+                  : "hidden md:inline-flex font-semibold text-dark-400 hover:text-white bg-dark-900/80 hover:bg-dark-800 border border-dark-800"
+              }`}
+              title={isAdminMode ? "Modo Administrador Encendido" : "Acceso a Administración"}
             >
-              <Shield className="w-3.5 h-3.5 text-blue-400" />
+              <Shield
+                className={`w-3.5 h-3.5 transition-colors ${
+                  isAdminMode ? "text-dark-950 fill-dark-950/20" : "text-blue-400"
+                }`}
+              />
               <span>Admin</span>
+              {isAdminMode && (
+                <span
+                  className="w-1.5 h-1.5 rounded-full bg-dark-950 animate-pulse ml-0.5"
+                  title="Modo Administrador Activo"
+                />
+              )}
             </Link>
 
             {/* Mobile Menu Button (Touch Target >= 44px) */}
@@ -219,10 +238,21 @@ export default function Header() {
               <Link
                 href="/admin"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-dark-400 hover:text-white hover:bg-dark-900 min-h-[48px]"
+                className={`flex items-center justify-between px-4 py-3 rounded-xl text-sm font-bold min-h-[48px] transition-all ${
+                  isAdminMode
+                    ? "bg-emerald-500 text-dark-950 shadow-[0_0_15px_rgba(16,185,129,0.35)] border border-emerald-300"
+                    : "text-dark-400 hover:text-white hover:bg-dark-900"
+                }`}
               >
-                <Shield className="w-4 h-4 text-blue-400" />
-                Panel Administrador
+                <div className="flex items-center gap-3">
+                  <Shield className={`w-4 h-4 ${isAdminMode ? "text-dark-950" : "text-blue-400"}`} />
+                  <span>Panel Administrador</span>
+                </div>
+                {isAdminMode && (
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-dark-950 text-emerald-300 border border-dark-900">
+                    Encendido
+                  </span>
+                )}
               </Link>
             </div>
           </div>
