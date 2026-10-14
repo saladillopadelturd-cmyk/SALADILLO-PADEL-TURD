@@ -79,13 +79,23 @@ export async function POST(req: Request) {
     let buffer: Buffer | null = null;
     let fileName = `flyer_confirmado_${Date.now()}.png`;
 
+    let mimeType = "image/png";
+    let fileExtension = "png";
+
     if (contentType.includes("multipart/form-data")) {
       const formData = await req.formData();
-      title = formData.get("title") as string || title;
-      link_url = formData.get("link_url") as string || link_url;
+      title = (formData.get("title") as string) || title;
+      link_url = (formData.get("link_url") as string) || link_url;
       const file = formData.get("file") as File | null;
       
       if (file) {
+        if (file.type) {
+          mimeType = file.type;
+          if (file.type === "image/jpeg" || file.type === "image/jpg") fileExtension = "jpg";
+          else if (file.type === "image/webp") fileExtension = "webp";
+          else if (file.type === "image/png") fileExtension = "png";
+        }
+        fileName = `flyer_confirmado_${Date.now()}.${fileExtension}`;
         const arrayBuffer = await file.arrayBuffer();
         buffer = Buffer.from(arrayBuffer);
       }
@@ -96,6 +106,13 @@ export async function POST(req: Request) {
       const { raw_base64 } = body;
       
       if (raw_base64 && typeof raw_base64 === "string" && raw_base64.startsWith("data:image")) {
+        const match = raw_base64.match(/^data:(image\/\w+);base64,/);
+        if (match && match[1]) {
+          mimeType = match[1];
+          if (mimeType.includes("jpeg") || mimeType.includes("jpg")) fileExtension = "jpg";
+          else if (mimeType.includes("webp")) fileExtension = "webp";
+        }
+        fileName = `flyer_confirmado_${Date.now()}.${fileExtension}`;
         const base64Data = raw_base64.replace(/^data:image\/\w+;base64,/, "");
         buffer = Buffer.from(base64Data, "base64");
       }
@@ -105,23 +122,23 @@ export async function POST(req: Request) {
 
     // Si tenemos buffer, subir a Supabase Storage
     if (buffer) {
-      // Verificar tamaño (max 5MB)
-      if (buffer.length > 5 * 1024 * 1024) {
-        return NextResponse.json({ success: false, error: "Imagen demasiado grande (máx 5MB)" }, { status: 413 });
+      // Verificar tamaño (máx 10MB)
+      if (buffer.length > 10 * 1024 * 1024) {
+        return NextResponse.json({ success: false, error: "Imagen demasiado grande (máx 10MB)" }, { status: 413 });
       }
 
-        // Subir a Supabase Storage con Service Role Key
-        if (SUPABASE_SERVICE_ROLE_KEY) {
-          const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/flyers/${fileName}`, {
-            method: "POST",
-            headers: {
-              apikey: SUPABASE_SERVICE_ROLE_KEY,
-              Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-              "Content-Type": "image/png",
-              "x-upsert": "true",
-            },
-            body: new Uint8Array(buffer),
-          });
+      // Subir a Supabase Storage con Service Role Key
+      if (SUPABASE_SERVICE_ROLE_KEY) {
+        const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/flyers/${fileName}`, {
+          method: "POST",
+          headers: {
+            apikey: SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            "Content-Type": mimeType,
+            "x-upsert": "true",
+          },
+          body: new Uint8Array(buffer),
+        });
 
         if (!uploadRes.ok) {
           const errText = await uploadRes.text();

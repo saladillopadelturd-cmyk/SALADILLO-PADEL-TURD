@@ -30,6 +30,12 @@ import {
   Check,
   Sparkles,
   Palette,
+  Upload,
+  Image as ImageIcon,
+  X,
+  ExternalLink,
+  ArrowRight,
+  Trash2,
 } from "lucide-react";
 
 export interface LocalBackground {
@@ -176,6 +182,21 @@ export default function AdminFlyersPage() {
   const [currentActiveFile, setCurrentActiveFile] = useState<string>(FONDOS_DISPONIBLES[0].filename);
   const [currentTheme, setCurrentTheme] = useState<FlyerTheme>("neon_emerald");
   const [currentLayout, setCurrentLayout] = useState<FlyerLayout>("split_card");
+
+  // Pestaña Activa: "generator" (Diseñador Canvas SPT) o "upload" (Subir Flyer de Otra App)
+  const [activeTab, setActiveTab] = useState<"generator" | "upload">("generator");
+
+  // Estados para Flyer Externo Subido
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedPreview, setUploadedPreview] = useState<string | null>(null);
+  const [uploadedDimensions, setUploadedDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [uploadedTitle, setUploadedTitle] = useState("");
+  const [uploadedLink, setUploadedLink] = useState("#torneos-activos");
+  const [uploadedTournamentId, setUploadedTournamentId] = useState("");
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [uploadingExternal, setUploadingExternal] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const customBgInputRef = useRef<HTMLInputElement>(null);
 
   // System & UI State
   const [loadingBg, setLoadingBg] = useState(false);
@@ -490,6 +511,170 @@ export default function AdminFlyersPage() {
     }
   };
 
+  // Manejo de Selección de Archivo Externo (desde otra app)
+  const handleFileSelect = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setStatusMsg({
+        type: "error",
+        text: "El archivo seleccionado debe ser una imagen válida (PNG, JPG, WEBP).",
+      });
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setStatusMsg({
+        type: "error",
+        text: "La imagen es demasiado pesada. El tamaño máximo permitido es 10 MB.",
+      });
+      return;
+    }
+
+    setUploadedFile(file);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      setUploadedPreview(result);
+
+      // Medir dimensiones reales
+      const img = new window.Image();
+      img.onload = () => {
+        setUploadedDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+      };
+      img.src = result;
+    };
+    reader.readAsDataURL(file);
+
+    // Sugerir título si aún está vacío
+    if (!uploadedTitle) {
+      const cleanName = file.name
+        .replace(/\.[^/.]+$/, "")
+        .replace(/[-_]/g, " ")
+        .toUpperCase();
+      setUploadedTitle(cleanName || "TORNEO SALADILLO PADEL TOUR");
+    }
+
+    setStatusMsg({
+      type: "success",
+      text: `Imagen cargada: "${file.name}" (${(file.size / (1024 * 1024)).toFixed(2)} MB). Lista para publicar.`,
+    });
+  };
+
+  // Autocompletar datos del flyer subido a partir de un torneo
+  const handleUploadedTournamentSelect = (tourId: string) => {
+    setUploadedTournamentId(tourId);
+    const tour = tournaments.find((t) => t.id === tourId);
+    if (!tour) return;
+
+    setUploadedTitle(`${tour.name?.toUpperCase()} - ${tour.category?.toUpperCase() || ""}`.trim());
+    setUploadedLink(`/torneo/${tour.id}`);
+  };
+
+  // CONFIRMAR Y PUBLICAR FLYER SUBIDO DIRECTAMENTE EN LA APP MÓVIL
+  const handleConfirmUploadedFlyer = async () => {
+    if (!uploadedFile) {
+      setStatusMsg({
+        type: "error",
+        text: "Primero selecciona o arrastra una imagen de flyer para subir.",
+      });
+      return;
+    }
+
+    setUploadingExternal(true);
+    setStatusMsg(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", uploadedFile);
+      formData.append("title", uploadedTitle.trim() || "Torneo Saladillo Padel Tour");
+      formData.append("link_url", uploadedLink.trim() || "#torneos-activos");
+
+      const apiRes = await fetch("/api/flyers", {
+        method: "POST",
+        body: formData,
+      });
+
+      const apiData = await apiRes.json();
+
+      if (apiData && apiData.success && apiData.flyer && apiData.flyer.image_url) {
+        try {
+          const confirmedFlyerData = {
+            id: apiData.flyer.id,
+            title: apiData.flyer.title,
+            image_url: apiData.flyer.image_url,
+            link_url: apiData.flyer.link_url,
+            active: true,
+            sort_order: -1,
+            created_at: apiData.flyer.created_at,
+          };
+          localStorage.setItem("spt_confirmed_flyer", JSON.stringify(confirmedFlyerData));
+          window.dispatchEvent(new CustomEvent("spt-flyer-confirmed", { detail: confirmedFlyerData }));
+        } catch (storageErr) {
+          console.error("Local storage error:", storageErr);
+        }
+
+        setStatusMsg({
+          type: "success",
+          text: "✅ ¡Flyer externo confirmado y publicado! Ya se muestra en la portada de la app móvil debajo del encabezado.",
+        });
+      } else {
+        throw new Error(apiData.error || "Error al subir el flyer al servidor");
+      }
+    } catch (err: unknown) {
+      console.error("Error al publicar flyer externo:", err);
+      const msg = err instanceof Error ? err.message : "Error al subir flyer";
+      setStatusMsg({ type: "error", text: msg });
+    } finally {
+      setUploadingExternal(false);
+    }
+  };
+
+  // Usar el flyer externo subido como fondo en el Generador Canvas de SPT
+  const handleUseUploadedAsBackground = () => {
+    if (!uploadedPreview) return;
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      setBgImage(img);
+      setCurrentActiveFile(uploadedFile?.name || "flyer_externo.png");
+      setSelectedBackgroundId("custom_upload");
+      setActiveTab("generator");
+      setStatusMsg({
+        type: "success",
+        text: "🎨 Flyer externo cargado como fondo en el Generador SPT. Ahora podés ajustar los textos y la composición.",
+      });
+    };
+    img.src = uploadedPreview;
+  };
+
+  // Subir un fondo personalizado directamente al Generador Canvas
+  const handleCustomBgSelect = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setStatusMsg({
+        type: "error",
+        text: "El fondo seleccionado debe ser una imagen válida (PNG, JPG, WEBP).",
+      });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      const img = new window.Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        setBgImage(img);
+        setCurrentActiveFile(file.name);
+        setSelectedBackgroundId("custom_bg");
+        setStatusMsg({
+          type: "success",
+          text: `Fondo personalizado "${file.name}" cargado en el canvas en tiempo real.`,
+        });
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       {/* Encabezado Principal */}
@@ -513,34 +698,103 @@ export default function AdminFlyersPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button
-            variant="secondary"
-            onClick={handleRegenerateFlyer}
-            disabled={loadingBg || confirming}
-            className="flex items-center gap-2 text-xs font-bold border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
-          >
-            <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse" />
-            REGENERAR FLYER
-          </Button>
+          {activeTab === "generator" ? (
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => setActiveTab("upload")}
+                className="flex items-center gap-2 text-xs font-bold border-amber-500/40 text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+              >
+                <Upload className="w-4 h-4 text-amber-400" />
+                <span>SUBIR FLYER (OTRA APP)</span>
+              </Button>
 
-          <Button
-            onClick={handleConfirmFlyer}
-            disabled={loadingBg || confirming}
-            className="flex items-center gap-2 text-xs bg-gradient-to-r from-emerald-500 via-teal-500 to-lime-500 text-dark-950 font-black hover:from-emerald-400 hover:to-lime-400 shadow-lg shadow-emerald-500/25 px-4"
-          >
-            <CheckCircle2 className={`w-4 h-4 ${confirming ? "animate-spin" : ""}`} />
-            <span>{confirming ? "Confirmando..." : "CONFIRMAR FLYER"}</span>
-          </Button>
+              <Button
+                variant="secondary"
+                onClick={handleRegenerateFlyer}
+                disabled={loadingBg || confirming}
+                className="flex items-center gap-2 text-xs font-bold border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
+              >
+                <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse" />
+                REGENERAR FLYER
+              </Button>
 
-          <Button
-            onClick={handleDownload}
-            disabled={loadingBg || confirming}
-            className="flex items-center gap-2 text-xs bg-dark-800 hover:bg-dark-700 text-white font-bold border border-dark-700"
-          >
-            <Download className="w-4 h-4" />
-            Descargar Flyer (20:9)
-          </Button>
+              <Button
+                onClick={handleConfirmFlyer}
+                disabled={loadingBg || confirming}
+                className="flex items-center gap-2 text-xs bg-gradient-to-r from-emerald-500 via-teal-500 to-lime-500 text-dark-950 font-black hover:from-emerald-400 hover:to-lime-400 shadow-lg shadow-emerald-500/25 px-4 cursor-pointer"
+              >
+                <CheckCircle2 className={`w-4 h-4 ${confirming ? "animate-spin" : ""}`} />
+                <span>{confirming ? "Confirmando..." : "CONFIRMAR FLYER"}</span>
+              </Button>
+
+              <Button
+                onClick={handleDownload}
+                disabled={loadingBg || confirming}
+                className="flex items-center gap-2 text-xs bg-dark-800 hover:bg-dark-700 text-white font-bold border border-dark-700 cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                Descargar Flyer (20:9)
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => setActiveTab("generator")}
+                className="flex items-center gap-2 text-xs font-bold border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 text-emerald-400" />
+                <span>DISEÑAR CON PLANTILLAS</span>
+              </Button>
+
+              <Button
+                onClick={handleConfirmUploadedFlyer}
+                disabled={!uploadedFile || uploadingExternal}
+                className={`flex items-center gap-2 text-xs font-black px-4 shadow-lg ${
+                  !uploadedFile || uploadingExternal
+                    ? "bg-dark-800 text-dark-500 border border-dark-700 cursor-not-allowed"
+                    : "bg-gradient-to-r from-emerald-500 via-teal-500 to-lime-500 text-dark-950 hover:from-emerald-400 hover:to-lime-400 shadow-emerald-500/25 cursor-pointer"
+                }`}
+              >
+                <CheckCircle2 className={`w-4 h-4 ${uploadingExternal ? "animate-spin" : ""}`} />
+                <span>{uploadingExternal ? "Publicando..." : "CONFIRMAR FLYER SUBIDO"}</span>
+              </Button>
+            </>
+          )}
         </div>
+      </div>
+
+      {/* Selector de Modo: Diseñar con Plantillas vs Subir Flyer de Otra App */}
+      <div className="flex border-b border-dark-800 gap-2 sm:gap-4 overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => setActiveTab("generator")}
+          className={`px-4 sm:px-6 py-3 font-bold text-xs sm:text-sm flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === "generator"
+              ? "border-emerald-500 text-emerald-400 bg-emerald-500/10 rounded-t-xl"
+              : "border-transparent text-dark-400 hover:text-white"
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-emerald-400" />
+          <span>Diseñar con Plantillas SPT</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("upload")}
+          className={`px-4 sm:px-6 py-3 font-bold text-xs sm:text-sm flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === "upload"
+              ? "border-amber-500 text-amber-400 bg-amber-500/10 rounded-t-xl"
+              : "border-transparent text-dark-400 hover:text-white"
+          }`}
+        >
+          <Upload className="w-4 h-4 text-amber-400" />
+          <span>Subir Flyer (Canva / Otra App)</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-400/20 text-amber-300 font-black border border-amber-400/30">
+            NUEVO
+          </span>
+        </button>
       </div>
 
       {/* Notificación de Estado */}
@@ -574,8 +828,11 @@ export default function AdminFlyersPage() {
         </div>
       )}
 
-      {/* SECCIÓN 1: VISTA PREVIA DEL CANVAS HORIZONTAL EN VIVO (16:9) */}
-      <Card className="p-3 sm:p-6 border-dark-800 bg-dark-900/90 shadow-2xl overflow-hidden">
+      {/* PESTAÑA 1: GENERADOR Y COMPOSITOR CON PLANTILLAS SPT */}
+      {activeTab === "generator" && (
+        <div className="space-y-8">
+          {/* SECCIÓN 1: VISTA PREVIA DEL CANVAS HORIZONTAL EN VIVO (20:9) */}
+          <Card className="p-3 sm:p-6 border-dark-800 bg-dark-900/90 shadow-2xl overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <span className="text-xs font-bold text-dark-300 uppercase tracking-wider flex items-center gap-2">
             <Eye className="w-4 h-4 text-emerald-400" />
@@ -778,6 +1035,40 @@ export default function AdminFlyersPage() {
               </span>
             </div>
 
+            {/* Input oculto para subir fondo propio */}
+            <input
+              ref={customBgInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/jpg,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.[0]) {
+                  handleCustomBgSelect(e.target.files[0]);
+                }
+              }}
+            />
+
+            {/* Opción de Subir Fondo Propio desde Archivo */}
+            <div className="p-3.5 rounded-xl border border-dashed border-dark-700 hover:border-emerald-500/50 bg-dark-950/40 transition-all flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 truncate">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
+                  <Upload className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div className="truncate">
+                  <p className="text-xs font-bold text-white truncate">¿Querés usar una foto propia?</p>
+                  <p className="text-[10px] text-dark-400 truncate">Subí una foto de tu club o pista como fondo</p>
+                </div>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => customBgInputRef.current?.click()}
+                className="text-xs font-bold flex-shrink-0 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 cursor-pointer"
+              >
+                Subir Foto
+              </Button>
+            </div>
+
             {/* Selector de Diseño y Distribución (Layout) */}
             <div>
               <label className="block text-xs font-medium text-dark-300 mb-1.5 flex items-center justify-between">
@@ -902,6 +1193,252 @@ export default function AdminFlyersPage() {
           </Card>
         </div>
       </div>
+        </div>
+      )}
+
+      {/* PESTAÑA 2: SUBIR FLYER EXTERNO (CANVA / PHOTOSHOP / OTRA APP) */}
+      {activeTab === "upload" && (
+        <div className="space-y-6">
+          {/* Input oculto para subir flyer externo */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/jpg,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files?.[0]) {
+                handleFileSelect(e.target.files[0]);
+              }
+            }}
+          />
+
+          {!uploadedPreview ? (
+            /* ZONA DE ARRASTRAR Y SOLTAR / SELECCIONAR ARCHIVO */
+            <Card
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragOver(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                setIsDragOver(false);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragOver(false);
+                if (e.dataTransfer.files?.[0]) {
+                  handleFileSelect(e.dataTransfer.files[0]);
+                }
+              }}
+              onClick={() => fileInputRef.current?.click()}
+              className={`p-10 sm:p-16 border-2 border-dashed rounded-3xl text-center cursor-pointer transition-all duration-300 ${
+                isDragOver
+                  ? "border-amber-400 bg-amber-500/10 scale-[1.01] shadow-2xl shadow-amber-500/20"
+                  : "border-dark-700 hover:border-amber-500/60 bg-dark-900/60 hover:bg-dark-900/90"
+              }`}
+            >
+              <div className="max-w-xl mx-auto flex flex-col items-center">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-500/20 via-amber-500/10 to-transparent border border-amber-500/40 flex items-center justify-center mb-5 shadow-lg shadow-amber-500/10">
+                  <Upload className="w-10 h-10 text-amber-400 animate-bounce" />
+                </div>
+
+                <h3 className="text-xl sm:text-2xl font-black text-white mb-2">
+                  Arrastrá tu flyer aquí o hacé clic para seleccionarlo
+                </h3>
+                <p className="text-sm text-dark-300 mb-6 max-w-md">
+                  Utilizá flyers generados en <strong>Canva</strong>, <strong>Photoshop</strong>, <strong>Illustrator</strong> o cualquier otra aplicación para publicarlos directamente en la app oficial de Saladillo Padel Tour.
+                </p>
+
+                <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
+                  <span className="text-xs font-semibold px-3 py-1 rounded-full bg-dark-800 text-slate-300 border border-dark-700">
+                    Formatos: PNG, JPG, WEBP
+                  </span>
+                  <span className="text-xs font-semibold px-3 py-1 rounded-full bg-dark-800 text-slate-300 border border-dark-700">
+                    Tamaño máx: 10 MB
+                  </span>
+                  <span className="text-xs font-semibold px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                    Cualquier resolución y aspecto
+                  </span>
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    fileInputRef.current?.click();
+                  }}
+                  className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-dark-950 font-black text-sm px-6 py-3 rounded-xl shadow-lg shadow-amber-500/20 flex items-center gap-2 cursor-pointer"
+                >
+                  <ImageIcon className="w-4 h-4" />
+                  <span>Explorar Archivos del Dispositivo</span>
+                </Button>
+              </div>
+            </Card>
+          ) : (
+            /* FLYER CARGADO: VISTA PREVIA Y OPCIONES DE PUBLICACIÓN */
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              {/* Columna Izquierda: Vista Previa (7 columnas) */}
+              <div className="lg:col-span-7 space-y-4">
+                <Card className="p-4 sm:p-6 border-dark-700 bg-dark-900/90 shadow-2xl">
+                  <div className="flex items-center justify-between mb-4 border-b border-dark-800 pb-3">
+                    <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                      <Eye className="w-4 h-4" />
+                      Vista Previa del Flyer Subido
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUploadedFile(null);
+                        setUploadedPreview(null);
+                        setUploadedDimensions(null);
+                      }}
+                      className="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Quitar / Cambiar</span>
+                    </button>
+                  </div>
+
+                  {/* Contenedor de la Imagen */}
+                  <div className="relative w-full rounded-2xl overflow-hidden bg-black/90 border border-dark-700/80 shadow-2xl flex items-center justify-center p-2 min-h-[320px]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={uploadedPreview}
+                      alt="Flyer Subido"
+                      className="max-h-[500px] w-auto max-w-full rounded-xl object-contain shadow-xl"
+                    />
+                  </div>
+
+                  {/* Barra de Datos Técnicos */}
+                  <div className="mt-4 pt-3 border-t border-dark-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {uploadedDimensions && (
+                        <span className="px-2.5 py-1 rounded-md bg-dark-800 text-slate-300 border border-dark-700 font-mono font-medium">
+                          📐 {uploadedDimensions.width} × {uploadedDimensions.height} px
+                        </span>
+                      )}
+                      {uploadedFile && (
+                        <>
+                          <span className="px-2.5 py-1 rounded-md bg-dark-800 text-slate-300 border border-dark-700 font-mono font-medium">
+                            💾 {(uploadedFile.size / (1024 * 1024)).toFixed(2)} MB
+                          </span>
+                          <span className="px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono font-bold uppercase">
+                            {uploadedFile.type.replace("image/", "")}
+                          </span>
+                        </>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-xs font-bold text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Elegir otro archivo</span>
+                    </button>
+                  </div>
+                </Card>
+              </div>
+
+              {/* Columna Derecha: Configuración y Publicación Oficial (5 columnas) */}
+              <div className="lg:col-span-5 space-y-6">
+                <Card className="p-6 border-dark-800 space-y-5 bg-dark-900/90 shadow-2xl">
+                  <div className="border-b border-dark-800 pb-3">
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-emerald-400" />
+                      Publicación Oficial del Flyer
+                    </h3>
+                    <p className="text-xs text-dark-400 mt-0.5">
+                      Configurá el destino y confirmá para mostrarlo inmediatamente en la app móvil.
+                    </p>
+                  </div>
+
+                  {/* Autocompletar desde Torneo */}
+                  {tournaments.length > 0 && (
+                    <div>
+                      <label className="block text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                        <Trophy className="w-3.5 h-3.5" />
+                        Vincular a un Torneo (Opcional):
+                      </label>
+                      <select
+                        value={uploadedTournamentId}
+                        onChange={(e) => handleUploadedTournamentSelect(e.target.value)}
+                        className="w-full bg-dark-950 border border-dark-700 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white focus:border-emerald-500 focus:outline-none cursor-pointer"
+                      >
+                        <option value="">-- Seleccionar torneo para vincular destino --</option>
+                        {tournaments.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} ({t.category}) - {new Date(t.date).toLocaleDateString("es-AR")}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[11px] text-dark-400 mt-1">
+                        Al seleccionar un torneo, se vinculará automáticamente el enlace y el título.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Título del Flyer */}
+                  <div>
+                    <label className="block text-xs font-medium text-dark-300 mb-1.5">
+                      Título o Descripción del Flyer:
+                    </label>
+                    <input
+                      type="text"
+                      value={uploadedTitle}
+                      onChange={(e) => setUploadedTitle(e.target.value)}
+                      placeholder="Ej: TORNEO ABIERTO 5TA LIBRES - QUINTA LA PISTA"
+                      className="w-full bg-dark-950 border border-dark-700 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white uppercase focus:border-emerald-500 focus:outline-none font-medium"
+                    />
+                  </div>
+
+                  {/* Enlace de Destino */}
+                  <div>
+                    <label className="block text-xs font-medium text-dark-300 mb-1.5 flex items-center justify-between">
+                      <span>Enlace al Tocar el Flyer:</span>
+                      <span className="text-[10px] text-dark-500">Ej: /torneo/xxx o #torneos-activos</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={uploadedLink}
+                      onChange={(e) => setUploadedLink(e.target.value)}
+                      placeholder="Ej: /torneos o #torneos-activos"
+                      className="w-full bg-dark-950 border border-dark-700 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white focus:border-emerald-500 focus:outline-none font-mono"
+                    />
+                  </div>
+
+                  {/* Botones de Acción */}
+                  <div className="space-y-3 pt-2">
+                    <Button
+                      onClick={handleConfirmUploadedFlyer}
+                      disabled={uploadingExternal}
+                      className="w-full py-3.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-lime-500 text-dark-950 font-black text-sm rounded-xl hover:from-emerald-400 hover:to-lime-400 shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2 cursor-pointer transition-all"
+                    >
+                      <CheckCircle2 className={`w-5 h-5 ${uploadingExternal ? "animate-spin" : ""}`} />
+                      <span>{uploadingExternal ? "Publicando en App Móvil..." : "CONFIRMAR Y PUBLICAR EN APP MÓVIL"}</span>
+                    </Button>
+
+                    <Button
+                      variant="secondary"
+                      onClick={handleUseUploadedAsBackground}
+                      className="w-full py-2.5 text-xs font-bold border-amber-500/40 text-amber-400 hover:bg-amber-500/10 flex items-center justify-center gap-2 cursor-pointer"
+                      title="Carga esta imagen dentro del Diseñador Canvas de SPT para superponer textos o logos oficiales"
+                    >
+                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      <span>Usar como Fondo en Generador SPT</span>
+                    </Button>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-dark-950/60 border border-dark-800 text-[11px] text-dark-400 leading-relaxed">
+                    💡 <strong>Ubicación automática:</strong> Al confirmar, este flyer se convertirá de inmediato en el flyer destacado de la portada para todos los usuarios en la aplicación móvil y web.
+                  </div>
+                </Card>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
