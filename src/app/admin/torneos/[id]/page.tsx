@@ -17,6 +17,8 @@ import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabe
 import { findNextPlayoffMatchSlot, propagatePlayoffWinners, getStageName } from "@/lib/tournament/elimination";
 import ZoneCard from "@/components/tournament/ZoneCard";
 import ZoneConformationEditor from "@/components/tournament/ZoneConformationEditor";
+import AutoScheduleModal from "@/components/tournament/AutoScheduleModal";
+import { normalizeScheduledTime } from "@/lib/tournament/scheduler";
 import {
   AlertCircle,
   AlertTriangle,
@@ -71,6 +73,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
   const [isEditingConformation, setIsEditingConformation] = useState(false);
 
   // Modals for Actions
+  const [isAutoScheduleOpen, setIsAutoScheduleOpen] = useState(false);
   const [schedulingMatch, setSchedulingMatch] = useState<Match | null>(null);
   const [formCourt, setFormCourt] = useState("");
   const [formTime, setFormTime] = useState("");
@@ -322,18 +325,31 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
   const openScheduleModal = (m: Match) => {
     setSchedulingMatch(m);
     setFormCourt(m.court_name || "");
-    setFormTime(m.scheduled_time || "");
+    if (m.scheduled_time) {
+      try {
+        const d = new Date(m.scheduled_time);
+        const hours = String(d.getHours()).padStart(2, "0");
+        const minutes = String(d.getMinutes()).padStart(2, "0");
+        setFormTime(`${hours}:${minutes}`);
+      } catch {
+        setFormTime(m.scheduled_time);
+      }
+    } else {
+      setFormTime("");
+    }
   };
 
   const handleSaveSchedule = async () => {
     if (!schedulingMatch) return;
     startTransition(async () => {
       try {
+        const normalizedTime = normalizeScheduledTime(formTime, tournament?.date);
         const { error } = await supabase
           .from("matches")
           .update({
             court_name: formCourt.trim() || null,
-            scheduled_time: formTime.trim() || null,
+            scheduled_time: normalizedTime,
+            updated_at: new Date().toISOString(),
           })
           .eq("id", schedulingMatch.id);
 
@@ -342,7 +358,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
         setMatches((prev) =>
           prev.map((m) =>
             m.id === schedulingMatch.id
-              ? { ...m, court_name: formCourt.trim() || null, scheduled_time: formTime.trim() || null }
+              ? { ...m, court_name: formCourt.trim() || null, scheduled_time: normalizedTime }
               : m
           )
         );
@@ -1067,6 +1083,15 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <Button
+                      size="sm"
+                      onClick={() => setIsAutoScheduleOpen(true)}
+                      disabled={isPending || matches.length === 0}
+                      className="flex items-center gap-1.5 font-bold shadow-md bg-gradient-to-r from-emerald-500 to-sky-500 hover:from-emerald-600 hover:to-sky-600 text-dark-950"
+                    >
+                      <Sparkles className="w-4 h-4 text-dark-950" />
+                      Programador Automático
+                    </Button>
+                    <Button
                       variant="secondary"
                       size="sm"
                       onClick={handleGeneratePlayoffs}
@@ -1221,7 +1246,14 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                                   </span>
                                   <span className="flex items-center gap-1">
                                     <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                                    {m.scheduled_time || "Horario a definir"}
+                                    {m.scheduled_time
+                                      ? !isNaN(Date.parse(m.scheduled_time))
+                                        ? new Date(m.scheduled_time).toLocaleTimeString("es-AR", {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          }) + " hs"
+                                        : m.scheduled_time
+                                      : "Horario a definir"}
                                   </span>
                                 </div>
                               </div>
@@ -1575,6 +1607,18 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
               </div>
             </div>
           </Modal>
+
+          {/* Modal: Programador Automático de Partidos */}
+          {tournament && (
+            <AutoScheduleModal
+              isOpen={isAutoScheduleOpen}
+              onClose={() => setIsAutoScheduleOpen(false)}
+              tournamentId={tournamentId}
+              tournamentDate={tournament.date}
+              matches={matches}
+              onScheduleComplete={loadData}
+            />
+          )}
         </>
       )}
     </div>

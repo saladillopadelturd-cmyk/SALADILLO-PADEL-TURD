@@ -5,6 +5,7 @@
 
 import { runTournamentBusinessLogicTests } from "../src/lib/tournament/tournament-rules.test";
 import { generateSeededPlayoffBracket, type QualifiedPair } from "../src/lib/tournament/elimination";
+import { runSchedulerTests } from "../src/lib/tournament/scheduler.test";
 
 function runPlayoffStressSuite(): { passed: number; failed: number; errors: string[] } {
   let passed = 0;
@@ -112,9 +113,21 @@ async function main() {
     playoffStress.errors.forEach((e) => console.error(`  x ${e}`));
   }
 
+  // 3. Suite de Programador Automático de Partidos y Canchas
+  console.log("\n>> Ejecutando Suite de Programador Automático de Partidos y Canchas...");
+  const schedulerResults = runSchedulerTests();
+  console.log(`Resultados Programador Automático:`);
+  console.log(`  - Pruebas Pasadas: ${schedulerResults.passed}`);
+  console.log(`  - Pruebas Fallidas: ${schedulerResults.failed}`);
+
+  if (schedulerResults.errors.length > 0) {
+    console.error("\n[ERRORES EN SCHEDULER]:");
+    schedulerResults.errors.forEach((e) => console.error(`  x ${e}`));
+  }
+
   const elapsed = Date.now() - startTime;
-  const totalPassed = businessLogicResults.passed + playoffStress.passed;
-  const totalFailed = businessLogicResults.failed + playoffStress.failed;
+  const totalPassed = businessLogicResults.passed + playoffStress.passed + schedulerResults.passed;
+  const totalFailed = businessLogicResults.failed + playoffStress.failed + schedulerResults.failed;
 
   console.log("\n===============================================================");
   console.log("   RESUMEN FINAL DE TESTING Y CALIDAD (QA)");

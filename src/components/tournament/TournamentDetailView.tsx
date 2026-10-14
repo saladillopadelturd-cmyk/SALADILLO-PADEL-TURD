@@ -5,6 +5,7 @@ import Link from "next/link";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
+import Modal from "@/components/ui/Modal";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/Tabs";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,8 +13,10 @@ import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
 import { calculateRoundRobinStandings } from "@/lib/tournament/standings";
 import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel, isSumaCategory } from "@/lib/tournament/couples";
 import { propagatePlayoffWinners, getStageName } from "@/lib/tournament/elimination";
+import { normalizeScheduledTime } from "@/lib/tournament/scheduler";
 import Bracket from "@/components/tournament/Bracket";
 import ZoneConformationEditor from "@/components/tournament/ZoneConformationEditor";
+import AutoScheduleModal from "@/components/tournament/AutoScheduleModal";
 import {
   Calendar,
   MapPin,
@@ -25,6 +28,7 @@ import {
   Settings2,
   CheckCircle2,
   AlertCircle,
+  Edit2,
 } from "lucide-react";
 
 interface TournamentDetailProps {
@@ -72,7 +76,66 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
   const [isGeneratingZones, setIsGeneratingZones] = useState(false);
   const [isEditingConformation, setIsEditingConformation] = useState(false);
   const [notification, setNotification] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Estados de Programación de Canchas y Horarios
+  const [isAutoScheduleOpen, setIsAutoScheduleOpen] = useState(false);
+  const [schedulingMatch, setSchedulingMatch] = useState<Match | null>(null);
+  const [formCourt, setFormCourt] = useState("");
+  const [formTime, setFormTime] = useState("");
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
+
   const supabase = useMemo(() => createClient(), []);
+
+  const openScheduleModal = (m: Match) => {
+    setSchedulingMatch(m);
+    setFormCourt(m.court_name || "");
+    // Si viene ISO, mostrar hora legible o ISO
+    if (m.scheduled_time) {
+      try {
+        const d = new Date(m.scheduled_time);
+        const hours = String(d.getHours()).padStart(2, "0");
+        const minutes = String(d.getMinutes()).padStart(2, "0");
+        setFormTime(`${hours}:${minutes}`);
+      } catch {
+        setFormTime(m.scheduled_time);
+      }
+    } else {
+      setFormTime("");
+    }
+  };
+
+  const handleSaveSingleSchedule = async () => {
+    if (!schedulingMatch) return;
+    setIsSavingSchedule(true);
+    try {
+      const normalizedTime = normalizeScheduledTime(formTime, tournament?.date);
+      const { error } = await supabase
+        .from("matches")
+        .update({
+          court_name: formCourt.trim() || null,
+          scheduled_time: normalizedTime,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", schedulingMatch.id);
+
+      if (error) throw error;
+
+      setMatches((prev) =>
+        prev.map((m) =>
+          m.id === schedulingMatch.id
+            ? { ...m, court_name: formCourt.trim() || null, scheduled_time: normalizedTime }
+            : m
+        )
+      );
+      setSchedulingMatch(null);
+      setNotification({ type: "success", text: "Cancha y horario actualizados correctamente." });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error al guardar horario";
+      setNotification({ type: "error", text: msg });
+    } finally {
+      setIsSavingSchedule(false);
+    }
+  };
 
   const loadTournamentData = useCallback(async () => {
     try {
@@ -770,6 +833,16 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                   En eliminación directa, los cruces de cada fase se conforman automáticamente a medida que las parejas ganan sus partidos.
                 </p>
               </div>
+              {isAdmin && matches.length > 0 && (
+                <Button
+                  size="sm"
+                  onClick={() => setIsAutoScheduleOpen(true)}
+                  className="flex items-center gap-2 font-bold shadow-md bg-gradient-to-r from-emerald-500 to-sky-500 hover:from-emerald-600 hover:to-sky-600 text-dark-950 self-start sm:self-auto"
+                >
+                  <Sparkles className="w-4 h-4 text-dark-950" />
+                  Programador Automático
+                </Button>
+              )}
             </div>
 
             {/* Filtros de Fixture */}
@@ -885,13 +958,40 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                           </div>
                         </div>
 
-                        {m.score_super_tb && (
-                          <div className="flex items-center justify-end pt-1">
-                            <span className="text-amber-400 text-xs font-mono font-bold bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/25">
-                              STB: {m.score_super_tb}
-                            </span>
+                        <div className="flex items-center justify-between pt-1 border-t border-dark-800/60 text-xs">
+                          <span className="text-dark-400 text-[11px] flex items-center gap-1">
+                            {m.court_name && (
+                              <span className="bg-dark-800 text-dark-300 px-1.5 py-0.5 rounded text-[10px] font-medium">
+                                {m.court_name}
+                              </span>
+                            )}
+                            {m.scheduled_time && (
+                              <span className="text-dark-400">
+                                {new Date(m.scheduled_time).toLocaleTimeString("es-AR", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            )}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            {m.score_super_tb && (
+                              <span className="text-amber-400 text-xs font-mono font-bold bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/25">
+                                STB: {m.score_super_tb}
+                              </span>
+                            )}
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => openScheduleModal(m)}
+                                title="Editar cancha y horario"
+                                className="p-1 rounded bg-dark-800/80 hover:bg-dark-700 text-dark-400 hover:text-white transition-colors"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
-                        )}
+                        </div>
                       </Card>
                     );
                   }
@@ -997,11 +1097,24 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                         >
                           {isFinished ? "Finalizado" : isLive ? "● En Cancha" : "Programado"}
                         </span>
-                        {m.score_super_tb && (
-                          <span className="text-amber-400 text-xs font-mono font-bold bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/25">
-                            STB: {m.score_super_tb}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {m.score_super_tb && (
+                            <span className="text-amber-400 text-xs font-mono font-bold bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/25">
+                              STB: {m.score_super_tb}
+                            </span>
+                          )}
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => openScheduleModal(m)}
+                              title="Editar cancha y horario"
+                              className="px-2 py-0.5 rounded bg-dark-800 hover:bg-dark-700 text-dark-300 hover:text-white transition-colors flex items-center gap-1 text-[11px] font-medium"
+                            >
+                              <Edit2 className="w-3 h-3 text-sky-400" />
+                              <span>Programar</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </Card>
                   );
@@ -1074,6 +1187,80 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Modal: Programador Automático de Partidos */}
+      {tournament && (
+        <AutoScheduleModal
+          isOpen={isAutoScheduleOpen}
+          onClose={() => setIsAutoScheduleOpen(false)}
+          tournamentId={id}
+          tournamentDate={tournament.date}
+          matches={matches}
+          onScheduleComplete={loadTournamentData}
+        />
+      )}
+
+      {/* Modal: Edición Manual de Cancha y Horario */}
+      <Modal
+        isOpen={!!schedulingMatch}
+        onClose={() => setSchedulingMatch(null)}
+        title="Editar Cancha y Horario del Partido"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-dark-400 mb-1">
+              Partido
+            </label>
+            <p className="text-white text-sm font-semibold p-2.5 bg-dark-900 rounded-lg border border-dark-700">
+              {schedulingMatch?.couple1
+                ? getCoupleLabelWithNumber(schedulingMatch.couple1, coupleNumberMap.get(schedulingMatch.couple1.id))
+                : "Por definir"}{" "}
+              <span className="text-emerald-400 mx-1">vs</span>{" "}
+              {schedulingMatch?.couple2
+                ? getCoupleLabelWithNumber(schedulingMatch.couple2, coupleNumberMap.get(schedulingMatch.couple2.id))
+                : "Por definir"}
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-dark-400 mb-1">
+              Cancha Asignada
+            </label>
+            <input
+              type="text"
+              placeholder="Ej: Cancha 1 / Cancha Central"
+              value={formCourt}
+              onChange={(e) => setFormCourt(e.target.value)}
+              className="w-full px-3 py-2 bg-dark-900 border border-dark-700 rounded-lg text-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-dark-400 mb-1">
+              Horario Programado (HH:mm o fecha completa)
+            </label>
+            <input
+              type="text"
+              placeholder="Ej: 14:30 o 2026-10-25 14:30"
+              value={formTime}
+              onChange={(e) => setFormTime(e.target.value)}
+              className="w-full px-3 py-2 bg-dark-900 border border-dark-700 rounded-lg text-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+            />
+            <p className="text-[11px] text-dark-400 mt-1">
+              Puedes ingresar la hora en formato 24hs (ej: 09:00, 14:30) y se asociará a la fecha del torneo.
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-3 border-t border-dark-800">
+            <Button variant="ghost" onClick={() => setSchedulingMatch(null)} disabled={isSavingSchedule}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveSingleSchedule} disabled={isSavingSchedule}>
+              {isSavingSchedule ? "Guardando..." : "Guardar Cambios"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
