@@ -1,4 +1,5 @@
 import { autoScheduleMatches, parseStartDateTime, generateDefaultCourtNames, normalizeScheduledTime } from "./scheduler";
+import { formatScoreInput } from "./couples";
 import type { Match } from "@/types/tournament";
 
 export function runSchedulerTests(): { passed: number; failed: number; errors: string[] } {
@@ -132,6 +133,16 @@ export function runSchedulerTests(): { passed: number; failed: number; errors: s
   assert(norm2 !== null && norm2.includes("2026-10-25"), "Debe manejar texto como 14:30 hs");
   const normEmpty = normalizeScheduledTime("");
   assert(normEmpty === null, "Debe ser null para vacío");
+
+  // TEST 9: Auto-colocación de barra / al tipear números
+  assert(formatScoreInput("9") === "9", "Un solo dígito debe quedar igual");
+  assert(formatScoreInput("94") === "9/4", "94 debe transformarse en 9/4");
+  assert(formatScoreInput("63") === "6/3", "63 debe transformarse en 6/3");
+  assert(formatScoreInput("31") === "3/1", "31 debe transformarse en 3/1");
+  assert(formatScoreInput("108") === "10/8", "108 debe transformarse en 10/8");
+  assert(formatScoreInput("119") === "11/9", "119 debe transformarse en 11/9");
+  assert(formatScoreInput("9-4") === "9/4", "Guión debe normalizarse a /");
+  assert(formatScoreInput("9/4") === "9/4", "9/4 debe mantenerse intacto");
 
   return { passed, failed, errors };
 }

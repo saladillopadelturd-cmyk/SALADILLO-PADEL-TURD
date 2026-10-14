@@ -595,3 +595,64 @@ export function generateRandomCouples(
   return result;
 }
 
+/**
+ * Formatea automáticamente el marcador de un partido para que al tipear solo números
+ * se inserte automáticamente la barra separadora "/" (ej: "94" -> "9/4", "63" -> "6/3").
+ */
+export function formatScoreInput(val: string): string {
+  if (!val) return "";
+
+  const trimmed = val.trim();
+
+  // Si incluye guión, normalizar a barra
+  if (trimmed.includes("-")) {
+    return trimmed.replace("-", "/");
+  }
+
+  // Si ya tiene barra '/', mantener lo que el usuario tipea a ambos lados
+  if (trimmed.includes("/")) {
+    const parts = trimmed.split("/");
+    const p1 = parts[0].replace(/\D/g, "");
+    const p2 = parts[1] ? parts[1].replace(/\D/g, "") : "";
+    if (parts.length > 1 && parts[1] === "") {
+      return `${p1}/`;
+    }
+    return p2 ? `${p1}/${p2}` : p1;
+  }
+
+  // Si solo son dígitos
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.length <= 1) {
+    return digits;
+  }
+
+  // Si empieza con 10, 11 o 12 (común en super tie-break) y solo tiene 2 dígitos, esperar el siguiente número
+  if ((digits.startsWith("10") || digits.startsWith("11") || digits.startsWith("12")) && digits.length === 2) {
+    return digits;
+  }
+
+  // 2 dígitos estándar: '94' -> '9/4', '63' -> '6/3', '31' -> '3/1'
+  if (digits.length === 2) {
+    return `${digits[0]}/${digits[1]}`;
+  }
+
+  // 3 dígitos: '108' -> '10/8', '119' -> '11/9'
+  if (digits.length === 3) {
+    if (digits.startsWith("10") || digits.startsWith("11") || digits.startsWith("12")) {
+      return `${digits.slice(0, 2)}/${digits[2]}`;
+    }
+    return `${digits[0]}/${digits.slice(1)}`;
+  }
+
+  // 4 dígitos o más: '1012' -> '10/12', '1113' -> '11/13'
+  if (digits.length >= 4) {
+    if (digits.startsWith("10") || digits.startsWith("11") || digits.startsWith("12")) {
+      return `${digits.slice(0, 2)}/${digits.slice(2, 4)}`;
+    }
+    return `${digits[0]}/${digits.slice(1, 3)}`;
+  }
+
+  return digits;
+}
+
+

@@ -11,7 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
 import { calculateRoundRobinStandings } from "@/lib/tournament/standings";
-import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel, isSumaCategory } from "@/lib/tournament/couples";
+import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel, isSumaCategory, formatScoreInput } from "@/lib/tournament/couples";
 import { propagatePlayoffWinners, getStageName, findNextPlayoffMatchSlot } from "@/lib/tournament/elimination";
 import { normalizeScheduledTime } from "@/lib/tournament/scheduler";
 import Bracket from "@/components/tournament/Bracket";
@@ -1362,71 +1362,85 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
         </div>
       </Modal>
 
-      {/* Modal: Carga de Marcador y Resultado */}
+      {/* Modal: Cargar / Modificar Marcador del Partido */}
       <Modal
         isOpen={!!scoringMatch}
         onClose={() => setScoringMatch(null)}
         title="Cargar / Modificar Marcador del Partido"
       >
         <div className="space-y-4">
-          <div className="p-3 bg-dark-900 rounded-lg border border-dark-700 text-sm">
-            <div className="flex justify-between items-center font-bold text-white mb-1">
-              <span>
-                {scoringMatch?.couple1
-                  ? getCoupleLabelWithNumber(scoringMatch.couple1, coupleNumberMap.get(scoringMatch.couple1.id))
-                  : "Por definir"}
-              </span>
-              <span className="text-dark-400 text-xs px-2">vs</span>
-              <span>
-                {scoringMatch?.couple2
-                  ? getCoupleLabelWithNumber(scoringMatch.couple2, coupleNumberMap.get(scoringMatch.couple2.id))
-                  : "Por definir"}
-              </span>
-            </div>
-            {tournament && (
-              <p className="text-dark-400 text-xs mt-1">
-                Modalidad: <span className="text-emerald-400 font-semibold">{GAME_MODE_LABELS[tournament.game_mode] ?? tournament.game_mode}</span>
-              </p>
-            )}
+          {/* 1. Selector de Pareja Ganadora */}
+          <div>
+            <label className="block text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider">
+              Pareja Ganadora
+            </label>
+            <select
+              value={formWinnerCoupleId}
+              onChange={(e) => setFormWinnerCoupleId(e.target.value)}
+              className="w-full px-3 py-2.5 bg-dark-900 border border-dark-600 rounded-lg text-white text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="">Seleccionar pareja ganadora...</option>
+              {scoringMatch?.couple1_id && (
+                <option value={scoringMatch.couple1_id}>
+                  🏆 {scoringMatch.couple1
+                    ? getCoupleLabelWithNumber(scoringMatch.couple1, coupleNumberMap.get(scoringMatch.couple1.id))
+                    : "Pareja 1"}
+                </option>
+              )}
+              {scoringMatch?.couple2_id && (
+                <option value={scoringMatch.couple2_id}>
+                  🏆 {scoringMatch.couple2
+                    ? getCoupleLabelWithNumber(scoringMatch.couple2, coupleNumberMap.get(scoringMatch.couple2.id))
+                    : "Pareja 2"}
+                </option>
+              )}
+            </select>
           </div>
 
+          {/* 2. Debajo: Resultado del Partido con barra '/' automática */}
           <div>
-            <label className="block text-xs font-medium text-dark-300 mb-1">
-              Resultado Set 1 {tournament?.game_mode === "american_9games" ? "(Partido a 9 games)" : ""}
+            <label className="block text-xs font-bold text-slate-300 mb-1 uppercase tracking-wider">
+              Resultado del Partido {tournament?.game_mode === "american_2sets" ? "(Set 1)" : ""}
             </label>
             <input
               type="text"
-              placeholder={tournament?.game_mode === "american_9games" ? "Ej: 9-4, 9-8 (7-4)" : "Ej: 6-4, 3-1"}
+              inputMode="numeric"
+              placeholder="Ej: 9/4"
               value={formScoreSet1}
-              onChange={(e) => setFormScoreSet1(e.target.value)}
-              className="w-full px-3 py-2 bg-dark-900 border border-dark-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+              onChange={(e) => setFormScoreSet1(formatScoreInput(e.target.value))}
+              className="w-full px-4 py-2.5 bg-dark-900 border border-dark-600 rounded-lg text-white text-base font-bold font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500 text-center tracking-widest"
             />
+            <p className="text-[11px] text-dark-400 mt-1 text-center">
+              Tipeá solo los números (ej: 9 y 4) y la barra <span className="font-bold text-emerald-400">/</span> se colocará automáticamente.
+            </p>
           </div>
 
           {tournament?.game_mode === "american_2sets" && (
             <>
               <div>
-                <label className="block text-xs font-medium text-dark-300 mb-1">
+                <label className="block text-xs font-bold text-slate-300 mb-1 uppercase tracking-wider">
                   Resultado Set 2 (a 3 games)
                 </label>
                 <input
                   type="text"
-                  placeholder="Ej: 3-1, 1-3"
+                  inputMode="numeric"
+                  placeholder="Ej: 3/1"
                   value={formScoreSet2}
-                  onChange={(e) => setFormScoreSet2(e.target.value)}
-                  className="w-full px-3 py-2 bg-dark-900 border border-dark-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+                  onChange={(e) => setFormScoreSet2(formatScoreInput(e.target.value))}
+                  className="w-full px-4 py-2.5 bg-dark-900 border border-dark-600 rounded-lg text-white text-base font-bold font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500 text-center tracking-widest"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-dark-300 mb-1">
+                <label className="block text-xs font-bold text-slate-300 mb-1 uppercase tracking-wider">
                   Super Tie-Break a 10 (en caso de empate en sets)
                 </label>
                 <input
                   type="text"
-                  placeholder="Ej: 11-9 (Muere en 11)"
+                  inputMode="numeric"
+                  placeholder="Ej: 11/9"
                   value={formScoreSuperTb}
-                  onChange={(e) => setFormScoreSuperTb(e.target.value)}
-                  className="w-full px-3 py-2 bg-dark-900 border border-dark-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+                  onChange={(e) => setFormScoreSuperTb(formatScoreInput(e.target.value))}
+                  className="w-full px-4 py-2.5 bg-dark-900 border border-dark-600 rounded-lg text-white text-base font-bold font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500 text-center tracking-widest"
                 />
               </div>
             </>
@@ -1434,45 +1448,19 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
 
           {tournament?.game_mode !== "american_9games" && tournament?.game_mode !== "american_2sets" && (
             <div>
-              <label className="block text-xs font-medium text-dark-300 mb-1">
+              <label className="block text-xs font-bold text-slate-300 mb-1 uppercase tracking-wider">
                 Resultado Set 2 (opcional)
               </label>
               <input
                 type="text"
-                placeholder="Ej: 6-3"
+                inputMode="numeric"
+                placeholder="Ej: 6/3"
                 value={formScoreSet2}
-                onChange={(e) => setFormScoreSet2(e.target.value)}
-                className="w-full px-3 py-2 bg-dark-900 border border-dark-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+                onChange={(e) => setFormScoreSet2(formatScoreInput(e.target.value))}
+                className="w-full px-4 py-2.5 bg-dark-900 border border-dark-600 rounded-lg text-white text-base font-bold font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500 text-center tracking-widest"
               />
             </div>
           )}
-
-          <div>
-            <label className="block text-xs font-medium text-dark-300 mb-1">
-              Pareja Ganadora
-            </label>
-            <select
-              value={formWinnerCoupleId}
-              onChange={(e) => setFormWinnerCoupleId(e.target.value)}
-              className="w-full px-3 py-2 bg-dark-900 border border-dark-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="">Seleccionar pareja ganadora</option>
-              {scoringMatch?.couple1_id && (
-                <option value={scoringMatch.couple1_id}>
-                  {scoringMatch.couple1
-                    ? getCoupleLabelWithNumber(scoringMatch.couple1, coupleNumberMap.get(scoringMatch.couple1.id))
-                    : "Pareja 1"}
-                </option>
-              )}
-              {scoringMatch?.couple2_id && (
-                <option value={scoringMatch.couple2_id}>
-                  {scoringMatch.couple2
-                    ? getCoupleLabelWithNumber(scoringMatch.couple2, coupleNumberMap.get(scoringMatch.couple2.id))
-                    : "Pareja 2"}
-                </option>
-              )}
-            </select>
-          </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-dark-800">
             <Button variant="ghost" onClick={() => setScoringMatch(null)} disabled={isSavingScore}>
