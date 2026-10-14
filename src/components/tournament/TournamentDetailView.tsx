@@ -43,6 +43,12 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "Cancelado",
 };
 
+const GAME_MODE_LABELS: Record<string, string> = {
+  american_9games: "Americano a 9 games",
+  american_2sets: "Americano 2 sets a 3 games",
+  traditional: "Tradicional al mejor de 3",
+};
+
 const STATUS_VARIANTS: Record<string, "default" | "success" | "warning" | "danger" | "info"> = {
   draft: "default",
   zones: "warning",
@@ -410,6 +416,11 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                   Categoría {tournament.category || "6ta"}
                 </span>
               )}
+              {tournament.game_mode && (
+                <span className="px-3 py-0.5 rounded-full text-xs font-black bg-sky-500/10 text-sky-400 border border-sky-500/25 tracking-wider">
+                  {GAME_MODE_LABELS[tournament.game_mode] ?? tournament.game_mode}
+                </span>
+              )}
               {tournament.golden_point && (
                 <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-amber-400/15 text-amber-300 border border-amber-400/35 flex items-center gap-1 shadow-sm shadow-amber-400/10">
                   ⭐ Punto de Oro (40-40)
@@ -439,16 +450,6 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                 {couples.length} Parejas ({tournament.num_zones} zonas de {tournament.zone_size})
               </span>
             </div>
-          </div>
-
-          <div className="flex items-center gap-3 self-start md:self-center">
-            <Link
-              href={`/admin/parejas?torneo=${id}`}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600/20 via-teal-600/20 to-emerald-600/30 hover:from-emerald-600/30 hover:to-teal-600/40 text-emerald-300 border border-emerald-500/30 font-bold text-xs sm:text-sm transition-all shadow-md active:scale-95"
-            >
-              <Users className="w-4 h-4 text-emerald-400" />
-              <span>Editor de Parejas ({couples.length})</span>
-            </Link>
           </div>
         </div>
       </div>
