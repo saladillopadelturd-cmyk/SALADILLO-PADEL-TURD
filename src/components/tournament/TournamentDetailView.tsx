@@ -12,7 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
 import { calculateRoundRobinStandings } from "@/lib/tournament/standings";
 import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel, isSumaCategory } from "@/lib/tournament/couples";
-import { propagatePlayoffWinners, getStageName } from "@/lib/tournament/elimination";
+import { propagatePlayoffWinners, getStageName, findNextPlayoffMatchSlot } from "@/lib/tournament/elimination";
 import { normalizeScheduledTime } from "@/lib/tournament/scheduler";
 import Bracket from "@/components/tournament/Bracket";
 import ZoneConformationEditor from "@/components/tournament/ZoneConformationEditor";
@@ -134,6 +134,103 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
       setNotification({ type: "error", text: msg });
     } finally {
       setIsSavingSchedule(false);
+    }
+  };
+
+  // Estados y lógica de carga de marcadores (Resultados)
+  const [scoringMatch, setScoringMatch] = useState<Match | null>(null);
+  const [formScoreSet1, setFormScoreSet1] = useState("");
+  const [formScoreSet2, setFormScoreSet2] = useState("");
+  const [formScoreSuperTb, setFormScoreSuperTb] = useState("");
+  const [formWinnerCoupleId, setFormWinnerCoupleId] = useState("");
+  const [isSavingScore, setIsSavingScore] = useState(false);
+
+  const openScoreModal = (m: Match) => {
+    setScoringMatch(m);
+    setFormScoreSet1(m.score_set1 || "");
+    setFormScoreSet2(m.score_set2 || "");
+    setFormScoreSuperTb(m.score_super_tb || "");
+    setFormWinnerCoupleId(m.winner_couple_id || m.couple1_id || "");
+  };
+
+  const handleSaveScore = async () => {
+    if (!scoringMatch) return;
+    if (!formScoreSet1.trim()) {
+      setNotification({ type: "error", text: "Debes ingresar al menos el resultado del Set / Partido." });
+      return;
+    }
+    if (!formWinnerCoupleId) {
+      setNotification({ type: "error", text: "Debes seleccionar la pareja ganadora del partido." });
+      return;
+    }
+
+    setIsSavingScore(true);
+    try {
+      const { error } = await supabase
+        .from("matches")
+        .update({
+          score_set1: formScoreSet1.trim(),
+          score_set2: formScoreSet2.trim() || null,
+          score_super_tb: formScoreSuperTb.trim() || null,
+          winner_couple_id: formWinnerCoupleId,
+          status: "completed",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", scoringMatch.id);
+
+      if (error) throw error;
+
+      // En fase de eliminación directa (Playoffs), avanzar automáticamente a la pareja ganadora al siguiente cruce
+      if (scoringMatch.stage !== "zone") {
+        const nextSlot = findNextPlayoffMatchSlot(matches, scoringMatch);
+        if (nextSlot) {
+          const targetMatch = matches.find((m) => m.id === nextSlot.targetMatchId);
+          const updatePayload: Record<string, unknown> = {
+            [nextSlot.slotField]: formWinnerCoupleId,
+            updated_at: new Date().toISOString(),
+          };
+
+          if (
+            scoringMatch.winner_couple_id &&
+            scoringMatch.winner_couple_id !== formWinnerCoupleId &&
+            targetMatch &&
+            targetMatch.winner_couple_id === scoringMatch.winner_couple_id
+          ) {
+            updatePayload.winner_couple_id = null;
+            updatePayload.status = "pending";
+            updatePayload.score_set1 = null;
+            updatePayload.score_set2 = null;
+            updatePayload.score_super_tb = null;
+          }
+
+          await supabase.from("matches").update(updatePayload).eq("id", nextSlot.targetMatchId);
+        }
+      }
+
+      // Si el partido completado es la Final, auto-liquidar rankings
+      if (scoringMatch.stage === "final") {
+        try {
+          await fetch("/api/rankings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tournamentId: id, recalculate: true }),
+          });
+        } catch (rankErr) {
+          console.warn("Error auto-liquidando rankings tras la final:", rankErr);
+        }
+      }
+
+      await loadTournamentData();
+      setScoringMatch(null);
+      setNotification({
+        type: "success",
+        text: "Marcador guardado exitosamente. El partido ahora figura como Finalizado.",
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error al guardar resultado";
+      setNotification({ type: "error", text: msg });
+    } finally {
+      setIsSavingScore(false);
     }
   };
 
@@ -911,9 +1008,10 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                       >
                         <div className="flex items-center justify-between text-xs text-dark-400 mb-3">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <Badge variant="success" size="xs">
+                            <span className="px-2.5 py-0.5 rounded text-[11px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-rose-400" />
                               FINALIZADO
-                            </Badge>
+                            </span>
                             {isPlayoff && (
                               <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
                                 CLASIFICÓ GANADOR
@@ -959,21 +1057,17 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                         </div>
 
                         <div className="flex items-center justify-between pt-1 border-t border-dark-800/60 text-xs">
-                          <span className="text-dark-400 text-[11px] flex items-center gap-1">
-                            {m.court_name && (
-                              <span className="bg-dark-800 text-dark-300 px-1.5 py-0.5 rounded text-[10px] font-medium">
-                                {m.court_name}
-                              </span>
-                            )}
-                            {m.scheduled_time && (
-                              <span className="text-dark-400">
-                                {new Date(m.scheduled_time).toLocaleTimeString("es-AR", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </span>
-                            )}
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => isAdmin && openScoreModal(m)}
+                            title={isAdmin ? "Clic para modificar resultado" : "Partido Finalizado"}
+                            className={`px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/20 text-rose-400 border border-rose-500/40 flex items-center gap-1.5 transition-all ${
+                              isAdmin ? "hover:bg-rose-500/30 cursor-pointer" : "cursor-default"
+                            }`}
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 text-rose-400" />
+                            Finalizado
+                          </button>
                           <div className="flex items-center gap-2">
                             {m.score_super_tb && (
                               <span className="text-amber-400 text-xs font-mono font-bold bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/25">
@@ -984,10 +1078,11 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                               <button
                                 type="button"
                                 onClick={() => openScheduleModal(m)}
-                                title="Editar cancha y horario"
-                                className="p-1 rounded bg-dark-800/80 hover:bg-dark-700 text-dark-400 hover:text-white transition-colors"
+                                title="Reprogramar cancha y horario"
+                                className="px-2.5 py-1 rounded-lg bg-dark-800 hover:bg-dark-700 text-dark-300 hover:text-white transition-colors flex items-center gap-1 text-xs font-medium border border-dark-700"
                               >
-                                <Edit2 className="w-3.5 h-3.5" />
+                                <Clock className="w-3.5 h-3.5 text-sky-400" />
+                                <span>Reprogramar</span>
                               </button>
                             )}
                           </div>
@@ -1086,17 +1181,22 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                       </div>
 
                       <div className="flex items-center justify-between pt-2 border-t border-dark-800 text-xs">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                            isFinished
-                              ? "bg-dark-800 text-dark-400"
-                              : isLive
-                              ? "bg-rose-500/20 text-rose-300 animate-pulse font-bold"
-                              : "bg-blue-500/10 text-blue-400"
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!isPendingRival) openScoreModal(m);
+                          }}
+                          disabled={isPendingRival}
+                          title={isPendingRival ? "Esperando definición de clasificados" : "Indicar resultado del partido"}
+                          className={`px-3 py-1 rounded-full text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 ${
+                            isPendingRival
+                              ? "bg-dark-800 text-dark-500 border border-dark-700 cursor-not-allowed"
+                              : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 hover:border-emerald-500/60 hover:scale-[1.02] cursor-pointer"
                           }`}
                         >
-                          {isFinished ? "Finalizado" : isLive ? "● En Cancha" : "Programado"}
-                        </span>
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                          Programado
+                        </button>
                         <div className="flex items-center gap-2">
                           {m.score_super_tb && (
                             <span className="text-amber-400 text-xs font-mono font-bold bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/25">
@@ -1107,11 +1207,11 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                             <button
                               type="button"
                               onClick={() => openScheduleModal(m)}
-                              title="Editar cancha y horario"
-                              className="px-2 py-0.5 rounded bg-dark-800 hover:bg-dark-700 text-dark-300 hover:text-white transition-colors flex items-center gap-1 text-[11px] font-medium"
+                              title="Reprogramar cancha y horario"
+                              className="px-2.5 py-1 rounded-lg bg-dark-800 hover:bg-dark-700 text-dark-300 hover:text-white transition-colors flex items-center gap-1 text-xs font-medium border border-dark-700"
                             >
-                              <Edit2 className="w-3 h-3 text-sky-400" />
-                              <span>Programar</span>
+                              <Clock className="w-3.5 h-3.5 text-sky-400" />
+                              <span>Reprogramar</span>
                             </button>
                           )}
                         </div>
@@ -1257,6 +1357,129 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
             </Button>
             <Button onClick={handleSaveSingleSchedule} disabled={isSavingSchedule}>
               {isSavingSchedule ? "Guardando..." : "Guardar Cambios"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal: Carga de Marcador y Resultado */}
+      <Modal
+        isOpen={!!scoringMatch}
+        onClose={() => setScoringMatch(null)}
+        title="Cargar / Modificar Marcador del Partido"
+      >
+        <div className="space-y-4">
+          <div className="p-3 bg-dark-900 rounded-lg border border-dark-700 text-sm">
+            <div className="flex justify-between items-center font-bold text-white mb-1">
+              <span>
+                {scoringMatch?.couple1
+                  ? getCoupleLabelWithNumber(scoringMatch.couple1, coupleNumberMap.get(scoringMatch.couple1.id))
+                  : "Por definir"}
+              </span>
+              <span className="text-dark-400 text-xs px-2">vs</span>
+              <span>
+                {scoringMatch?.couple2
+                  ? getCoupleLabelWithNumber(scoringMatch.couple2, coupleNumberMap.get(scoringMatch.couple2.id))
+                  : "Por definir"}
+              </span>
+            </div>
+            {tournament && (
+              <p className="text-dark-400 text-xs mt-1">
+                Modalidad: <span className="text-emerald-400 font-semibold">{GAME_MODE_LABELS[tournament.game_mode] ?? tournament.game_mode}</span>
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-dark-300 mb-1">
+              Resultado Set 1 {tournament?.game_mode === "american_9games" ? "(Partido a 9 games)" : ""}
+            </label>
+            <input
+              type="text"
+              placeholder={tournament?.game_mode === "american_9games" ? "Ej: 9-4, 9-8 (7-4)" : "Ej: 6-4, 3-1"}
+              value={formScoreSet1}
+              onChange={(e) => setFormScoreSet1(e.target.value)}
+              className="w-full px-3 py-2 bg-dark-900 border border-dark-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+            />
+          </div>
+
+          {tournament?.game_mode === "american_2sets" && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-dark-300 mb-1">
+                  Resultado Set 2 (a 3 games)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: 3-1, 1-3"
+                  value={formScoreSet2}
+                  onChange={(e) => setFormScoreSet2(e.target.value)}
+                  className="w-full px-3 py-2 bg-dark-900 border border-dark-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-dark-300 mb-1">
+                  Super Tie-Break a 10 (en caso de empate en sets)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: 11-9 (Muere en 11)"
+                  value={formScoreSuperTb}
+                  onChange={(e) => setFormScoreSuperTb(e.target.value)}
+                  className="w-full px-3 py-2 bg-dark-900 border border-dark-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+                />
+              </div>
+            </>
+          )}
+
+          {tournament?.game_mode !== "american_9games" && tournament?.game_mode !== "american_2sets" && (
+            <div>
+              <label className="block text-xs font-medium text-dark-300 mb-1">
+                Resultado Set 2 (opcional)
+              </label>
+              <input
+                type="text"
+                placeholder="Ej: 6-3"
+                value={formScoreSet2}
+                onChange={(e) => setFormScoreSet2(e.target.value)}
+                className="w-full px-3 py-2 bg-dark-900 border border-dark-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+              />
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium text-dark-300 mb-1">
+              Pareja Ganadora
+            </label>
+            <select
+              value={formWinnerCoupleId}
+              onChange={(e) => setFormWinnerCoupleId(e.target.value)}
+              className="w-full px-3 py-2 bg-dark-900 border border-dark-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="">Seleccionar pareja ganadora</option>
+              {scoringMatch?.couple1_id && (
+                <option value={scoringMatch.couple1_id}>
+                  {scoringMatch.couple1
+                    ? getCoupleLabelWithNumber(scoringMatch.couple1, coupleNumberMap.get(scoringMatch.couple1.id))
+                    : "Pareja 1"}
+                </option>
+              )}
+              {scoringMatch?.couple2_id && (
+                <option value={scoringMatch.couple2_id}>
+                  {scoringMatch.couple2
+                    ? getCoupleLabelWithNumber(scoringMatch.couple2, coupleNumberMap.get(scoringMatch.couple2.id))
+                    : "Pareja 2"}
+                </option>
+              )}
+            </select>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-dark-800">
+            <Button variant="ghost" onClick={() => setScoringMatch(null)} disabled={isSavingScore}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveScore} disabled={isSavingScore}>
+              {isSavingScore ? "Guardando..." : "Confirmar Resultado"}
             </Button>
           </div>
         </div>

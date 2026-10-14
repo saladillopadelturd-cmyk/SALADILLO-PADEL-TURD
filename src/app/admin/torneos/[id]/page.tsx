@@ -1171,13 +1171,14 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                             return (
                               <Card
                                 key={m.id}
-                                className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-emerald-500/30 bg-dark-900/60 transition-colors"
+                                className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-rose-500/30 bg-dark-900/60 transition-colors"
                               >
                                 <div className="space-y-1.5">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <Badge variant="success" size="sm">
+                                    <span className="px-2.5 py-0.5 rounded text-[11px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center gap-1">
+                                      <CheckCircle2 className="w-3 h-3 text-rose-400" />
                                       FINALIZADO
-                                    </Badge>
+                                    </span>
                                     <span className="text-dark-400 text-xs">
                                       {STAGE_LABELS[m.stage] ?? getStageName(m.stage)}
                                     </span>
@@ -1198,7 +1199,16 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                                 </div>
 
                                 <div className="flex items-center gap-2">
-                                  <Button size="sm" variant="secondary" onClick={() => openScoreModal(m)}>
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => openScheduleModal(m)}
+                                    className="flex items-center gap-1.5 text-xs"
+                                  >
+                                    <Clock className="w-3.5 h-3.5 text-sky-400" />
+                                    Reprogramar
+                                  </Button>
+                                  <Button size="sm" onClick={() => openScoreModal(m)} className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs">
                                     <Edit2 className="w-3.5 h-3.5 mr-1" />
                                     Modificar Marcador
                                   </Button>
@@ -1259,22 +1269,32 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                               </div>
 
                               <div className="flex items-center gap-2">
-                                <Button variant="secondary" size="sm" onClick={() => openScheduleModal(m)}>
-                                  <Clock className="w-3.5 h-3.5 mr-1" />
-                                  Programar
-                                </Button>
-                                <Button
-                                  size="sm"
+                                <button
+                                  type="button"
                                   onClick={() => openScoreModal(m)}
                                   disabled={isPendingRival}
                                   title={
                                     isPendingRival
                                       ? "El cruce se conformará automáticamente cuando concluyan los partidos de la fase previa"
-                                      : "Cargar Marcador"
+                                      : "Indicar resultado del partido"
                                   }
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 ${
+                                    isPendingRival
+                                      ? "bg-dark-800 text-dark-500 border border-dark-700 cursor-not-allowed"
+                                      : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 hover:border-emerald-500/60 cursor-pointer"
+                                  }`}
                                 >
-                                  <Edit2 className="w-3.5 h-3.5 mr-1" />
-                                  Cargar Marcador
+                                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                  Programado
+                                </button>
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => openScheduleModal(m)}
+                                  className="flex items-center gap-1 text-xs"
+                                >
+                                  <Clock className="w-3.5 h-3.5 mr-1 text-sky-400" />
+                                  Reprogramar
                                 </Button>
                               </div>
                             </Card>
