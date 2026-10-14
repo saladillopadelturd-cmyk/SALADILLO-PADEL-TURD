@@ -10,9 +10,15 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/Tabs";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
-import { calculateRoundRobinStandings } from "@/lib/tournament/standings";
+import { calculateRoundRobinStandings, getQualifiedPairs } from "@/lib/tournament/standings";
 import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel, isSumaCategory, formatScoreInput } from "@/lib/tournament/couples";
-import { propagatePlayoffWinners, getStageName, findNextPlayoffMatchSlot } from "@/lib/tournament/elimination";
+import {
+  propagatePlayoffWinners,
+  getStageName,
+  findNextPlayoffMatchSlot,
+  generateSeededPlayoffBracket,
+  type QualifiedPair,
+} from "@/lib/tournament/elimination";
 import { normalizeScheduledTime } from "@/lib/tournament/scheduler";
 import Bracket from "@/components/tournament/Bracket";
 import ZoneConformationEditor from "@/components/tournament/ZoneConformationEditor";
@@ -29,6 +35,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Edit2,
+  RefreshCw,
 } from "lucide-react";
 
 interface TournamentDetailProps {
@@ -73,7 +80,9 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
   const [zoneCouplesMap, setZoneCouplesMap] = useState<Record<string, string[]>>({});
   const [fixtureFilter, setFixtureFilter] = useState<"all" | "zone" | "playoff">("all");
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<string>(initialTab || "parejas");
   const [isGeneratingZones, setIsGeneratingZones] = useState(false);
+  const [isGeneratingPlayoffs, setIsGeneratingPlayoffs] = useState(false);
   const [isEditingConformation, setIsEditingConformation] = useState(false);
   const [notification, setNotification] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -328,6 +337,38 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
     }
   };
 
+  const handleGeneratePlayoffs = async () => {
+    if (!tournament) return;
+    setIsGeneratingPlayoffs(true);
+    setNotification(null);
+    try {
+      const res = await fetch("/api/playoffs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tournamentId: id,
+          force: true,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Error al generar cuadro eliminatorio");
+      }
+
+      await loadTournamentData();
+      setNotification({
+        type: "success",
+        text: `Cuadro de eliminación directa generado exitosamente (${data.matchesCreated ?? 0} partidos creados). Ya podés programar horarios o cargar marcadores.`,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error al generar cuadro eliminatorio";
+      setNotification({ type: "error", text: msg });
+    } finally {
+      setIsGeneratingPlayoffs(false);
+    }
+  };
+
   useEffect(() => {
     loadTournamentData();
 
@@ -432,9 +473,57 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
     return sortedDisplayMatches;
   }, [sortedDisplayMatches, fixtureFilter]);
 
+  // Incondicional: Clasificados de cada zona y estado de playoffs
+  const { allQualifiedPairs, hasPlayoffMatchesInDb } = useMemo(() => {
+    const hasPlayoffs = matches.some((m) => m.stage !== "zone");
+    const qualified: QualifiedPair[] = [];
+
+    for (const zone of zones) {
+      let zonePairIds = zoneCouplesMap[zone.id] || [];
+      if (zonePairIds.length === 0) {
+        zonePairIds = couples.filter((c) => c.zone_id === zone.id).map((c) => c.id);
+      }
+      if (zonePairIds.length === 0) continue;
+
+      const zoneMatches = displayMatches.filter((m) => m.zone_id === zone.id && m.stage === "zone");
+      const standings = calculateRoundRobinStandings(zoneMatches, zonePairIds);
+      const qualifiedInZone = getQualifiedPairs(standings);
+
+      qualifiedInZone.forEach((s) => {
+        qualified.push({
+          pairId: s.couple_id || s.pair_id || "",
+          zoneId: zone.id,
+          zoneName: zone.name,
+          zonePosition: s.position || 1,
+          points: s.points,
+          gameDifference: (s.games_won ?? 0) - (s.games_lost ?? 0),
+          gamesWon: s.games_won ?? 0,
+        });
+      });
+    }
+
+    return { allQualifiedPairs: qualified, hasPlayoffMatchesInDb: hasPlayoffs };
+  }, [matches, zones, zoneCouplesMap, couples, displayMatches]);
+
+  // Nombres de parejas enriquecidos para el cuadro (ej: "1° Zona A: Pareja 1")
+  const bracketPairNames = useMemo(() => {
+    const names: Record<string, string> = { ...coupleNamesMap };
+    names["BYE"] = "BYE (Pasa de ronda)";
+    names["Por definir"] = "Por definir";
+
+    allQualifiedPairs.forEach((q) => {
+      const originalName = coupleNamesMap[q.pairId] || "Pareja";
+      names[q.pairId] = `${q.zonePosition}° ${q.zoneName}: ${originalName}`;
+    });
+
+    return names;
+  }, [coupleNamesMap, allQualifiedPairs]);
+
   // Incondicional: Estructura del cuadro eliminatorio para pestaña playoffs
   const bracketRounds = useMemo(() => {
     const STAGE_ORDER: Record<string, number> = {
+      round_of_32: 0,
+      dieciseisavos: 0,
       round_of_16: 1,
       octavos: 1,
       quarter: 2,
@@ -458,27 +547,90 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
         return a.id.localeCompare(b.id);
       });
 
-    const playoffRoundsMap: Record<string, { pair1: string; pair2: string; winner?: string; score?: string }[]> = {};
+    // 1. Si ya hay partidos de playoffs creados en la BD, utilizarlos con sus marcadores y estados reales
+    if (playoffMatches.length > 0) {
+      const playoffRoundsMap: Record<string, { id?: string; pair1: string; pair2: string; winner?: string; score?: string; status?: string }[]> = {};
 
-    playoffMatches.forEach((m) => {
-      const stage = m.stage;
-      if (!playoffRoundsMap[stage]) playoffRoundsMap[stage] = [];
-      const scoreStr = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
-      playoffRoundsMap[stage].push({
-        pair1: m.couple1_id ?? "Por definir",
-        pair2: m.couple2_id ?? "Por definir",
-        winner: m.winner_couple_id ?? undefined,
-        score: scoreStr || undefined,
+      playoffMatches.forEach((m) => {
+        const stage = m.stage;
+        if (!playoffRoundsMap[stage]) playoffRoundsMap[stage] = [];
+        const scoreStr = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
+        playoffRoundsMap[stage].push({
+          id: m.id,
+          pair1: m.couple1_id ?? "Por definir",
+          pair2: m.couple2_id ?? "Por definir",
+          winner: m.winner_couple_id ?? undefined,
+          score: scoreStr || undefined,
+          status: m.status,
+        });
       });
-    });
 
-    return Object.entries(playoffRoundsMap)
-      .sort(([roundA], [roundB]) => (STAGE_ORDER[roundA] ?? 99) - (STAGE_ORDER[roundB] ?? 99))
-      .map(([round, roundMatches]) => ({
-        round,
-        matches: roundMatches,
-      }));
-  }, [displayMatches]);
+      return Object.entries(playoffRoundsMap)
+        .sort(([roundA], [roundB]) => (STAGE_ORDER[roundA] ?? 99) - (STAGE_ORDER[roundB] ?? 99))
+        .map(([round, roundMatches]) => ({
+          round,
+          matches: roundMatches,
+        }));
+    }
+
+    // 2. Si todavía no se confirmaron partidos de playoffs en la BD, DIBUJAR el cuadro proyectado
+    // enfrentando la mejor pareja de cada zona vs la peor pareja de otra zona
+    if (allQualifiedPairs.length >= 2) {
+      const bracketData = generateSeededPlayoffBracket(allQualifiedPairs);
+      const rounds: { round: string; matches: { id?: string; pair1: string; pair2: string; winner?: string; score?: string; status?: string }[] }[] = [];
+
+      const initialStage = bracketData.allStages[0];
+      rounds.push({
+        round: initialStage,
+        matches: bracketData.firstRoundMatches.map((m) => ({
+          pair1: m.couple1Id,
+          pair2: m.couple2Id,
+          winner: m.isBye ? m.advancingPairId : undefined,
+          score: m.isBye ? "BYE" : undefined,
+          status: m.isBye ? "completed" : "pending",
+        })),
+      });
+
+      let previousRoundSlotsCount = bracketData.firstRoundMatches.length;
+      for (let sIdx = 1; sIdx < bracketData.allStages.length; sIdx++) {
+        const currentStage = bracketData.allStages[sIdx];
+        const matchesInThisStage = Math.max(1, previousRoundSlotsCount / 2);
+        const stageMatches = [];
+
+        for (let mIdx = 0; mIdx < matchesInThisStage; mIdx++) {
+          let prefilledC1 = "Por definir";
+          let prefilledC2 = "Por definir";
+
+          if (sIdx === 1) {
+            const originatingMatch1 = bracketData.firstRoundMatches[mIdx * 2];
+            const originatingMatch2 = bracketData.firstRoundMatches[mIdx * 2 + 1];
+            if (originatingMatch1?.isBye && originatingMatch1.advancingPairId) {
+              prefilledC1 = originatingMatch1.advancingPairId;
+            }
+            if (originatingMatch2?.isBye && originatingMatch2.advancingPairId) {
+              prefilledC2 = originatingMatch2.advancingPairId;
+            }
+          }
+
+          stageMatches.push({
+            pair1: prefilledC1,
+            pair2: prefilledC2,
+            status: "pending",
+          });
+        }
+
+        rounds.push({
+          round: currentStage,
+          matches: stageMatches,
+        });
+        previousRoundSlotsCount = matchesInThisStage;
+      }
+
+      return rounds;
+    }
+
+    return [];
+  }, [displayMatches, allQualifiedPairs]);
 
   if (loading) {
     return (
@@ -615,7 +767,7 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
       </div>
 
       {/* Main Content Tabs */}
-      <Tabs defaultValue={initialTab || "parejas"}>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="flex-wrap">
           <TabsTrigger value="parejas">Parejas ({couples.length})</TabsTrigger>
           <TabsTrigger value="zonas">Zonas</TabsTrigger>
@@ -1227,22 +1379,95 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
 
         {/* 3. TAB: CUADRO DE ELIMINACIÓN (PLAYOFFS) */}
         <TabsContent value="playoffs">
-          <div className="mt-6">
-            <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <Trophy className="w-5 h-5 text-amber-400" />
-              Cuadro Principal de Eliminación Directa
-            </h2>
+          <div className="mt-6 space-y-6">
+            {/* Cabecera del Cuadro */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-dark-900/80 p-5 rounded-2xl border border-dark-700/80">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
+                  <Trophy className="w-6 h-6 text-amber-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-xl font-bold text-white">
+                      Cuadro Principal de Eliminación Directa
+                    </h2>
+                    {hasPlayoffMatchesInDb ? (
+                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        Oficial en Fixture
+                      </span>
+                    ) : (
+                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        Llaves Clasificatorias
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-dark-400 mt-1">
+                    {hasPlayoffMatchesInDb
+                      ? "Cuadro oficial en disputa. Los resultados cargados avanzan automáticamente las llaves hacia Semis y Final."
+                      : "Llaves conformadas enfrentando la mejor pareja de cada zona vs la peor pareja clasificada de otra zona."}
+                  </p>
+                </div>
+              </div>
 
+              {isAdmin && (
+                <div className="flex items-center gap-2 self-start sm:self-center">
+                  <Button
+                    onClick={handleGeneratePlayoffs}
+                    disabled={isGeneratingPlayoffs || zones.length === 0}
+                    className={`flex items-center gap-2 font-bold ${
+                      hasPlayoffMatchesInDb
+                        ? "bg-dark-800 hover:bg-dark-700 text-slate-200 border border-dark-700"
+                        : "bg-amber-500 hover:bg-amber-400 text-dark-950"
+                    }`}
+                  >
+                    {isGeneratingPlayoffs ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Generando cuadro...</span>
+                      </>
+                    ) : hasPlayoffMatchesInDb ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 text-amber-400" />
+                        <span>Regenerar Cuadro</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 text-dark-950" />
+                        <span>Confirmar Cuadro Oficial</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* Dibujo del Cuadro */}
             {bracketRounds.length === 0 ? (
-              <Card className="p-8 text-center text-dark-400">
-                <p>El cuadro de playoffs se generará al completarse los partidos de zonas.</p>
-                <p className="text-xs mt-2 text-dark-500">
-                  Las parejas clasificadas avanzarán automáticamente a Cuartos, Semis y Final.
+              <Card className="p-12 text-center text-dark-400">
+                <Trophy className="w-12 h-12 text-dark-600 mx-auto mb-3" />
+                <h3 className="text-base font-bold text-white mb-1">
+                  Aún no se pueden conformar las llaves eliminatorias
+                </h3>
+                <p className="text-sm max-w-md mx-auto mb-4">
+                  Para dibujar el cuadro de eliminación, primero debes configurar las zonas y contar con al menos 2 parejas clasificadas.
                 </p>
+                <Button onClick={() => setActiveTab("zonas")} variant="secondary">
+                  Ir a Zonas
+                </Button>
               </Card>
             ) : (
-              <Card className="p-6 overflow-x-auto">
-                <Bracket rounds={bracketRounds} pairNames={coupleNamesMap} />
+              <Card className="p-6 overflow-x-auto border-dark-800 bg-dark-950/40">
+                <Bracket
+                  rounds={bracketRounds}
+                  pairNames={bracketPairNames}
+                  isAdmin={isAdmin}
+                  onMatchClick={(matchId) => {
+                    const found = matches.find((m) => m.id === matchId);
+                    if (found && isAdmin) {
+                      openScoreModal(found);
+                    }
+                  }}
+                />
               </Card>
             )}
           </div>

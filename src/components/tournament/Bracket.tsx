@@ -3,19 +3,25 @@
 import Card from "@/components/ui/Card";
 import { Trophy, Award, ChevronRight, Flame, Star, Zap, Shield, Medal } from "lucide-react";
 
-interface BracketRound {
-  round: string;
-  matches: {
-    pair1: string;
-    pair2: string;
-    winner?: string;
-    score?: string;
-  }[];
+export interface BracketMatch {
+  id?: string;
+  pair1: string;
+  pair2: string;
+  winner?: string;
+  score?: string;
+  status?: string;
 }
 
-interface BracketProps {
+export interface BracketRound {
+  round: string;
+  matches: BracketMatch[];
+}
+
+export interface BracketProps {
   rounds: BracketRound[];
   pairNames: Record<string, string>;
+  onMatchClick?: (matchId: string) => void;
+  isAdmin?: boolean;
 }
 
 interface StageTheme {
@@ -248,7 +254,7 @@ function getStageTheme(roundKey: string): StageTheme {
   return STAGE_THEMES[normalizedKey] ?? DEFAULT_STAGE_THEME;
 }
 
-export default function Bracket({ rounds, pairNames }: BracketProps) {
+export default function Bracket({ rounds, pairNames, onMatchClick, isAdmin }: BracketProps) {
   if (!rounds || rounds.length === 0) {
     return (
       <div className="text-center py-10 text-dark-400 text-sm">
@@ -321,10 +327,27 @@ export default function Bracket({ rounds, pairNames }: BracketProps) {
                       const isP1Pending = match.pair1 === "Por definir" || p1DisplayName === "Por definir";
                       const isP2Pending = match.pair2 === "Por definir" || p2DisplayName === "Por definir";
 
+                      const isClickable = Boolean(
+                        isAdmin &&
+                        match.id &&
+                        !isP1Pending &&
+                        !isP2Pending &&
+                        onMatchClick &&
+                        match.pair1 !== "BYE" &&
+                        match.pair2 !== "BYE"
+                      );
+
                       return (
                         <div key={`${round.round}_${matchIndex}`} className="relative flex items-center">
                           <Card
+                            onClick={() => {
+                              if (isClickable && match.id && onMatchClick) {
+                                onMatchClick(match.id);
+                              }
+                            }}
                             className={`p-3.5 w-full border transition-all relative z-10 ${
+                              isClickable ? "cursor-pointer hover:border-emerald-400/70 hover:scale-[1.01] active:scale-[0.99]" : ""
+                            } ${
                               isFinal && match.winner
                                 ? "border-amber-400/70 bg-dark-900/95 shadow-xl shadow-amber-400/20"
                                 : `${theme.cardBorder} ${theme.cardBg} ${theme.cardHoverBorder} shadow-lg`
@@ -383,6 +406,14 @@ export default function Bracket({ rounds, pairNames }: BracketProps) {
                                 <span className="scoreboard-digit font-mono font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
                                   {match.score}
                                 </span>
+                              </div>
+                            )}
+
+                            {/* Indicador de acción para el administrador */}
+                            {isClickable && (
+                              <div className="mt-2 pt-1.5 border-t border-dark-800/80 flex items-center justify-between text-[11px] font-semibold text-emerald-400">
+                                <span>{match.status === "completed" ? "Modificar marcador" : "Cargar marcador"}</span>
+                                <ChevronRight className="w-3.5 h-3.5" />
                               </div>
                             )}
 

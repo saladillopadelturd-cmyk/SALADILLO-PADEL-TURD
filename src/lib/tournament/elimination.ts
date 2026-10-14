@@ -352,17 +352,23 @@ export function generateSeededPlayoffBracket(
   const allStages = getStagesSequence(totalSlots);
 
   // Separar y ordenar 1°s, 2°s y 3°s por mérito
+  // 1°s de zona ordenados de mejor a peor para cabezas de serie (Seed 1, Seed 2...)
   const firsts = qualifiedPairs
     .filter((p) => p.zonePosition === 1)
     .sort((a, b) => b.points - a.points || b.gameDifference - a.gameDifference);
 
-  const seconds = qualifiedPairs
-    .filter((p) => p.zonePosition === 2)
-    .sort((a, b) => b.points - a.points || b.gameDifference - a.gameDifference);
-
-  const thirds = qualifiedPairs
+  // Regla SPT: "La mejor pareja de una zona vs la peor pareja de otra zona".
+  // Las peores clasificadas (3°s y 2°s con menor puntaje/diferencia) encabezan el pool
+  // para cruzarse prioritariamente con las mejores cabezas de serie de otras zonas.
+  const worstThirds = qualifiedPairs
     .filter((p) => p.zonePosition >= 3)
-    .sort((a, b) => b.points - a.points || b.gameDifference - a.gameDifference);
+    .sort((a, b) => a.points - b.points || a.gameDifference - b.gameDifference);
+
+  const worstSeconds = qualifiedPairs
+    .filter((p) => p.zonePosition === 2)
+    .sort((a, b) => a.points - b.points || a.gameDifference - b.gameDifference);
+
+  const opponentsPool = [...worstThirds, ...worstSeconds];
 
   const numMatchesFirstRound = totalSlots / 2;
 
@@ -404,15 +410,14 @@ export function generateSeededPlayoffBracket(
 
   // Asignar los cabezas de serie (1°s de zona) en las posiciones canónicas
   const seedsToPlace = [...firsts];
-  const opponentsPool = [...seconds, ...thirds];
 
-  // Si hay más slots que 1°s, rellenar semillas con los mejores 2°s
+  // Si hay más slots que 1°s, rellenar semillas con los mejores 2°s (del final de opponentsPool)
   const topSeeds: QualifiedPair[] = [];
   for (let i = 0; i < numMatchesFirstRound; i++) {
     if (seedsToPlace.length > 0) {
       topSeeds.push(seedsToPlace.shift()!);
     } else if (opponentsPool.length > 0) {
-      topSeeds.push(opponentsPool.shift()!);
+      topSeeds.push(opponentsPool.pop()!);
     }
   }
 
@@ -499,8 +504,8 @@ export function generateSeededPlayoffBracket(
       couple2Id: c2Id,
       isBye: slot.isBye,
       advancingPairId: advancingId,
-      description: `${c1?.zoneName ? `1° ${c1.zoneName}` : "Clasificado"} vs ${
-        slot.isBye ? "BYE" : c2?.zoneName ? `2° ${c2.zoneName}` : "Clasificado"
+      description: `${c1?.zoneName ? `${c1.zonePosition}° ${c1.zoneName}` : "Clasificado"} vs ${
+        slot.isBye ? "BYE" : c2?.zoneName ? `${c2.zonePosition}° ${c2.zoneName}` : "Clasificado"
       }`,
     };
   });

@@ -355,6 +355,10 @@ export function runTournamentBusinessLogicTests(): TestResult {
   const seed2InM2 = m2.couple1Id === "1B" || m2.couple2Id === "1B";
   assert(seed1InM1 && seed2InM2, "Seed 1 (1A) y Seed 2 (1B) en semifinales opuestas para que solo choquen en la final");
 
+  // Regla SPT: Mejor pareja de una zona vs peor pareja de otra zona
+  assert(m1.couple1Id === "1A" && m1.couple2Id === "2B", "1A (mejor Zona A) enfrenta a 2B (peor Zona B)");
+  assert(m2.couple1Id === "1B" && m2.couple2Id === "2A", "1B (mejor Zona B) enfrenta a 2A (peor Zona A)");
+
   // Cuadro de 8 con 6 clasificados (2 BYEs)
   const sixPairs: QualifiedPair[] = [
     { pairId: "1A", zoneName: "Zona A", zonePosition: 1, points: 6, gameDifference: 12 },
@@ -378,7 +382,21 @@ export function runTournamentBusinessLogicTests(): TestResult {
   assert(bracket8.firstRoundMatches[0].isBye, "Match 0 (mitad superior) tiene BYE");
   assert(bracket8.firstRoundMatches[3].isBye, "Match 3 (mitad inferior) tiene BYE");
   assert(bracket8.firstRoundMatches[0].advancingPairId === "1A", "Seed 1 (1A) avanza por BYE en mitad superior");
-  assert(bracket8.firstRoundMatches[3].advancingPairId === "1B", "Seed 2 (1B) avanza por BYE en mitad inferior");
+  // Cuadro de 8 con 8 clasificados (4 zonas de 3: 1A..1D, 2A..2D)
+  const eightPairs: QualifiedPair[] = [
+    { pairId: "1A", zoneName: "Zona A", zonePosition: 1, points: 4, gameDifference: 8 },
+    { pairId: "1B", zoneName: "Zona B", zonePosition: 1, points: 4, gameDifference: 6 },
+    { pairId: "1C", zoneName: "Zona C", zonePosition: 1, points: 4, gameDifference: 4 },
+    { pairId: "1D", zoneName: "Zona D", zonePosition: 1, points: 4, gameDifference: 2 },
+    { pairId: "2A", zoneName: "Zona A", zonePosition: 2, points: 3, gameDifference: 4 },
+    { pairId: "2B", zoneName: "Zona B", zonePosition: 2, points: 3, gameDifference: 3 },
+    { pairId: "2C", zoneName: "Zona C", zonePosition: 2, points: 3, gameDifference: 2 },
+    { pairId: "2D", zoneName: "Zona D", zonePosition: 2, points: 3, gameDifference: 1 },
+  ];
+  const bracket8_4zones = generateSeededPlayoffBracket(eightPairs);
+  assert(bracket8_4zones.firstRoundMatches.length === 4, "4 partidos de cuartos");
+  assert(bracket8_4zones.firstRoundMatches[0].couple1Id === "1A" && bracket8_4zones.firstRoundMatches[0].couple2Id === "2D", "1A (mejor Zona A) vs 2D (peor 2do, de Zona D)");
+  assert(bracket8_4zones.firstRoundMatches[3].couple1Id === "1B" && bracket8_4zones.firstRoundMatches[3].couple2Id === "2A", "1B (mejor Zona B) vs 2A (de Zona A)");
 
   // Cuadro de 16 con 10 clasificados (6 BYEs)
   const tenPairs: QualifiedPair[] = Array.from({ length: 10 }, (_, i) => ({
