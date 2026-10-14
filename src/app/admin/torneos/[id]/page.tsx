@@ -1860,76 +1860,38 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                   })}
                 </div>
 
-                {/* Opciones rápidas de Tie-Break al 8-8 con indicación explícita de Pareja 1 y Pareja 2 */}
+                {/* Opciones de Tie-Break al 8-8 */}
                 {(formScoreSet1.startsWith("9/8") || formScoreSet1.startsWith("8/9")) && (
-                  <div className="mt-2.5 p-3 bg-dark-950/90 rounded-xl border border-amber-500/30 space-y-2">
-                    <div className="flex items-center justify-between text-[11px] font-bold text-amber-300">
-                      <span>Tie-Break al 8-8: ( 1° N° - 2° N° )</span>
-                      <span className="text-[10px] text-dark-400 font-normal">Parentesis y separador automáticos</span>
-                    </div>
-
-                    {/* Indicador de qué pareja es cada número */}
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
-                        <span className="text-[10px] uppercase font-bold text-emerald-400">1° N° (Pareja 1):</span>
-                        <span className="text-white font-bold truncate max-w-[120px] ml-1">
-                          {scoringMatch?.couple1
-                            ? getCouplePlayersLabel(scoringMatch.couple1, scoringMatch.couple1_id)
-                            : "Pareja 1"}
-                        </span>
-                      </div>
-                      <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-between">
-                        <span className="text-[10px] uppercase font-bold text-sky-400">2° N° (Pareja 2):</span>
-                        <span className="text-white font-bold truncate max-w-[120px] ml-1">
-                          {scoringMatch?.couple2
-                            ? getCouplePlayersLabel(scoringMatch.couple2, scoringMatch.couple2_id)
-                            : "Pareja 2"}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div>
-                      <span className="text-[10px] text-dark-400 block mb-1">
-                        Marcadores rápidos (1° número de Pareja 1, 2° número de Pareja 2):
-                      </span>
-                      <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                        {(formWinnerCoupleId === scoringMatch?.couple2_id
-                          ? ["6-7", "5-7", "4-7", "3-7", "2-7", "1-7", "0-7", "6-8", "8-10"]
-                          : ["7-6", "7-5", "7-4", "7-3", "7-2", "7-1", "7-0", "8-6", "10-8"]
-                        ).map((tbChip) => {
-                          const prefix = formWinnerCoupleId === scoringMatch?.couple2_id ? "8/9" : "9/8";
-                          const candidate = `${prefix} (${tbChip})`;
-                          const isSelected = formScoreSet1 === candidate;
-                          return (
-                            <button
-                              key={tbChip}
-                              type="button"
-                              onClick={() => setFormScoreSet1(candidate)}
-                              className={`px-2 py-0.5 text-xs font-mono font-bold rounded-md border transition-all cursor-pointer ${
-                                isSelected
-                                  ? "bg-amber-400 text-dark-950 border-amber-300 shadow-sm font-black"
-                                  : "bg-dark-900 hover:bg-dark-800 text-amber-300/90 border-amber-500/30 hover:border-amber-400"
-                              }`}
-                            >
-                              ({tbChip})
-                            </button>
-                          );
-                        })}
-                      </div>
+                  <div className="mt-2.5 p-2.5 bg-dark-950/90 rounded-xl border border-amber-500/30">
+                    <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                      {(formWinnerCoupleId === scoringMatch?.couple2_id
+                        ? ["6-7", "5-7", "4-7", "3-7", "2-7", "1-7", "0-7", "6-8", "8-10"]
+                        : ["7-6", "7-5", "7-4", "7-3", "7-2", "7-1", "7-0", "8-6", "10-8"]
+                      ).map((tbChip) => {
+                        const prefix = formWinnerCoupleId === scoringMatch?.couple2_id ? "8/9" : "9/8";
+                        const candidate = `${prefix} (${tbChip})`;
+                        const isSelected = formScoreSet1 === candidate;
+                        return (
+                          <button
+                            key={tbChip}
+                            type="button"
+                            onClick={() => setFormScoreSet1(candidate)}
+                            className={`px-2 py-0.5 text-xs font-mono font-bold rounded-md border transition-all cursor-pointer ${
+                              isSelected
+                                ? "bg-amber-400 text-dark-950 border-amber-300 shadow-sm font-black"
+                                : "bg-dark-900 hover:bg-dark-800 text-amber-300/90 border-amber-500/30 hover:border-amber-400"
+                            }`}
+                          >
+                            ({tbChip})
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
 
                 <p className="text-[11px] text-dark-400 mt-1.5 text-center">
-                  {formScoreSet1.startsWith("9/8") || formScoreSet1.startsWith("8/9") ? (
-                    <span className="text-amber-400 font-medium">
-                      Partidos 9/8 con Tie-Break: el 1° número es de Pareja 1 y el 2° número de Pareja 2. El guión y paréntesis se colocan automáticamente.
-                    </span>
-                  ) : (
-                    <>
-                      Tipeá solo los números (ej: 9 y 4) y la barra <span className="font-bold text-emerald-400">/</span> se colocará automáticamente. Presioná <kbd className="px-1.5 py-0.5 rounded bg-dark-800 border border-dark-700 text-[10px] text-white">Enter</kbd> para confirmar.
-                    </>
-                  )}
+                  Tipeá solo los números (ej: 9 y 4) y la barra <span className="font-bold text-emerald-400">/</span> se colocará automáticamente. Presioná <kbd className="px-1.5 py-0.5 rounded bg-dark-800 border border-dark-700 text-[10px] text-white">Enter</kbd> para confirmar.
                 </p>
               </div>
 
