@@ -55,21 +55,24 @@ export default function MatchCard({
     p2Sets = match.score_pair2.sets;
   } else if (match.score_set1 || match.score_set2) {
     if (match.score_set1) {
-      const parts = match.score_set1.split("-");
+      const clean = match.score_set1.replace(/\s*\(.*?\)/, "").trim();
+      const parts = clean.includes("/") ? clean.split("/") : clean.split("-");
       if (parts.length === 2) {
         p1Sets.push(parts[0].trim());
         p2Sets.push(parts[1].trim());
       }
     }
     if (match.score_set2) {
-      const parts = match.score_set2.split("-");
+      const clean = match.score_set2.replace(/\s*\(.*?\)/, "").trim();
+      const parts = clean.includes("/") ? clean.split("/") : clean.split("-");
       if (parts.length === 2) {
         p1Sets.push(parts[0].trim());
         p2Sets.push(parts[1].trim());
       }
     }
     if (match.score_super_tb) {
-      const parts = match.score_super_tb.split("-");
+      const clean = match.score_super_tb.replace(/[()]/g, "").trim();
+      const parts = clean.includes("/") ? clean.split("/") : clean.split("-");
       if (parts.length === 2) {
         p1Sets.push(`(${parts[0].trim()})`);
         p2Sets.push(`(${parts[1].trim()})`);

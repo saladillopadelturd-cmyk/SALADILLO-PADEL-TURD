@@ -598,14 +598,96 @@ export function generateRandomCouples(
 /**
  * Formatea automáticamente el marcador de un partido para que al tipear solo números
  * se inserte automáticamente la barra separadora "/" (ej: "94" -> "9/4", "63" -> "6/3").
+ *
+ * En caso de torneos a 9 games donde un partido termina "9/8" u "8/9", se agrega automáticamente
+ * la plantilla del tie-break "( - )" para que el usuario solo tipee los números (ej: "9/8 (7-6)").
  */
-export function formatScoreInput(val: string): string {
+export function formatScoreInput(val: string, prevVal?: string): string {
   if (!val) return "";
 
   const trimmed = val.trim();
 
-  // Si incluye guión, normalizar a barra
-  if (trimmed.includes("-")) {
+  // Detección específica para 9/8 u 8/9 con tie-break
+  const isNineEight =
+    trimmed.startsWith("9/8") ||
+    trimmed.startsWith("8/9") ||
+    trimmed.startsWith("9-8") ||
+    trimmed.startsWith("8-9") ||
+    trimmed.startsWith("98") ||
+    trimmed.startsWith("89");
+
+  if (isNineEight) {
+    const isP1Leading = trimmed.startsWith("9/8") || trimmed.startsWith("9-8") || trimmed.startsWith("98");
+    const basePrefix = isP1Leading ? "9/8" : "8/9";
+
+    // Si el usuario estaba en "9/8 ( - )" o similar y borró con Backspace hacia atrás
+    if (prevVal && (prevVal.includes("(") || prevVal.includes("-")) && !val.includes("(") && !val.includes("-")) {
+      // El usuario borró explícitamente el paréntesis del tiebreak
+      if (trimmed === "98" || trimmed === "89" || trimmed === "9/8" || trimmed === "8/9") {
+        return basePrefix;
+      }
+    }
+
+    // Extraer la porción posterior al 9/8 o 8/9
+    let afterBase = "";
+    if (trimmed.includes("/")) {
+      const slashIndex = trimmed.indexOf("/");
+      afterBase = trimmed.slice(slashIndex + 2); // saltar el '8' o '9'
+    } else if (trimmed.includes("-") && !trimmed.includes("(")) {
+      const dashIndex = trimmed.indexOf("-");
+      afterBase = trimmed.slice(dashIndex + 2);
+    } else {
+      afterBase = trimmed.slice(2);
+    }
+
+    afterBase = afterBase.trim();
+
+    // Si no hay nada después de 9/8 o si es solo paréntesis vacío o " - "
+    if (!afterBase || afterBase === "(" || afterBase === "(-)" || afterBase === "( - )" || afterBase === "-") {
+      return `${basePrefix} ( - )`;
+    }
+
+    // Si tiene guión dentro de afterBase (ej: '(7-6)', '(7- )', '7-6', '7-')
+    if (afterBase.includes("-")) {
+      const parts = afterBase.split("-");
+      const leftDigits = parts[0].replace(/\D/g, "");
+      const rightDigits = parts[1] ? parts[1].replace(/\D/g, "") : "";
+
+      if (!leftDigits && !rightDigits) {
+        return `${basePrefix} ( - )`;
+      }
+      if (leftDigits && !rightDigits) {
+        return `${basePrefix} (${leftDigits}- )`;
+      }
+      return `${basePrefix} (${leftDigits}-${rightDigits})`;
+    }
+
+    // Si solo hay dígitos después de la base (ej: '987' -> '7', '9876' -> '76', '98108' -> '108')
+    const tbDigits = afterBase.replace(/\D/g, "");
+    if (!tbDigits) {
+      return `${basePrefix} ( - )`;
+    }
+    if (tbDigits.length === 1) {
+      return `${basePrefix} (${tbDigits}- )`;
+    }
+    if (tbDigits.length === 2) {
+      return `${basePrefix} (${tbDigits[0]}-${tbDigits[1]})`;
+    }
+    if (tbDigits.length === 3) {
+      if (tbDigits.startsWith("10") || tbDigits.startsWith("11") || tbDigits.startsWith("12")) {
+        return `${basePrefix} (${tbDigits.slice(0, 2)}-${tbDigits[2]})`;
+      }
+      return `${basePrefix} (${tbDigits[0]}-${tbDigits.slice(1)})`;
+    }
+    // 4 o más dígitos
+    if (tbDigits.startsWith("10") || tbDigits.startsWith("11") || tbDigits.startsWith("12")) {
+      return `${basePrefix} (${tbDigits.slice(0, 2)}-${tbDigits.slice(2, 4)})`;
+    }
+    return `${basePrefix} (${tbDigits[0]}-${tbDigits.slice(1, 3)})`;
+  }
+
+  // Si incluye guión fuera de tie-break, normalizar a barra
+  if (trimmed.includes("-") && !trimmed.includes("(")) {
     return trimmed.replace("-", "/");
   }
 

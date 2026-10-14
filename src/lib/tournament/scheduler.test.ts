@@ -144,5 +144,16 @@ export function runSchedulerTests(): { passed: number; failed: number; errors: s
   assert(formatScoreInput("9-4") === "9/4", "Guión debe normalizarse a /");
   assert(formatScoreInput("9/4") === "9/4", "9/4 debe mantenerse intacto");
 
+  // TEST 10: Partidos a 9 games definidos 9/8 con Tie-Break
+  assert(formatScoreInput("98") === "9/8 ( - )", "98 debe autocompletar con tie-break ( - )");
+  assert(formatScoreInput("9/8") === "9/8 ( - )", "9/8 debe autocompletar con tie-break ( - )");
+  assert(formatScoreInput("89") === "8/9 ( - )", "89 debe autocompletar con tie-break ( - )");
+  assert(formatScoreInput("987") === "9/8 (7- )", "987 debe colocar el primer punto del tie break");
+  assert(formatScoreInput("9876") === "9/8 (7-6)", "9876 debe formatear a 9/8 (7-6)");
+  assert(formatScoreInput("9875") === "9/8 (7-5)", "9875 debe formatear a 9/8 (7-5)");
+  assert(formatScoreInput("98108") === "9/8 (10-8)", "98108 debe formatear a 9/8 (10-8)");
+  assert(formatScoreInput("9/8 (7-6)") === "9/8 (7-6)", "9/8 (7-6) debe mantenerse intacto");
+  assert(formatScoreInput("9/8", "9/8 ( - )") === "9/8", "Backspace debe permitir volver a 9/8");
+
   return { passed, failed, errors };
 }

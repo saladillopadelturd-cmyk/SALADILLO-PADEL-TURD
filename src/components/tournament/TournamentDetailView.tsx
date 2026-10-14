@@ -174,6 +174,17 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
       return;
     }
 
+    if (formScoreSet1.includes("9/8") || formScoreSet1.includes("8/9")) {
+      const tbMatch = formScoreSet1.match(/([89]\/[89])\s*\(\s*(\d+)\s*-\s*(\d+)\s*\)/);
+      if (!tbMatch) {
+        setNotification({
+          type: "error",
+          text: "Para un resultado de 9/8, debes anotar los puntos del tie-break, por ejemplo: 9/8 (7-6)",
+        });
+        return;
+      }
+    }
+
     setIsSavingScore(true);
     try {
       const { error } = await supabase
@@ -1787,7 +1798,7 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
               type="text"
               inputMode="numeric"
               autoFocus
-              placeholder="Ej: 9/4"
+              placeholder="Ej: 9/4 o 9/8 (7-6)"
               value={formScoreSet1}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -1795,7 +1806,7 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                   handleSaveScore();
                 }
               }}
-              onChange={(e) => setFormScoreSet1(formatScoreInput(e.target.value))}
+              onChange={(e) => setFormScoreSet1(formatScoreInput(e.target.value, formScoreSet1))}
               className="w-full px-4 py-2.5 bg-dark-900 border border-dark-600 rounded-lg text-white text-base font-bold font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500 text-center tracking-widest"
             />
             
@@ -1804,20 +1815,75 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
               {(tournament?.game_mode === "american_9games" || !tournament?.game_mode
                 ? ["9/4", "9/5", "9/6", "9/7", "9/3", "9/8"]
                 : ["6/3", "6/4", "6/2", "7/5", "7/6"]
-              ).map((chip) => (
-                <button
-                  key={chip}
-                  type="button"
-                  onClick={() => setFormScoreSet1(chip)}
-                  className="px-2.5 py-1 text-xs font-mono font-bold rounded-lg bg-dark-800 hover:bg-dark-700 text-dark-300 hover:text-white border border-dark-700 transition-colors cursor-pointer"
-                >
-                  {chip}
-                </button>
-              ))}
+              ).map((chip) => {
+                const is98 = chip === "9/8";
+                const isSelected = is98
+                  ? formScoreSet1.startsWith("9/8") || formScoreSet1.startsWith("8/9")
+                  : formScoreSet1 === chip;
+                return (
+                  <button
+                    key={chip}
+                    type="button"
+                    onClick={() => {
+                      if (is98) {
+                        setFormScoreSet1("9/8 ( - )");
+                      } else {
+                        setFormScoreSet1(chip);
+                      }
+                    }}
+                    className={`px-2.5 py-1 text-xs font-mono font-bold rounded-lg border transition-colors cursor-pointer ${
+                      isSelected
+                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                        : "bg-dark-800 hover:bg-dark-700 text-dark-300 hover:text-white border-dark-700"
+                    }`}
+                  >
+                    {chip}
+                  </button>
+                );
+              })}
             </div>
 
+            {/* Opciones rápidas de Tie-Break al 8-8 */}
+            {(formScoreSet1.startsWith("9/8") || formScoreSet1.startsWith("8/9")) && (
+              <div className="mt-2.5 p-2.5 bg-dark-950/90 rounded-xl border border-amber-500/30 space-y-1.5">
+                <div className="flex items-center justify-between text-[11px] font-bold text-amber-300">
+                  <span>Puntos del Tie-Break (al 8-8):</span>
+                  <span className="text-[10px] text-dark-400 font-normal">Tipeá números o tocá una opción:</span>
+                </div>
+                <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                  {["7-6", "7-5", "7-4", "7-3", "7-2", "7-1", "7-0", "8-6", "10-8"].map((tbChip) => {
+                    const prefix = formScoreSet1.startsWith("8/9") ? "8/9" : "9/8";
+                    const candidate = `${prefix} (${tbChip})`;
+                    const isSelected = formScoreSet1 === candidate;
+                    return (
+                      <button
+                        key={tbChip}
+                        type="button"
+                        onClick={() => setFormScoreSet1(candidate)}
+                        className={`px-2 py-0.5 text-xs font-mono font-bold rounded-md border transition-all cursor-pointer ${
+                          isSelected
+                            ? "bg-amber-400 text-dark-950 border-amber-300 shadow-sm font-black"
+                            : "bg-dark-900 hover:bg-dark-800 text-amber-300/90 border-amber-500/30 hover:border-amber-400"
+                        }`}
+                      >
+                        ({tbChip})
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <p className="text-[11px] text-dark-400 mt-1.5 text-center">
-              Tipeá solo los números (ej: 9 y 4) y la barra <span className="font-bold text-emerald-400">/</span> se colocará automáticamente. Presioná <kbd className="px-1.5 py-0.5 rounded bg-dark-800 border border-dark-700 text-[10px] text-white">Enter</kbd> para confirmar.
+              {formScoreSet1.startsWith("9/8") || formScoreSet1.startsWith("8/9") ? (
+                <span className="text-amber-400 font-medium">
+                  Partidos 9/8 con Tie-Break: tipeá los números de puntos (ej: 7 y 6 para 9/8 (7-6)) o elegí un marcador rápido.
+                </span>
+              ) : (
+                <>
+                  Tipeá solo los números (ej: 9 y 4) y la barra <span className="font-bold text-emerald-400">/</span> se colocará automáticamente. Presioná <kbd className="px-1.5 py-0.5 rounded bg-dark-800 border border-dark-700 text-[10px] text-white">Enter</kbd> para confirmar.
+                </>
+              )}
             </p>
           </div>
 
