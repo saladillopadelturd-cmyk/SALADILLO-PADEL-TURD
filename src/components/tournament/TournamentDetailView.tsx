@@ -36,6 +36,8 @@ import {
   AlertCircle,
   Edit2,
   RefreshCw,
+  X,
+  RotateCcw,
 } from "lucide-react";
 
 interface TournamentDetailProps {
@@ -291,6 +293,56 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
       await loadTournamentData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error al guardar resultado";
+      setNotification({ type: "error", text: msg });
+    } finally {
+      setIsSavingScore(false);
+    }
+  };
+
+  const handleClearScoreForm = () => {
+    setFormScoreSet1("");
+    setFormScoreSet2("");
+    setFormScoreSuperTb("");
+    setFormWinnerCoupleId("");
+  };
+
+  const handleResetScoreToScheduled = async () => {
+    if (!scoringMatch) return;
+    setIsSavingScore(true);
+    try {
+      const { error } = await supabase
+        .from("matches")
+        .update({
+          score_set1: null,
+          score_set2: null,
+          score_super_tb: null,
+          winner_couple_id: null,
+          status: "scheduled",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", scoringMatch.id);
+
+      if (error) throw error;
+
+      setMatches((prev) =>
+        prev.map((m) =>
+          m.id === scoringMatch.id
+            ? {
+                ...m,
+                score_set1: null,
+                score_set2: null,
+                score_super_tb: null,
+                winner_couple_id: null,
+                status: "scheduled" as const,
+              }
+            : m
+        )
+      );
+      setScoringMatch(null);
+      setNotification({ type: "success", text: "El partido fue restablecido a Programado con éxito." });
+      await loadTournamentData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error al restablecer el partido";
       setNotification({ type: "error", text: msg });
     } finally {
       setIsSavingScore(false);
@@ -1794,21 +1846,38 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
             <label className="block text-xs font-bold text-slate-300 mb-1 uppercase tracking-wider">
               Resultado del Partido {tournament?.game_mode === "american_2sets" ? "(Set 1)" : ""}
             </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              autoFocus
-              placeholder="Ej: 9/4 o 9/8 (7-6)"
-              value={formScoreSet1}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleSaveScore();
-                }
-              }}
-              onChange={(e) => setFormScoreSet1(formatScoreInput(e.target.value, formScoreSet1))}
-              className="w-full px-4 py-2.5 bg-dark-900 border border-dark-600 rounded-lg text-white text-base font-bold font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500 text-center tracking-widest"
-            />
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoFocus
+                  placeholder="Ej: 9/4 o 9/8 (7-6)"
+                  value={formScoreSet1}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleSaveScore();
+                    }
+                  }}
+                  onChange={(e) => setFormScoreSet1(formatScoreInput(e.target.value, formScoreSet1))}
+                  className="w-full px-4 py-2.5 bg-dark-900 border border-dark-600 rounded-lg text-white text-base font-bold font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500 text-center tracking-widest"
+                />
+              </div>
+
+              {/* Botón (X) color rojo para borrar el resultado ingresado y poner el formulario en cero */}
+              <button
+                type="button"
+                onClick={handleClearScoreForm}
+                title="Borrar resultado ingresado y poner el formulario en cero"
+                className="px-2.5 py-2.5 rounded-lg bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 hover:text-white border border-rose-500/40 flex items-center gap-1.5 text-xs font-bold transition-all cursor-pointer flex-shrink-0 shadow-sm active:scale-95"
+              >
+                <span className="w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center text-xs font-black shadow-inner">
+                  ✕
+                </span>
+                <span className="hidden sm:inline">Poner en cero</span>
+              </button>
+            </div>
             
             {/* Chips de marcadores rápidos */}
             <div className="flex items-center justify-center gap-1.5 mt-2 flex-wrap">
@@ -1826,7 +1895,8 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                     type="button"
                     onClick={() => {
                       if (is98) {
-                        setFormScoreSet1("9/8 ( - )");
+                        const prefix = formWinnerCoupleId === scoringMatch?.couple2_id ? "8/9" : "9/8";
+                        setFormScoreSet1(`${prefix} ( - )`);
                       } else {
                         setFormScoreSet1(chip);
                       }
@@ -1843,33 +1913,62 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
               })}
             </div>
 
-            {/* Opciones rápidas de Tie-Break al 8-8 */}
+            {/* Opciones rápidas de Tie-Break al 8-8 con indicación explícita de Pareja 1 y Pareja 2 */}
             {(formScoreSet1.startsWith("9/8") || formScoreSet1.startsWith("8/9")) && (
-              <div className="mt-2.5 p-2.5 bg-dark-950/90 rounded-xl border border-amber-500/30 space-y-1.5">
+              <div className="mt-2.5 p-3 bg-dark-950/90 rounded-xl border border-amber-500/30 space-y-2">
                 <div className="flex items-center justify-between text-[11px] font-bold text-amber-300">
-                  <span>Puntos del Tie-Break (al 8-8):</span>
-                  <span className="text-[10px] text-dark-400 font-normal">Tipeá números o tocá una opción:</span>
+                  <span>Tie-Break al 8-8: ( 1° N° - 2° N° )</span>
+                  <span className="text-[10px] text-dark-400 font-normal">Parentesis y separador automáticos</span>
                 </div>
-                <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                  {["7-6", "7-5", "7-4", "7-3", "7-2", "7-1", "7-0", "8-6", "10-8"].map((tbChip) => {
-                    const prefix = formScoreSet1.startsWith("8/9") ? "8/9" : "9/8";
-                    const candidate = `${prefix} (${tbChip})`;
-                    const isSelected = formScoreSet1 === candidate;
-                    return (
-                      <button
-                        key={tbChip}
-                        type="button"
-                        onClick={() => setFormScoreSet1(candidate)}
-                        className={`px-2 py-0.5 text-xs font-mono font-bold rounded-md border transition-all cursor-pointer ${
-                          isSelected
-                            ? "bg-amber-400 text-dark-950 border-amber-300 shadow-sm font-black"
-                            : "bg-dark-900 hover:bg-dark-800 text-amber-300/90 border-amber-500/30 hover:border-amber-400"
-                        }`}
-                      >
-                        ({tbChip})
-                      </button>
-                    );
-                  })}
+
+                {/* Indicador de qué pareja es cada número */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-emerald-400">1° N° (Pareja 1):</span>
+                    <span className="text-white font-bold truncate max-w-[120px] ml-1">
+                      {scoringMatch?.couple1
+                        ? getCouplePlayersShortLabel(scoringMatch.couple1)
+                        : couplePlayersMap[scoringMatch?.couple1_id ?? ""] || "Pareja 1"}
+                    </span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-sky-400">2° N° (Pareja 2):</span>
+                    <span className="text-white font-bold truncate max-w-[120px] ml-1">
+                      {scoringMatch?.couple2
+                        ? getCouplePlayersShortLabel(scoringMatch.couple2)
+                        : couplePlayersMap[scoringMatch?.couple2_id ?? ""] || "Pareja 2"}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-[10px] text-dark-400 block mb-1">
+                    Marcadores rápidos (1° número de Pareja 1, 2° número de Pareja 2):
+                  </span>
+                  <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                    {(formWinnerCoupleId === scoringMatch?.couple2_id
+                      ? ["6-7", "5-7", "4-7", "3-7", "2-7", "1-7", "0-7", "6-8", "8-10"]
+                      : ["7-6", "7-5", "7-4", "7-3", "7-2", "7-1", "7-0", "8-6", "10-8"]
+                    ).map((tbChip) => {
+                      const prefix = formWinnerCoupleId === scoringMatch?.couple2_id ? "8/9" : "9/8";
+                      const candidate = `${prefix} (${tbChip})`;
+                      const isSelected = formScoreSet1 === candidate;
+                      return (
+                        <button
+                          key={tbChip}
+                          type="button"
+                          onClick={() => setFormScoreSet1(candidate)}
+                          className={`px-2 py-0.5 text-xs font-mono font-bold rounded-md border transition-all cursor-pointer ${
+                            isSelected
+                              ? "bg-amber-400 text-dark-950 border-amber-300 shadow-sm font-black"
+                              : "bg-dark-900 hover:bg-dark-800 text-amber-300/90 border-amber-500/30 hover:border-amber-400"
+                          }`}
+                        >
+                          ({tbChip})
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             )}
@@ -1877,7 +1976,7 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
             <p className="text-[11px] text-dark-400 mt-1.5 text-center">
               {formScoreSet1.startsWith("9/8") || formScoreSet1.startsWith("8/9") ? (
                 <span className="text-amber-400 font-medium">
-                  Partidos 9/8 con Tie-Break: tipeá los números de puntos (ej: 7 y 6 para 9/8 (7-6)) o elegí un marcador rápido.
+                  Partidos 9/8 con Tie-Break: el 1° número es de Pareja 1 y el 2° número de Pareja 2. El guión y paréntesis se colocan automáticamente.
                 </span>
               ) : (
                 <>
@@ -1934,13 +2033,28 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
             </div>
           )}
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-dark-800">
-            <Button variant="ghost" onClick={() => setScoringMatch(null)} disabled={isSavingScore}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveScore} disabled={isSavingScore} className="font-bold bg-emerald-500 hover:bg-emerald-600 text-dark-950">
-              {isSavingScore ? "Guardando..." : "Confirmar Resultado"}
-            </Button>
+          <div className="flex items-center justify-between pt-4 border-t border-dark-800 flex-wrap gap-2">
+            {scoringMatch?.status === "completed" ? (
+              <button
+                type="button"
+                onClick={handleResetScoreToScheduled}
+                disabled={isSavingScore}
+                title="Poner el partido en cero y volverlo a Programado"
+                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 border border-rose-500/30 flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Restablecer a Programado</span>
+              </button>
+            ) : <div />}
+
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" onClick={() => setScoringMatch(null)} disabled={isSavingScore}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSaveScore} disabled={isSavingScore} className="font-bold bg-emerald-500 hover:bg-emerald-600 text-dark-950">
+                {isSavingScore ? "Guardando..." : "Confirmar Resultado"}
+              </Button>
+            </div>
           </div>
         </div>
       </Modal>
