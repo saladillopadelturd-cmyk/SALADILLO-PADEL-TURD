@@ -817,15 +817,6 @@ function AdminParejasContent() {
             disabled={!selectedTournament || player2Options.length === 0}
           />
 
-          {formJugador1 && formJugador2 && (
-            <div className="p-2.5 bg-dark-800/90 border border-dark-700 rounded-lg text-xs text-dark-200">
-              <span className="text-dark-400">Se creará:</span>{" "}
-              <strong className="text-primary-400">Pareja {nextCoupleNumber}:</strong>{" "}
-              {player1Options.find((p) => p.value === formJugador1)?.label} /{" "}
-              {player2Options.find((p) => p.value === formJugador2)?.label}
-            </div>
-          )}
-
           {formJugador1 && formJugador2 && selectedTournament && isSumaCategory(selectedTournament.category) && (
             <div className="p-3 bg-dark-800/95 border border-amber-500/30 rounded-xl flex items-center justify-between text-xs">
               <span className="text-dark-300 font-medium">Validación de Suma:</span>
