@@ -526,7 +526,32 @@ export function runTournamentBusinessLogicTests(): TestResult {
   // Ganó 70 pts en T1 con jD + 70 pts en T2 con jA = 140 pts
   assert(indivRankings.get("jC")?.points === 140, "Ranking Individual jC acumuló 140 pts (70 + 70)");
 
-  // 6. Verificación de cálculo de puntos acumulados en curso (hasta el momento de la consulta)
+  // 6. Torneo 3: La pareja original [jA-jB] vuelve a jugar junta y ganan (100 pts)
+  const tournament3Couples = [
+    { id: "c_AB_3", player1_id: "jA", player2_id: "jB" },
+    { id: "c_XY_3", player1_id: "jX", player2_id: "jY" },
+  ];
+  const tournament3Matches: Match[] = [
+    { id: "m3_final", tournament_id: "t3", stage: "final", couple1_id: "c_AB_3", couple2_id: "c_XY_3", winner_couple_id: "c_AB_3", score_set1: "9-5", status: "completed", created_at: "" },
+  ];
+  const t3Stats = calculateTournamentStageStats(tournament3Matches, tournament3Couples);
+  const update3 = processDoubleRankingUpdate({
+    existingCoupleRankings: coupleRankings,
+    existingIndividualRankings: indivRankings,
+    tournamentStats: t3Stats,
+    category: "5ta",
+  });
+  coupleRankings = update3.updatedCoupleRankings;
+  indivRankings = update3.updatedIndividualRankings;
+
+  assert(coupleRankings.get(c1Key)?.points === 200, "Ranking Pareja [jA-jB] acumuló 200 pts en 2 torneos jugados juntos (100 + 100)");
+  assert(coupleRankings.get(c1Key)?.tournamentsPlayed === 2, "Ranking Pareja [jA-jB] registra 2 torneos jugados");
+  assert(indivRankings.get("jA")?.points === 270, "Ranking Individual jA acumuló 270 pts sumando todos sus torneos (100 + 70 + 100)");
+  assert(indivRankings.get("jA")?.tournamentsPlayed === 3, "Ranking Individual jA registra 3 torneos disputados");
+  assert(indivRankings.get("jB")?.points === 250, "Ranking Individual jB acumuló 250 pts sumando todos sus torneos (100 + 50 + 100)");
+  assert(indivRankings.get("jB")?.tournamentsPlayed === 3, "Ranking Individual jB registra 3 torneos disputados");
+
+  // 7. Verificación de cálculo de puntos acumulados en curso (hasta el momento de la consulta)
   const inProgressCouples = [
     { id: "pair1", player1_id: "p1", player2_id: "p2" },
     { id: "pair2", player1_id: "p3", player2_id: "p4" },

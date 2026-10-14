@@ -4,7 +4,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/Tabs";
 import PlayerAvatar from "@/components/player/PlayerAvatar";
 import { createClient } from "@/lib/supabase/server";
 import { formatPlayerShortName } from "@/lib/tournament/couples";
-import { syncAllTournamentsRankings } from "@/lib/tournament/rankings";
+import { syncAllTournamentsRankings, resolveCoupleCategory, getCoupleKey } from "@/lib/tournament/rankings";
 import { Trophy, Medal, Users, User, Flame, CheckCircle2 } from "lucide-react";
 
 export const revalidate = 0;
@@ -21,6 +21,7 @@ interface CoupleRankingItem {
 
 interface IndividualRankingItem {
   id: string;
+  playerId?: string;
   name: string;
   firstName: string;
   lastName: string;
@@ -47,105 +48,99 @@ export default async function RankingsPage({
   let availableCategories: string[] = [];
 
   try {
-    // 1. Auto-sincronizar si la tabla de rankings está vacía para que siempre muestre datos al instante
-    const { count } = await supabase.from("rankings").select("*", { count: "exact", head: true });
-    if (!count || count === 0) {
-      await syncAllTournamentsRankings(supabase);
-    }
+    // 1. Auto-sincronizar siempre para consolidar todos los puntos de torneos disputados
+    await syncAllTournamentsRankings(supabase);
 
-    // 2. Traer jugadores para resolución 100% segura de nombres abreviados
+    // 2. Traer jugadores para resolución de nombres y categorías oficiales
     const { data: allPlayers } = await supabase.from("players").select("*");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const playersMap = new Map((allPlayers || []).map((p: any) => [p.id, p]));
 
-    // 3. Obtener todos los rankings para extraer categorías disponibles
+    // 3. Obtener rankings persistidos
     const { data: allRankings } = await supabase
       .from("rankings")
       .select("*")
       .order("points", { ascending: false })
       .order("matches_won", { ascending: false });
 
-    // 3. Extraer categorías disponibles combinando registros existentes y jugadores de la BD
-    const catsSet = new Set<string>();
-    if (allRankings && allRankings.length > 0) {
-      allRankings.forEach((r) => {
-        if (r.category) catsSet.add(r.category);
-      });
-    }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (allPlayers || []).forEach((p: any) => {
-      if (p.category) catsSet.add(p.category);
-    });
-    availableCategories = Array.from(catsSet).sort();
-
-    const filtered = (allRankings || []).filter((r) => {
-      if (selectedCategory === "all") return true;
-      return r.category === selectedCategory;
-    });
-
-    // Separar parejas
-    coupleRankings = filtered
+    // 4. Consolidar parejas sumando todos los puntos de cada torneo que disputaron juntos
+    const coupleAggMap = new Map<string, CoupleRankingItem>();
+    (allRankings || [])
       .filter((r) => r.ranking_type === "couple")
-      .map((r) => {
+      .forEach((r) => {
         const p1 = r.player1_id ? playersMap.get(r.player1_id) : null;
         const p2 = r.player2_id ? playersMap.get(r.player2_id) : null;
+        const p1Id = r.player1_id || "";
+        const p2Id = r.player2_id || "";
+        const key = r.couple_key || getCoupleKey(p1Id, p2Id);
         const p1Name = p1 ? formatPlayerShortName(p1) : "Jugador 1";
         const p2Name = p2 ? formatPlayerShortName(p2) : "Jugador 2";
-        return {
-          id: r.id,
-          name: `${p1Name} / ${p2Name}`,
-          category: r.category || "General",
-          tournaments: r.tournaments_played,
-          points: r.points,
-          matchesWon: r.matches_won,
-          matchesLost: r.matches_lost,
-        };
+        const coupleCategory = r.category || resolveCoupleCategory(p1?.category, p2?.category, "General");
+
+        const existing = coupleAggMap.get(key);
+        if (existing) {
+          existing.points += (r.points || 0);
+          existing.tournaments += (r.tournaments_played || 0);
+          existing.matchesWon += (r.matches_won || 0);
+          existing.matchesLost += (r.matches_lost || 0);
+        } else {
+          coupleAggMap.set(key, {
+            id: r.id,
+            name: `${p1Name} / ${p2Name}`,
+            category: coupleCategory,
+            tournaments: r.tournaments_played || 0,
+            points: r.points || 0,
+            matchesWon: r.matches_won || 0,
+            matchesLost: r.matches_lost || 0,
+          });
+        }
       });
 
-    // Separar individuales con puntos
-    const existingIndiv = filtered
-      .filter((r) => r.ranking_type === "individual")
-      .map((r) => {
-        const p = r.player_id ? playersMap.get(r.player_id) : null;
+    // 5. Consolidar individuales sumando todos los puntos de cada torneo que disputó cada jugador
+    const indivAggMap = new Map<string, IndividualRankingItem>();
+    (allRankings || [])
+      .filter((r) => r.ranking_type === "individual" && r.player_id)
+      .forEach((r) => {
+        const p = playersMap.get(r.player_id);
         const pName = p ? formatPlayerShortName(p) : "Jugador";
-        return {
-          id: r.id,
-          playerId: r.player_id,
-          name: pName,
-          firstName: p?.first_name || "J",
-          lastName: p?.last_name || "",
-          photoUrl: p?.photo_url || p?.avatar_url || null,
-          category: r.category || p?.category || "General",
-          tournaments: r.tournaments_played || 0,
-          points: r.points || 0,
-          matchesWon: r.matches_won || 0,
-          matchesLost: r.matches_lost || 0,
-          isObserved: !!p?.is_observed,
-        };
+        const playerCategory = p?.category || r.category || "General";
+
+        const existing = indivAggMap.get(r.player_id);
+        if (existing) {
+          existing.points += (r.points || 0);
+          existing.tournaments += (r.tournaments_played || 0);
+          existing.matchesWon += (r.matches_won || 0);
+          existing.matchesLost += (r.matches_lost || 0);
+        } else {
+          indivAggMap.set(r.player_id, {
+            id: r.id,
+            playerId: r.player_id,
+            name: pName,
+            firstName: p?.first_name || "J",
+            lastName: p?.last_name || "",
+            photoUrl: p?.photo_url || p?.avatar_url || null,
+            category: playerCategory,
+            tournaments: r.tournaments_played || 0,
+            points: r.points || 0,
+            matchesWon: r.matches_won || 0,
+            matchesLost: r.matches_lost || 0,
+            isObserved: !!p?.is_observed,
+          });
+        }
       });
 
-    const includedPlayerIds = new Set(existingIndiv.map((item) => item.playerId).filter(Boolean));
-
-    // Agregar a TODOS los jugadores de la base de datos que aún no figuren (0 puntos)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const zeroPointsPlayers: typeof existingIndiv = [];
+    // 6. Incluir a todos los jugadores registrados con 0 puntos si no disputaron torneos
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (allPlayers || []).forEach((p: any) => {
-      if (includedPlayerIds.has(p.id)) return;
-
-      const playerCat = p.category || "General";
-      if (selectedCategory !== "all" && playerCat !== selectedCategory) {
-        return;
-      }
-
-      zeroPointsPlayers.push({
+      if (indivAggMap.has(p.id)) return;
+      indivAggMap.set(p.id, {
         id: `p-${p.id}`,
         playerId: p.id,
         name: formatPlayerShortName(p),
         firstName: p.first_name || "J",
         lastName: p.last_name || "",
         photoUrl: p.photo_url || p.avatar_url || null,
-        category: playerCat,
+        category: p.category || "General",
         tournaments: 0,
         points: 0,
         matchesWon: 0,
@@ -154,15 +149,31 @@ export default async function RankingsPage({
       });
     });
 
-    // Unir y ordenar ranking individual
-    individualRankings = [...existingIndiv, ...zeroPointsPlayers].sort((a, b) => {
-      if (b.points !== a.points) return b.points - a.points;
-      if (b.matchesWon !== a.matchesWon) return b.matchesWon - a.matchesWon;
-      if (b.tournaments !== a.tournaments) return b.tournaments - a.tournaments;
-      const compLast = (a.lastName || "").localeCompare(b.lastName || "");
-      if (compLast !== 0) return compLast;
-      return (a.firstName || "").localeCompare(b.firstName || "");
-    });
+    // 7. Extraer categorías oficiales disponibles
+    const catsSet = new Set<string>();
+    coupleAggMap.forEach((c) => { if (c.category) catsSet.add(c.category); });
+    indivAggMap.forEach((p) => { if (p.category) catsSet.add(p.category); });
+    availableCategories = Array.from(catsSet).sort();
+
+    // 8. Filtrar y ordenar rankings
+    coupleRankings = Array.from(coupleAggMap.values())
+      .filter((c) => selectedCategory === "all" || c.category === selectedCategory)
+      .sort((a, b) => {
+        if (b.points !== a.points) return b.points - a.points;
+        if (b.matchesWon !== a.matchesWon) return b.matchesWon - a.matchesWon;
+        return a.name.localeCompare(b.name);
+      });
+
+    individualRankings = Array.from(indivAggMap.values())
+      .filter((p) => selectedCategory === "all" || p.category === selectedCategory)
+      .sort((a, b) => {
+        if (b.points !== a.points) return b.points - a.points;
+        if (b.matchesWon !== a.matchesWon) return b.matchesWon - a.matchesWon;
+        if (b.tournaments !== a.tournaments) return b.tournaments - a.tournaments;
+        const compLast = (a.lastName || "").localeCompare(b.lastName || "");
+        if (compLast !== 0) return compLast;
+        return (a.firstName || "").localeCompare(b.firstName || "");
+      });
   } catch (err) {
     console.error("Error fetching rankings from Supabase:", err);
   }

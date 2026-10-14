@@ -1,4 +1,5 @@
 import type { Match } from "@/types/tournament";
+import { parseCategoryLevel, isSumaCategory } from "./couples";
 
 /**
  * Escala oficial de puntos Saladillo Padel Tour (SPT).
@@ -19,6 +20,33 @@ export type TournamentStageReached = keyof typeof SPT_POINTS_SCALE;
  */
 export function getCoupleKey(p1Id: string, p2Id: string): string {
   return [p1Id, p2Id].sort().join("_");
+}
+
+/**
+ * Resuelve la categoría deportiva de una pareja basándose en las categorías oficiales de sus jugadores.
+ */
+export function resolveCoupleCategory(
+  p1Category?: string | null,
+  p2Category?: string | null,
+  fallbackCat?: string | null
+): string {
+  if (p1Category && p2Category) {
+    const l1 = parseCategoryLevel(p1Category);
+    const l2 = parseCategoryLevel(p2Category);
+    const minLevel = Math.min(l1, l2);
+    if (minLevel === 1) return "1ra";
+    if (minLevel === 2) return "2da";
+    if (minLevel === 3) return "3ra";
+    if (minLevel === 4) return "4ta";
+    if (minLevel === 5) return "5ta";
+    if (minLevel === 6) return "6ta";
+    if (minLevel === 7) return "7ma";
+    if (minLevel === 8) return "8va";
+  }
+  if (p1Category && !isSumaCategory(p1Category)) return p1Category;
+  if (p2Category && !isSumaCategory(p2Category)) return p2Category;
+  if (fallbackCat && !isSumaCategory(fallbackCat)) return fallbackCat;
+  return fallbackCat || "5ta";
 }
 
 export interface CoupleTournamentStats {
@@ -277,7 +305,12 @@ export function processDoubleRankingUpdate(params: {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function syncAllTournamentsRankings(supabase: any) {
-  // 1. Obtener todos los torneos excepto borradores
+  // 1. Obtener todos los jugadores registrados para resolución de categorías oficiales y nombres
+  const { data: allDbPlayers } = await supabase.from("players").select("*");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const playersMap = new Map<string, any>((allDbPlayers || []).map((p: any) => [p.id, p]));
+
+  // 2. Obtener todos los torneos excepto borradores
   const { data: tournaments } = await supabase
     .from("tournaments")
     .select("*")
@@ -285,6 +318,7 @@ export async function syncAllTournamentsRankings(supabase: any) {
 
   const validTournaments = tournaments || [];
 
+  // Mapeos consolidados: Clave única por pareja (couple_key) y por jugador (player_id)
   const coupleRankingsMap = new Map<
     string,
     {
@@ -314,8 +348,6 @@ export async function syncAllTournamentsRankings(supabase: any) {
   >();
 
   for (const tour of validTournaments) {
-    const category = tour.category || "General";
-
     // Obtener parejas del torneo
     const { data: couplesData } = await supabase
       .from("couples")
@@ -354,22 +386,24 @@ export async function syncAllTournamentsRankings(supabase: any) {
       const p2Id = couple.player2_id;
       if (!p1Id || !p2Id) continue;
       const coupleKey = getCoupleKey(p1Id, p2Id);
-      const coupleCompositeKey = `${coupleKey}__${category}`;
+      const p1 = playersMap.get(p1Id);
+      const p2 = playersMap.get(p2Id);
 
-      // Acumular puntos de pareja
-      const existingCouple = coupleRankingsMap.get(coupleCompositeKey);
+      // A) Acumular puntos de la pareja sumando todos los torneos disputados juntos
+      const existingCouple = coupleRankingsMap.get(coupleKey);
       if (existingCouple) {
         existingCouple.points += stats.pointsEarned;
         existingCouple.tournaments_played += 1;
         existingCouple.matches_won += stats.matchesWon;
         existingCouple.matches_lost += stats.matchesLost;
       } else {
-        coupleRankingsMap.set(coupleCompositeKey, {
+        const coupleCategory = resolveCoupleCategory(p1?.category, p2?.category, tour.category);
+        coupleRankingsMap.set(coupleKey, {
           ranking_type: "couple",
           player1_id: p1Id,
           player2_id: p2Id,
           couple_key: coupleKey,
-          category,
+          category: coupleCategory,
           points: stats.pointsEarned,
           tournaments_played: 1,
           matches_won: stats.matchesWon,
@@ -377,20 +411,21 @@ export async function syncAllTournamentsRankings(supabase: any) {
         });
       }
 
-      // Acumular puntos individuales para cada jugador
+      // B) Acumular puntos individuales sumando todos los torneos disputados por cada jugador
       for (const pId of [p1Id, p2Id]) {
-        const indivCompositeKey = `${pId}__${category}`;
-        const existingIndiv = individualRankingsMap.get(indivCompositeKey);
+        const player = playersMap.get(pId);
+        const playerCategory = player?.category || tour.category || "General";
+        const existingIndiv = individualRankingsMap.get(pId);
         if (existingIndiv) {
           existingIndiv.points += stats.pointsEarned;
           existingIndiv.tournaments_played += 1;
           existingIndiv.matches_won += stats.matchesWon;
           existingIndiv.matches_lost += stats.matchesLost;
         } else {
-          individualRankingsMap.set(indivCompositeKey, {
+          individualRankingsMap.set(pId, {
             ranking_type: "individual",
             player_id: pId,
-            category,
+            category: playerCategory,
             points: stats.pointsEarned,
             tournaments_played: 1,
             matches_won: stats.matchesWon,
@@ -401,17 +436,14 @@ export async function syncAllTournamentsRankings(supabase: any) {
     }
   }
 
-  // 2. Garantizar que TODOS los jugadores disponibles en la base de datos figuren en individualRankingsMap aun cuando tengan 0 puntos
-  const { data: allDbPlayers } = await supabase.from("players").select("id, category");
+  // 3. Garantizar que TODOS los jugadores registrados en la BD figuren con 0 puntos si aún no disputaron torneos
   if (allDbPlayers && allDbPlayers.length > 0) {
     for (const p of allDbPlayers) {
-      const pCat = p.category || "General";
-      const indivCompositeKey = `${p.id}__${pCat}`;
-      if (!individualRankingsMap.has(indivCompositeKey)) {
-        individualRankingsMap.set(indivCompositeKey, {
+      if (!individualRankingsMap.has(p.id)) {
+        individualRankingsMap.set(p.id, {
           ranking_type: "individual",
           player_id: p.id,
-          category: pCat,
+          category: p.category || "General",
           points: 0,
           tournaments_played: 0,
           matches_won: 0,
@@ -421,60 +453,87 @@ export async function syncAllTournamentsRankings(supabase: any) {
     }
   }
 
-  // Persistir en la tabla rankings de Supabase
-  for (const coupleRec of coupleRankingsMap.values()) {
-    const { data: existing } = await supabase
-      .from("rankings")
-      .select("id")
-      .eq("ranking_type", "couple")
-      .eq("category", coupleRec.category)
-      .eq("couple_key", coupleRec.couple_key)
-      .maybeSingle();
+  // 4. Persistir registros consolidados en la tabla rankings de Supabase
+  try {
+    // Limpiar tabla rankings para evitar registros huérfanos o duplicados por torneo/categoría
+    await supabase.from("rankings").delete().neq("id", "00000000-0000-0000-0000-000000000000");
 
-    if (existing) {
-      await supabase
-        .from("rankings")
-        .update({
-          points: coupleRec.points,
-          tournaments_played: coupleRec.tournaments_played,
-          matches_won: coupleRec.matches_won,
-          matches_lost: coupleRec.matches_lost,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", existing.id);
-    } else {
-      await supabase.from("rankings").insert({
-        ...coupleRec,
-        updated_at: new Date().toISOString(),
-      });
+    const coupleRows = Array.from(coupleRankingsMap.values()).map((r) => ({
+      ...r,
+      updated_at: new Date().toISOString(),
+    }));
+    if (coupleRows.length > 0) {
+      for (let i = 0; i < coupleRows.length; i += 100) {
+        await supabase.from("rankings").insert(coupleRows.slice(i, i + 100));
+      }
     }
-  }
 
-  for (const indivRec of individualRankingsMap.values()) {
-    const { data: existing } = await supabase
-      .from("rankings")
-      .select("id")
-      .eq("ranking_type", "individual")
-      .eq("category", indivRec.category)
-      .eq("player_id", indivRec.player_id)
-      .maybeSingle();
+    const indivRows = Array.from(individualRankingsMap.values()).map((r) => ({
+      ...r,
+      updated_at: new Date().toISOString(),
+    }));
+    if (indivRows.length > 0) {
+      for (let i = 0; i < indivRows.length; i += 100) {
+        await supabase.from("rankings").insert(indivRows.slice(i, i + 100));
+      }
+    }
+  } catch (err) {
+    console.warn("Aviso al persistir en rankings (fallback a update/insert):", err);
 
-    if (existing) {
-      await supabase
+    for (const coupleRec of coupleRankingsMap.values()) {
+      const { data: existing } = await supabase
         .from("rankings")
-        .update({
-          points: indivRec.points,
-          tournaments_played: indivRec.tournaments_played,
-          matches_won: indivRec.matches_won,
-          matches_lost: indivRec.matches_lost,
+        .select("id")
+        .eq("ranking_type", "couple")
+        .eq("couple_key", coupleRec.couple_key)
+        .maybeSingle();
+
+      if (existing) {
+        await supabase
+          .from("rankings")
+          .update({
+            category: coupleRec.category,
+            points: coupleRec.points,
+            tournaments_played: coupleRec.tournaments_played,
+            matches_won: coupleRec.matches_won,
+            matches_lost: coupleRec.matches_lost,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existing.id);
+      } else {
+        await supabase.from("rankings").insert({
+          ...coupleRec,
           updated_at: new Date().toISOString(),
-        })
-        .eq("id", existing.id);
-    } else {
-      await supabase.from("rankings").insert({
-        ...indivRec,
-        updated_at: new Date().toISOString(),
-      });
+        });
+      }
+    }
+
+    for (const indivRec of individualRankingsMap.values()) {
+      const { data: existing } = await supabase
+        .from("rankings")
+        .select("id")
+        .eq("ranking_type", "individual")
+        .eq("player_id", indivRec.player_id)
+        .maybeSingle();
+
+      if (existing) {
+        await supabase
+          .from("rankings")
+          .update({
+            category: indivRec.category,
+            points: indivRec.points,
+            tournaments_played: indivRec.tournaments_played,
+            matches_won: indivRec.matches_won,
+            matches_lost: indivRec.matches_lost,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existing.id);
+      } else {
+        await supabase.from("rankings").insert({
+          ...indivRec,
+          updated_at: new Date().toISOString(),
+        });
+      }
     }
   }
 

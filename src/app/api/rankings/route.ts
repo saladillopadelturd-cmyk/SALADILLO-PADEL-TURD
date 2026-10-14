@@ -41,13 +41,50 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Consolidar rankings en memoria sumando todos los torneos por pareja (couple_key) y por jugador (player_id)
+  const coupleMap = new Map<string, any>();
+  const indivMap = new Map<string, any>();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (rawRankings || []).forEach((r: any) => {
+    if (r.ranking_type === "couple") {
+      const p1Id = r.player1_id || "";
+      const p2Id = r.player2_id || "";
+      const key = r.couple_key || getCoupleKey(p1Id, p2Id);
+      const ex = coupleMap.get(key);
+      if (ex) {
+        ex.points += (r.points || 0);
+        ex.tournaments_played += (r.tournaments_played || 0);
+        ex.matches_won += (r.matches_won || 0);
+        ex.matches_lost += (r.matches_lost || 0);
+      } else {
+        coupleMap.set(key, { ...r });
+      }
+    } else if (r.ranking_type === "individual" && r.player_id) {
+      const ex = indivMap.get(r.player_id);
+      if (ex) {
+        ex.points += (r.points || 0);
+        ex.tournaments_played += (r.tournaments_played || 0);
+        ex.matches_won += (r.matches_won || 0);
+        ex.matches_lost += (r.matches_lost || 0);
+      } else {
+        indivMap.set(r.player_id, { ...r });
+      }
+    }
+  });
+
+  const consolidatedRankings = [
+    ...Array.from(coupleMap.values()),
+    ...Array.from(indivMap.values()),
+  ];
+
   // Cargar jugadores para hidratar nombres de forma 100% segura
   const { data: allPlayers } = await supabase.from("players").select("*");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const playersMap = new Map((allPlayers || []).map((p: any) => [p.id, p]));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const enrichedRankings = (rawRankings || []).map((r: any) => {
+  const enrichedRankings = consolidatedRankings.map((r: any) => {
     if (r.ranking_type === "couple") {
       const p1 = r.player1_id ? playersMap.get(r.player1_id) : null;
       const p2 = r.player2_id ? playersMap.get(r.player2_id) : null;
@@ -455,6 +492,9 @@ export async function POST(request: Request) {
     .from("tournaments")
     .update({ status: "finished", updated_at: new Date().toISOString() })
     .eq("id", tournamentId);
+
+  // 9. Consolidar acumulados globales de todos los torneos
+  await syncAllTournamentsRankings(supabase);
 
   return NextResponse.json({
     success: true,

@@ -73,7 +73,13 @@ async function computePlayerStats(
         (r: any) => r.ranking_type === "individual" && r.player_id === playerId
       );
 
-      const targetCategory = myIndRankings[0]?.category || playerCategory || "5ta";
+      const targetCategory = playerCategory || myIndRankings[0]?.category || "5ta";
+      const totalPoints = myIndRankings.reduce((sum: number, r: any) => sum + (r.points || 0), 0);
+      const totalTournaments = myIndRankings.reduce((sum: number, r: any) => sum + (r.tournaments_played || 0), 0);
+      const totalMatchesWon = myIndRankings.reduce((sum: number, r: any) => sum + (r.matches_won || 0), 0);
+      const totalMatchesLost = myIndRankings.reduce((sum: number, r: any) => sum + (r.matches_lost || 0), 0);
+      const totalInd = totalMatchesWon + totalMatchesLost;
+
       const categoryIndRankings = allRankings.filter(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (r: any) => r.ranking_type === "individual" && r.category === targetCategory
@@ -81,31 +87,16 @@ async function computePlayerStats(
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const indPos = categoryIndRankings.findIndex((r: any) => r.player_id === playerId) + 1;
-      const bestInd = myIndRankings[0];
 
-      if (bestInd) {
-        const totalInd = (bestInd.matches_won || 0) + (bestInd.matches_lost || 0);
-        stats.individualRanking = {
-          category: targetCategory,
-          points: bestInd.points || 0,
-          position: indPos > 0 ? indPos : 1,
-          tournamentsPlayed: bestInd.tournaments_played || 0,
-          matchesWon: bestInd.matches_won || 0,
-          matchesLost: bestInd.matches_lost || 0,
-          winRate: totalInd > 0 ? Math.round(((bestInd.matches_won || 0) / totalInd) * 100) : 0,
-        };
-      } else {
-        const totalInCat = categoryIndRankings.length;
-        stats.individualRanking = {
-          category: targetCategory,
-          points: 0,
-          position: totalInCat + 1,
-          tournamentsPlayed: 0,
-          matchesWon: 0,
-          matchesLost: 0,
-          winRate: 0,
-        };
-      }
+      stats.individualRanking = {
+        category: targetCategory,
+        points: totalPoints,
+        position: indPos > 0 ? indPos : 1,
+        tournamentsPlayed: totalTournaments,
+        matchesWon: totalMatchesWon,
+        matchesLost: totalMatchesLost,
+        winRate: totalInd > 0 ? Math.round((totalMatchesWon / totalInd) * 100) : 0,
+      };
 
       // --- Ranking por Parejas ---
       const myCoupleRankings = allRankings.filter(
@@ -115,8 +106,26 @@ async function computePlayerStats(
           (r.player1_id === playerId || r.player2_id === playerId)
       );
 
+      // Consolidar parejas sumando todos los torneos que disputaron juntos
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      stats.coupleRankings = myCoupleRankings.map((cr: any) => {
+      const coupleMap = new Map<string, any>();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      myCoupleRankings.forEach((cr: any) => {
+        const partnerId = cr.player1_id === playerId ? cr.player2_id : cr.player1_id;
+        const key = cr.couple_key || (partnerId ? [playerId, partnerId].sort().join("_") : cr.id);
+        const ex = coupleMap.get(key);
+        if (ex) {
+          ex.points += (cr.points || 0);
+          ex.tournaments_played += (cr.tournaments_played || 0);
+          ex.matches_won += (cr.matches_won || 0);
+          ex.matches_lost += (cr.matches_lost || 0);
+        } else {
+          coupleMap.set(key, { ...cr });
+        }
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      stats.coupleRankings = Array.from(coupleMap.values()).map((cr: any) => {
         const partnerId = cr.player1_id === playerId ? cr.player2_id : cr.player1_id;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const partner: any = partnerId ? playersMap.get(partnerId) : null;
