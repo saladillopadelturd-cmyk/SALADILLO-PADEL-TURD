@@ -20,7 +20,7 @@ export interface BracketRound {
 export interface BracketProps {
   rounds: BracketRound[];
   pairNames: Record<string, string>;
-  onMatchClick?: (matchId: string, winningPairId?: string) => void;
+  onMatchClick?: (matchId: string, winningPairId?: string, match?: BracketMatch) => void;
   isAdmin?: boolean;
 }
 
@@ -255,6 +255,8 @@ function getStageTheme(roundKey: string): StageTheme {
 }
 
 export default function Bracket({ rounds, pairNames, onMatchClick, isAdmin }: BracketProps) {
+  const canInteract = isAdmin !== false && Boolean(onMatchClick);
+
   if (!rounds || rounds.length === 0) {
     return (
       <div className="text-center py-10 text-dark-400 text-sm">
@@ -265,8 +267,8 @@ export default function Bracket({ rounds, pairNames, onMatchClick, isAdmin }: Br
 
   return (
     <div className="relative">
-      {/* Indicador de ayuda para el administrador */}
-      {isAdmin && (
+      {/* Indicador de ayuda */}
+      {canInteract && (
         <div className="mb-4 p-3 rounded-xl bg-gradient-to-r from-emerald-950/40 via-dark-900 to-dark-950 border border-emerald-500/30 flex items-center gap-2.5 text-xs text-emerald-300">
           <Sparkles className="w-4 h-4 text-emerald-400 flex-shrink-0" />
           <span>
@@ -341,22 +343,20 @@ export default function Bracket({ rounds, pairNames, onMatchClick, isAdmin }: Br
                       const isP1Loser = Boolean(hasWinner && !isP1Winner && !isP1Pending && match.pair1 !== "BYE");
                       const isP2Loser = Boolean(hasWinner && !isP2Winner && !isP2Pending && match.pair2 !== "BYE");
 
+                      const matchIdentifier = match.id || `proj_${round.round}_${matchIndex}_${match.pair1}_${match.pair2}`;
+
                       const isP1Clickable = Boolean(
-                        isAdmin &&
-                        match.id &&
+                        canInteract &&
                         !isP1Pending &&
                         !isP2Pending &&
-                        onMatchClick &&
                         match.pair1 !== "BYE" &&
                         match.pair2 !== "BYE"
                       );
 
                       const isP2Clickable = Boolean(
-                        isAdmin &&
-                        match.id &&
+                        canInteract &&
                         !isP1Pending &&
                         !isP2Pending &&
-                        onMatchClick &&
                         match.pair1 !== "BYE" &&
                         match.pair2 !== "BYE"
                       );
@@ -367,8 +367,8 @@ export default function Bracket({ rounds, pairNames, onMatchClick, isAdmin }: Br
                         <div key={`${round.round}_${matchIndex}`} className="relative flex items-center">
                           <Card
                             onClick={() => {
-                              if (isMatchClickable && match.id && onMatchClick) {
-                                onMatchClick(match.id, match.winner || match.pair1);
+                              if (isMatchClickable && onMatchClick) {
+                                onMatchClick(matchIdentifier, match.winner || match.pair1, match);
                               }
                             }}
                             className={`p-3.5 w-full border transition-all relative z-10 ${
@@ -382,9 +382,9 @@ export default function Bracket({ rounds, pairNames, onMatchClick, isAdmin }: Br
                             {/* Pareja 1 */}
                             <div
                               onClick={(e) => {
-                                if (isP1Clickable && match.id && onMatchClick) {
+                                if (isP1Clickable && onMatchClick) {
                                   e.stopPropagation();
-                                  onMatchClick(match.id, match.pair1);
+                                  onMatchClick(matchIdentifier, match.pair1, match);
                                 }
                               }}
                               title={
@@ -444,9 +444,9 @@ export default function Bracket({ rounds, pairNames, onMatchClick, isAdmin }: Br
                             {/* Pareja 2 */}
                             <div
                               onClick={(e) => {
-                                if (isP2Clickable && match.id && onMatchClick) {
+                                if (isP2Clickable && onMatchClick) {
                                   e.stopPropagation();
-                                  onMatchClick(match.id, match.pair2);
+                                  onMatchClick(matchIdentifier, match.pair2, match);
                                 }
                               }}
                               title={

@@ -84,7 +84,7 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
   const [isGeneratingZones, setIsGeneratingZones] = useState(false);
   const [isGeneratingPlayoffs, setIsGeneratingPlayoffs] = useState(false);
   const [isEditingConformation, setIsEditingConformation] = useState(false);
-  const [notification, setNotification] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [notification, setNotification] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
 
   // Estados de Programación de Canchas y Horarios
   const [isAutoScheduleOpen, setIsAutoScheduleOpen] = useState(false);
@@ -195,11 +195,20 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
       let nextTargetSlotField: "couple1_id" | "couple2_id" | null = null;
 
       if (scoringMatch.stage !== "zone") {
-        const nextSlot = findNextPlayoffMatchSlot(matches, scoringMatch);
+        let currentMatchesList = matches;
+        if (!currentMatchesList.some((m) => m.id === scoringMatch.id)) {
+          const { data: freshList } = await supabase
+            .from("matches")
+            .select("*")
+            .eq("tournament_id", id);
+          if (freshList) currentMatchesList = freshList;
+        }
+
+        const nextSlot = findNextPlayoffMatchSlot(currentMatchesList, scoringMatch);
         if (nextSlot) {
           nextTargetMatchId = nextSlot.targetMatchId;
           nextTargetSlotField = nextSlot.slotField;
-          const targetMatch = matches.find((m) => m.id === nextSlot.targetMatchId);
+          const targetMatch = currentMatchesList.find((m) => m.id === nextSlot.targetMatchId);
           const updatePayload: Record<string, unknown> = {
             [nextSlot.slotField]: formWinnerCoupleId,
             updated_at: new Date().toISOString(),
@@ -397,6 +406,95 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error al generar cuadro eliminatorio";
+      setNotification({ type: "error", text: msg });
+    } finally {
+      setIsGeneratingPlayoffs(false);
+    }
+  };
+
+  const handleBracketMatchClick = async (
+    matchId: string,
+    winningPairId?: string,
+    matchData?: { pair1: string; pair2: string; winner?: string }
+  ) => {
+    // 1. Si el partido ya existe en la BD (cuadro oficial en fixture), abrir directamente el modal
+    const existingMatch = matches.find((m) => m.id === matchId);
+    if (existingMatch) {
+      openScoreModal(existingMatch, winningPairId);
+      return;
+    }
+
+    // 2. Si es un cruce de "Llaves Clasificatorias" proyectado en memoria:
+    if (!tournament) return;
+
+    const p1 = matchData?.pair1;
+    const p2 = matchData?.pair2;
+    const selectedWinner = winningPairId || p1;
+
+    // Si no son parejas reales válidas, no abrir modal
+    if (!p1 || !p2 || p1 === "Por definir" || p2 === "Por definir" || p1 === "BYE" || p2 === "BYE") {
+      return;
+    }
+
+    setIsGeneratingPlayoffs(true);
+    setNotification({
+      type: "info",
+      text: "Habilitando cuadro oficial para cargar resultado...",
+    });
+
+    try {
+      const res = await fetch("/api/playoffs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tournamentId: id,
+          force: true,
+        }),
+      });
+
+      const resData = await res.json();
+      if (!res.ok) {
+        throw new Error(resData.error || "Error al inicializar cuadro de playoffs");
+      }
+
+      // Obtener los nuevos partidos de playoffs recién insertados en la BD
+      const { data: freshMatches, error: matchesErr } = await supabase
+        .from("matches")
+        .select("*, couple1:couples!matches_couple1_id_fkey(*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*)), couple2:couples!matches_couple2_id_fkey(*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*))")
+        .eq("tournament_id", id)
+        .order("scheduled_time", { ascending: true, nullsFirst: false });
+
+      if (matchesErr || !freshMatches) {
+        throw new Error(matchesErr?.message || "Error al cargar partidos de playoffs");
+      }
+
+      setMatches(freshMatches);
+
+      // Buscar el partido que corresponde al cruce clickeado
+      const matchingMatch = freshMatches.find(
+        (m) =>
+          m.stage !== "zone" &&
+          ((m.couple1_id === p1 && m.couple2_id === p2) ||
+           (m.couple1_id === p2 && m.couple2_id === p1) ||
+           (selectedWinner && (m.couple1_id === selectedWinner || m.couple2_id === selectedWinner)))
+      );
+
+      if (matchingMatch) {
+        setNotification({
+          type: "success",
+          text: "¡Cuadro oficial habilitado! Anotá el resultado del partido.",
+        });
+        openScoreModal(matchingMatch, selectedWinner);
+      } else {
+        const firstPlayoff = freshMatches.find((m) => m.stage !== "zone" && m.status !== "completed");
+        if (firstPlayoff) {
+          openScoreModal(firstPlayoff, selectedWinner);
+        }
+      }
+
+      await loadTournamentData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error al conformar el cuadro eliminatorio";
       setNotification({ type: "error", text: msg });
     } finally {
       setIsGeneratingPlayoffs(false);
@@ -616,7 +714,8 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
       const initialStage = bracketData.allStages[0];
       rounds.push({
         round: initialStage,
-        matches: bracketData.firstRoundMatches.map((m) => ({
+        matches: bracketData.firstRoundMatches.map((m, idx) => ({
+          id: `proj_${initialStage}_${idx}_${m.couple1Id}_${m.couple2Id}`,
           pair1: m.couple1Id,
           pair2: m.couple2Id,
           winner: m.isBye ? m.advancingPairId : undefined,
@@ -647,6 +746,7 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
           }
 
           stageMatches.push({
+            id: `proj_${currentStage}_${mIdx}_${prefilledC1}_${prefilledC2}`,
             pair1: prefilledC1,
             pair2: prefilledC2,
             status: "pending",
@@ -718,12 +818,16 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
           className={`p-4 rounded-xl mb-6 flex items-center justify-between gap-3 text-xs font-semibold border ${
             notification.type === "success"
               ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300"
+              : notification.type === "info"
+              ? "bg-sky-500/15 border-sky-500/30 text-sky-300"
               : "bg-rose-500/15 border-rose-500/30 text-rose-300"
           }`}
         >
           <div className="flex items-center gap-2">
             {notification.type === "success" ? (
               <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            ) : notification.type === "info" ? (
+              <RefreshCw className="w-4 h-4 text-sky-400 animate-spin flex-shrink-0" />
             ) : (
               <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
             )}
@@ -1494,13 +1598,8 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                 <Bracket
                   rounds={bracketRounds}
                   pairNames={bracketPairNames}
-                  isAdmin={isAdmin}
-                  onMatchClick={(matchId, winningPairId) => {
-                    const found = matches.find((m) => m.id === matchId);
-                    if (found && isAdmin) {
-                      openScoreModal(found, winningPairId);
-                    }
-                  }}
+                  isAdmin={isAdmin ?? true}
+                  onMatchClick={handleBracketMatchClick}
                 />
               </Card>
             )}

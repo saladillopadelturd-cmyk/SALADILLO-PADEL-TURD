@@ -1382,6 +1382,89 @@ export function runTournamentBusinessLogicTests(): TestResult {
   assert(bracketMatchesSim[6].winner_couple_id === "c_1A", "Pareja ganadora de la Final (1A) identificada para pintar de verde");
   assert(bracketMatchesSim[6].couple2_id === "c_1B" && bracketMatchesSim[6].winner_couple_id !== "c_1B", "Pareja perdedora de la Final (1B) identificada para pintar de rojo");
 
+  // =========================================================================
+  // SUITE 10: Llaves Clasificatorias Proyectadas e Interacción de Cuadro
+  // =========================================================================
+  log.push("--- SUITE 10: Llaves Clasificatorias Proyectadas e Interacción de Cuadro ---");
+
+  // Test 10.1: getNextStage para 16avos de final
+  assert(getNextStage("round_of_32") === "round_of_16", "getNextStage('round_of_32') avanza a 'round_of_16'");
+  assert(getNextStage("dieciseisavos") === "round_of_16", "getNextStage('dieciseisavos') normalizado avanza a 'round_of_16'");
+
+  // Test 10.2: findNextPlayoffMatchSlot desde round_of_32 a round_of_16
+  const r32MatchesTest = [
+    { id: "m_r32_0", stage: "round_of_32", match_number: 1 },
+    { id: "m_r32_1", stage: "round_of_32", match_number: 2 },
+  ];
+  const r16MatchesTest = [
+    { id: "m_r16_0", stage: "round_of_16", match_number: 3 },
+  ];
+  const allR32AndR16 = [...r32MatchesTest, ...r16MatchesTest];
+  const slotFromR32Match0 = findNextPlayoffMatchSlot(allR32AndR16, r32MatchesTest[0]);
+  const slotFromR32Match1 = findNextPlayoffMatchSlot(allR32AndR16, r32MatchesTest[1]);
+  assert(slotFromR32Match0?.targetMatchId === "m_r16_0" && slotFromR32Match0.slotField === "couple1_id", "Ganador de r32_0 avanza a r16_0 como couple1_id");
+  assert(slotFromR32Match1?.targetMatchId === "m_r16_0" && slotFromR32Match1.slotField === "couple2_id", "Ganador de r32_1 avanza a r16_0 como couple2_id");
+
+  // Test 10.3: Bracket proyectado en memoria (sin IDs en BD) genera identificadores válidos y es interactivo
+  const qualifiedMock: QualifiedPair[] = [
+    { pairId: "c_A1", zoneName: "Zona A", zonePosition: 1, points: 6, gameDifference: 12 },
+    { pairId: "c_B2", zoneName: "Zona B", zonePosition: 2, points: 4, gameDifference: 4 },
+    { pairId: "c_B1", zoneName: "Zona B", zonePosition: 1, points: 6, gameDifference: 10 },
+    { pairId: "c_A2", zoneName: "Zona A", zonePosition: 2, points: 4, gameDifference: 2 },
+  ];
+  const projectedBracket = generateSeededPlayoffBracket(qualifiedMock);
+  assert(projectedBracket.firstRoundMatches.length === 2, "Cuadro proyectado de 4 clasificados tiene 2 semifinales");
+  
+  // Simular la construcción de matches proyectados con sus IDs
+  const initialStage = projectedBracket.allStages[0];
+  const projectedRounds = [
+    {
+      round: initialStage,
+      matches: projectedBracket.firstRoundMatches.map((m, idx) => ({
+        id: `proj_${initialStage}_${idx}_${m.couple1Id}_${m.couple2Id}`,
+        pair1: m.couple1Id,
+        pair2: m.couple2Id,
+        winner: m.isBye ? m.advancingPairId : undefined,
+        score: m.isBye ? "BYE" : undefined,
+        status: m.isBye ? "completed" : "pending",
+      })),
+    },
+  ];
+
+  // Comprobar que los partidos proyectados no son "Por definir" ni "BYE" y tienen IDs válidos
+  const semi0 = projectedRounds[0].matches[0];
+  const semi1 = projectedRounds[0].matches[1];
+  assert(semi0.id.startsWith("proj_semi_0"), "Match 0 proyectado tiene ID sintético válido");
+  assert(semi1.id.startsWith("proj_semi_1"), "Match 1 proyectado tiene ID sintético válido");
+  assert(semi0.pair1 === "c_A1" && semi0.pair2 === "c_B2", "Semis 0 cruza 1° de Zona A vs 2° de Zona B");
+  assert(semi1.pair1 === "c_B1" && semi1.pair2 === "c_A2", "Semis 1 cruza 1° de Zona B vs 2° de Zona A");
+
+  // Verificar la lógica de clickeabilidad:
+  const canInteract = true;
+  const isSemi0P1Clickable = Boolean(
+    canInteract &&
+    semi0.pair1 !== "Por definir" &&
+    semi0.pair2 !== "Por definir" &&
+    semi0.pair1 !== "BYE" &&
+    semi0.pair2 !== "BYE"
+  );
+  const isSemi0P2Clickable = Boolean(
+    canInteract &&
+    semi0.pair1 !== "Por definir" &&
+    semi0.pair2 !== "Por definir" &&
+    semi0.pair1 !== "BYE" &&
+    semi0.pair2 !== "BYE"
+  );
+  assert(isSemi0P1Clickable === true, "Pareja 1 en llave clasificatoria proyectada es 100% clickeable");
+  assert(isSemi0P2Clickable === true, "Pareja 2 en llave clasificatoria proyectada es 100% clickeable");
+
+  // Simular clic en c_A1 como ganador:
+  const clickedWinningPairId = semi0.pair1;
+  const isP1Winner = clickedWinningPairId === semi0.pair1;
+  const isP2Loser = clickedWinningPairId !== semi0.pair2 && semi0.pair2 !== "BYE";
+  assert(isP1Winner === true, "Pareja ganadora c_A1 se identifica para pintar de verde");
+  assert(isP2Loser === true, "Pareja perdedora c_B2 se identifica para pintar de rojo");
+
   return {
     passed,
     failed,

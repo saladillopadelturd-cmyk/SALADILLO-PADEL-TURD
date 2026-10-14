@@ -1452,8 +1452,16 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                       rounds={bracketRounds}
                       pairNames={bracketPairNames}
                       isAdmin={true}
-                      onMatchClick={(matchId, winningPairId) => {
-                        const found = matches.find((m) => m.id === matchId);
+                      onMatchClick={(matchId, winningPairId, matchData) => {
+                        let found = matches.find((m) => m.id === matchId);
+                        if (!found && matchData) {
+                          found = matches.find(
+                            (m) =>
+                              m.stage !== "zone" &&
+                              ((m.couple1_id === matchData.pair1 && m.couple2_id === matchData.pair2) ||
+                               (m.couple1_id === matchData.pair2 && m.couple2_id === matchData.pair1))
+                          );
+                        }
                         if (found) {
                           openScoreModal(found, winningPairId);
                         }

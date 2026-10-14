@@ -90,6 +90,9 @@ export function getStageName(stage: MatchStage | string): string {
  */
 export function normalizeStage(stage: MatchStage | string): MatchStage {
   switch (stage) {
+    case "dieciseisavos":
+    case "round_of_32":
+      return "round_of_32";
     case "octavos":
     case "round_of_16":
       return "round_of_16";
@@ -113,6 +116,8 @@ export function normalizeStage(stage: MatchStage | string): MatchStage {
 export function getNextStage(stage: MatchStage | string): MatchStage | null {
   const norm = normalizeStage(stage);
   switch (norm) {
+    case "round_of_32":
+      return "round_of_16";
     case "round_of_16":
       return "quarter";
     case "quarter":
@@ -235,7 +240,7 @@ export function propagatePlayoffWinners<
   const clonedMatches: T[] = tournamentMatches.map((m) => ({ ...m }));
   const updatesMap = new Map<string, PlayoffSlotUpdate>();
 
-  const stageProgression: MatchStage[] = ["round_of_16", "quarter", "semi"];
+  const stageProgression: MatchStage[] = ["round_of_32", "round_of_16", "quarter", "semi"];
 
   for (const currentStage of stageProgression) {
     const nextStage = getNextStage(currentStage);

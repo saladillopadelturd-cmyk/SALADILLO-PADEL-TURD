@@ -15,13 +15,14 @@ export type TournamentStatus =
 
 export type MatchStage =
   | "zone"
+  | "round_of_32"
   | "round_of_16"
   | "quarter"
   | "semi"
   | "final"
   | "third_place";
 
-export type MatchRound = MatchStage | "octavos" | "cuartos" | "semifinal" | "tercer_puesto";
+export type MatchRound = MatchStage | "dieciseisavos" | "octavos" | "cuartos" | "semifinal" | "tercer_puesto";
 
 export type MatchStatus = "pending" | "in_progress" | "completed" | "scheduled";
 
