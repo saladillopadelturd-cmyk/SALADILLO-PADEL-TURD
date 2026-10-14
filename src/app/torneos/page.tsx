@@ -70,29 +70,29 @@ export default async function TorneosPage() {
           <p className="text-xs text-dark-400 mt-1">Los nuevos torneos creados aparecerán aquí automáticamente.</p>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6">
           {tournaments.map((tour) => {
             const isLive = tour.status === "active" || tour.status === "zones" || tour.status === "playoffs";
             return (
               <Card
                 key={tour.id}
                 hover
-                className={`p-6 h-full flex flex-col justify-between transition-all ${
+                className={`p-6 w-full flex flex-col justify-between transition-all shadow-xl ${
                   isLive
                     ? "border-emerald-500/40 bg-gradient-to-b from-dark-900 via-dark-900/90 to-dark-950"
                     : "border-dark-700/80 bg-dark-900/80"
                 }`}
               >
                 <div>
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <Badge
-                      variant={STATUS_VARIANTS[tour.status] ?? "info"}
-                      pulse={isLive}
-                    >
-                      {STATUS_LABELS[tour.status] ?? tour.status}
-                    </Badge>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`text-xs font-black px-2 py-0.5 rounded-lg border ${
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-dark-800">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge
+                        variant={STATUS_VARIANTS[tour.status] ?? "info"}
+                        pulse={isLive}
+                      >
+                        {STATUS_LABELS[tour.status] ?? tour.status}
+                      </Badge>
+                      <span className={`text-xs font-black px-2.5 py-0.5 rounded-lg border ${
                         tour.gender === "Femenino"
                           ? "bg-pink-500/10 text-pink-400 border-pink-500/30"
                           : "bg-blue-500/10 text-blue-400 border-blue-500/30"
@@ -109,53 +109,73 @@ export default async function TorneosPage() {
                         </span>
                       )}
                     </div>
+
+                    <div className="flex items-center gap-4 text-xs text-slate-300 flex-wrap">
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                        <span className="font-medium">
+                          {new Date(tour.date).toLocaleDateString("es-AR", {
+                            day: "numeric",
+                            month: "long",
+                            year: "numeric",
+                          })}
+                        </span>
+                      </div>
+                      {tour.location && (
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="w-4 h-4 text-sky-400 flex-shrink-0" />
+                          <span>{tour.location}</span>
+                        </div>
+                      )}
+                      {tour.golden_point && (
+                        <div className="flex items-center gap-1 font-bold text-amber-300">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                          <span>Punto de Oro</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  <Link href={`/torneo/${tour.id}`} className="group/title block">
-                    <h3 className="text-xl font-black text-white group-hover/title:text-emerald-400 transition-colors mb-3">
+                  <Link href={`/torneo/${tour.id}`} className="group/title block mb-4">
+                    <h3 className="text-2xl font-black text-white group-hover/title:text-emerald-400 transition-colors">
                       {tour.name}
                     </h3>
                   </Link>
-
-                  <div className="space-y-2 text-xs text-slate-300 mb-5">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                      <span>
-                        {new Date(tour.date).toLocaleDateString("es-AR", {
-                          day: "numeric",
-                          month: "long",
-                          year: "numeric",
-                        })}
-                      </span>
-                    </div>
-                    {tour.location && (
-                      <div className="flex items-center gap-2">
-                        <MapPin className="w-4 h-4 text-sky-400 flex-shrink-0" />
-                        <span>{tour.location}</span>
-                      </div>
-                    )}
-                    {tour.golden_point && (
-                      <div className="flex items-center gap-2 font-bold text-amber-300">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                        <span>Punto de Oro oficial (40-40)</span>
-                      </div>
-                    )}
-                  </div>
                 </div>
 
-                <div className="pt-4 border-t border-dark-800 flex items-center justify-between gap-3">
-                  <Link
-                    href={`/admin/parejas?torneo=${tour.id}`}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold transition-all hover:scale-[1.02]"
-                    title="Editor de parejas de este torneo"
-                  >
-                    <Users className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Parejas</span>
-                  </Link>
+                <div className="pt-4 border-t border-dark-800 flex items-center justify-between gap-3 flex-nowrap overflow-x-auto whitespace-nowrap">
+                  <div className="flex items-center gap-2 flex-nowrap">
+                    <Link
+                      href={`/torneo/${tour.id}?tab=zonas`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-dark-800 hover:bg-dark-700 text-slate-200 border border-dark-600 text-xs font-bold transition-all whitespace-nowrap"
+                    >
+                      <span>Zonas</span>
+                    </Link>
+                    <Link
+                      href={`/torneo/${tour.id}?tab=fixture`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-dark-800 hover:bg-dark-700 text-slate-200 border border-dark-600 text-xs font-bold transition-all whitespace-nowrap"
+                    >
+                      <span>Fixture</span>
+                    </Link>
+                    <Link
+                      href={`/torneo/${tour.id}?tab=posiciones`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-dark-800 hover:bg-dark-700 text-slate-200 border border-dark-600 text-xs font-bold transition-all whitespace-nowrap"
+                    >
+                      <span>Resultados</span>
+                    </Link>
+                    <Link
+                      href={`/admin/parejas?torneo=${tour.id}`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold transition-all whitespace-nowrap"
+                      title="Editor de parejas de este torneo"
+                    >
+                      <Users className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Parejas</span>
+                    </Link>
+                  </div>
 
                   <Link
                     href={`/torneo/${tour.id}`}
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors group/link"
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-dark-950 text-xs font-black transition-all whitespace-nowrap group/link ml-auto"
                   >
                     <span>Ver detalle completo</span>
                     <ArrowRight className="w-3.5 h-3.5 group-hover/link:translate-x-1 transition-transform" />

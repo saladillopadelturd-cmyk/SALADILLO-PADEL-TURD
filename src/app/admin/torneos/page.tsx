@@ -405,23 +405,23 @@ export default function AdminTorneosPage() {
           <Button onClick={openCreate}>Crear el Primer Torneo</Button>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-6">
           {tournaments.map((tournament) => (
-            <Card key={tournament.id} className="p-6">
-              <div className="flex items-start justify-between mb-4">
+            <Card key={tournament.id} className="p-6 w-full shadow-lg">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 pb-3 border-b border-dark-800">
                 <div>
                   <Link href={`/admin/torneos/${tournament.id}`} className="hover:underline">
-                    <h3 className="text-lg font-bold text-white hover:text-primary-400 transition-colors">
+                    <h3 className="text-xl font-black text-white hover:text-primary-400 transition-colors">
                       {tournament.name}
                     </h3>
                   </Link>
-                  <div className="flex items-center gap-2 mt-1">
-                    <p className="text-dark-400 text-sm">{formatDate(tournament.date)}</p>
+                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                    <p className="text-dark-400 text-sm font-medium">{formatDate(tournament.date)}</p>
                     <span className="text-dark-600">•</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                    <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold border ${
                       tournament.gender === "Femenino"
-                        ? "bg-pink-500/10 text-pink-400 border border-pink-500/30"
-                        : "bg-blue-500/10 text-blue-400 border border-blue-500/30"
+                        ? "bg-pink-500/10 text-pink-400 border-pink-500/30"
+                        : "bg-blue-500/10 text-blue-400 border-blue-500/30"
                     }`}>
                       {tournament.gender === "Femenino" ? "♀ Femenino" : "♂ Masculino"}
                     </span>
@@ -430,51 +430,60 @@ export default function AdminTorneosPage() {
                         ∑ {tournament.category}
                       </span>
                     ) : (
-                      <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-primary-500/10 text-primary-400 border border-primary-500/30">
+                      <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-primary-500/10 text-primary-400 border border-primary-500/30">
                         Cat. {tournament.category || "5ta"}
                       </span>
                     )}
                   </div>
                 </div>
-                <Badge variant={STATUS_VARIANTS[tournament.status] ?? "default"}>
-                  {STATUS_LABELS[tournament.status] ?? tournament.status}
-                </Badge>
+                <div className="self-start md:self-center">
+                  <Badge variant={STATUS_VARIANTS[tournament.status] ?? "default"}>
+                    {STATUS_LABELS[tournament.status] ?? tournament.status}
+                  </Badge>
+                </div>
               </div>
-              <div className="space-y-2 text-sm mb-4">
-                <div className="flex justify-between text-dark-300">
-                  <span>Modalidad:</span>
-                  <span className="text-white font-medium">
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm mb-4 bg-dark-950/60 p-3.5 rounded-xl border border-dark-800/80">
+                <div className="flex flex-col">
+                  <span className="text-xs text-dark-400 font-medium">Modalidad:</span>
+                  <span className="text-white font-semibold">
                     {GAME_MODE_LABELS[tournament.game_mode] ?? tournament.game_mode}
                   </span>
                 </div>
-                <div className="flex justify-between text-dark-300">
-                  <span>Zonas:</span>
-                  <span className="text-white font-medium">
-                    {tournament.num_zones} de {tournament.zone_size} parejas
+                <div className="flex flex-col">
+                  <span className="text-xs text-dark-400 font-medium">Estructura Zonas:</span>
+                  <span className="text-white font-semibold">
+                    {tournament.num_zones} zonas de {tournament.zone_size} parejas
                   </span>
                 </div>
-                {tournament.location && (
-                  <div className="flex justify-between text-dark-300">
-                    <span>Lugar:</span>
-                    <span className="text-dark-200">{tournament.location}</span>
+                {tournament.location ? (
+                  <div className="flex flex-col">
+                    <span className="text-xs text-dark-400 font-medium">Lugar:</span>
+                    <span className="text-dark-200 font-semibold">{tournament.location}</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col">
+                    <span className="text-xs text-dark-400 font-medium">Reglamento:</span>
+                    <span className="text-amber-300 font-semibold">Punto de Oro Oficial</span>
                   </div>
                 )}
               </div>
-              <div className="flex flex-wrap gap-2 pt-2 border-t border-dark-800">
-                <Button variant="ghost" size="sm" onClick={() => openEdit(tournament)}>
+
+              <div className="flex items-center gap-2 pt-3 border-t border-dark-800 flex-nowrap overflow-x-auto whitespace-nowrap">
+                <Button variant="ghost" size="sm" onClick={() => openEdit(tournament)} className="whitespace-nowrap flex-shrink-0">
                   Editar
                 </Button>
-                <Link href={`/admin/torneos/${tournament.id}?tab=zonas`}>
-                  <Button variant="secondary" size="sm">Zonas</Button>
+                <Link href={`/admin/torneos/${tournament.id}?tab=zonas`} className="flex-shrink-0">
+                  <Button variant="secondary" size="sm" className="whitespace-nowrap">Zonas</Button>
                 </Link>
-                <Link href={`/admin/torneos/${tournament.id}?tab=fixture`}>
-                  <Button variant="secondary" size="sm">Fixture</Button>
+                <Link href={`/admin/torneos/${tournament.id}?tab=fixture`} className="flex-shrink-0">
+                  <Button variant="secondary" size="sm" className="whitespace-nowrap">Fixture</Button>
                 </Link>
-                <Link href={`/admin/torneos/${tournament.id}?tab=results`}>
-                  <Button variant="secondary" size="sm">Resultados</Button>
+                <Link href={`/admin/torneos/${tournament.id}?tab=results`} className="flex-shrink-0">
+                  <Button variant="secondary" size="sm" className="whitespace-nowrap">Resultados</Button>
                 </Link>
-                <Link href={`/admin/parejas?torneo=${tournament.id}`}>
-                  <Button variant="secondary" size="sm" className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
+                <Link href={`/admin/parejas?torneo=${tournament.id}`} className="flex-shrink-0">
+                  <Button variant="secondary" size="sm" className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold whitespace-nowrap">
                     <Users className="w-3.5 h-3.5 mr-1" />
                     Parejas
                   </Button>
@@ -484,6 +493,7 @@ export default function AdminTorneosPage() {
                   size="sm"
                   onClick={() => setDeleting(tournament)}
                   disabled={isPending}
+                  className="whitespace-nowrap flex-shrink-0"
                 >
                   Eliminar
                 </Button>
