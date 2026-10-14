@@ -62,11 +62,11 @@ function AdminParejasContent() {
       const [couplesRes, tournamentsRes, playersRes] = await Promise.all([
         supabase
           .from("couples")
-          .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*), tournament:tournaments(name, gender, category)")
+          .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*), tournament:tournaments(name, category)")
           .order("created_at", { ascending: false }),
         supabase
           .from("tournaments")
-          .select("id, name, date, gender, category, zone_size, num_zones")
+          .select("*")
           .order("created_at", { ascending: false }),
         supabase
           .from("players")
@@ -74,9 +74,28 @@ function AdminParejasContent() {
           .order("first_name", { ascending: true }),
       ]);
 
-      if (couplesRes.data) setCouples(couplesRes.data as unknown as Couple[]);
-      if (tournamentsRes.data) setTournaments(tournamentsRes.data as unknown as Tournament[]);
-      if (playersRes.data) setPlayers(playersRes.data as unknown as Player[]);
+      if (tournamentsRes.error) {
+        console.error("Error cargando torneos:", tournamentsRes.error);
+      } else if (tournamentsRes.data) {
+        const mapped = (tournamentsRes.data as unknown as Tournament[]).map((t) => ({
+          ...t,
+          gender: t.gender || "Masculino",
+          category: t.category || "6ta",
+        }));
+        setTournaments(mapped);
+      }
+
+      if (couplesRes.error) {
+        console.error("Error cargando parejas:", couplesRes.error);
+      } else if (couplesRes.data) {
+        setCouples(couplesRes.data as unknown as Couple[]);
+      }
+
+      if (playersRes.error) {
+        console.error("Error cargando jugadores:", playersRes.error);
+      } else if (playersRes.data) {
+        setPlayers(playersRes.data as unknown as Player[]);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error al cargar parejas";
       console.error("Error al cargar parejas:", err);
@@ -88,6 +107,9 @@ function AdminParejasContent() {
 
   useEffect(() => {
     loadData();
+    const handleFocus = () => loadData();
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, [loadData]);
 
   // Mapa de numeración correlativa por torneo (Pareja 1, Pareja 2, etc.)
@@ -308,7 +330,7 @@ function AdminParejasContent() {
         const { data, error } = await supabase
           .from("couples")
           .insert(payload)
-          .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*), tournament:tournaments(name, gender, category)")
+          .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*), tournament:tournaments(name, category)")
           .single();
 
         if (error) throw error;
@@ -353,7 +375,7 @@ function AdminParejasContent() {
         const { data, error } = await supabase
           .from("couples")
           .insert(payloads)
-          .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*), tournament:tournaments(name, gender, category)");
+          .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*), tournament:tournaments(name, category)");
 
         if (error) throw error;
         if (data) {
@@ -399,7 +421,7 @@ function AdminParejasContent() {
           .from("couples")
           .update(payload)
           .eq("id", editing.id)
-          .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*), tournament:tournaments(name, gender, category)")
+          .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*), tournament:tournaments(name, category)")
           .single();
 
         if (error) throw error;
