@@ -16,6 +16,7 @@ import { calculateOptimalZones } from "@/lib/tournament/zones";
 import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel, isSumaCategory } from "@/lib/tournament/couples";
 import { findNextPlayoffMatchSlot, propagatePlayoffWinners, getStageName } from "@/lib/tournament/elimination";
 import ZoneCard from "@/components/tournament/ZoneCard";
+import ZoneConformationEditor from "@/components/tournament/ZoneConformationEditor";
 import {
   AlertCircle,
   AlertTriangle,
@@ -33,6 +34,7 @@ import {
   Sparkles,
   Trash2,
   Medal,
+  Settings2,
 } from "lucide-react";
 
 const GAME_MODE_LABELS: Record<string, string> = {
@@ -66,6 +68,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
   const [showDelete, setShowDelete] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [notification, setNotification] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [isEditingConformation, setIsEditingConformation] = useState(false);
 
   // Modals for Actions
   const [schedulingMatch, setSchedulingMatch] = useState<Match | null>(null);
@@ -163,6 +166,15 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     return getCoupleNumberMap(couples);
   }, [couples]);
 
+  const coupleNamesMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    couples.forEach((c) => {
+      const num = coupleNumberMap.get(c.id);
+      map[c.id] = getCoupleLabelWithNumber(c, num);
+    });
+    return map;
+  }, [couples, coupleNumberMap]);
+
   const getCoupleLabel = (c?: Couple | null, coupleId?: string | null) => {
     const coupleObj = c || (coupleId ? couples.find((item) => item.id === coupleId) : null);
     if (!coupleObj) return "Por definir";
@@ -210,17 +222,17 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     return calculateOptimalZones(couples.length, targetZoneSize, num);
   }, [couples.length, targetZoneSize, targetNumZones]);
 
-  // 1. Action: Sorteo Automático de Zonas
+  // 1. Action: Generar Zonas Automáticamente
   const executeShuffleZones = async (force: boolean = false) => {
     startTransition(async () => {
       try {
-        const chosenNumZones = targetNumZones ? parseInt(targetNumZones, 10) : zoneDistribution.numZones;
+        const chosenNumZones = targetNumZones ? parseInt(targetNumZones, 10) : (tournament?.num_zones || zoneDistribution.numZones);
         const res = await fetch("/api/zonas", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             tournamentId,
-            action: "shuffle",
+            action: force ? "generate_zones" : "shuffle",
             numZones: chosenNumZones,
             zoneSize: targetZoneSize,
             force,
@@ -232,17 +244,17 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
             setShowUnequalWarningModal(true);
             return;
           }
-          throw new Error(data.error || "Error al sortear zonas");
+          throw new Error(data.error || "Error al generar zonas");
         }
 
         await loadData();
         setShowUnequalWarningModal(false);
         setNotification({
           type: "success",
-          text: `Sorteo de zonas realizado exitosamente (${data.zones?.length ?? 0} zonas conformadas).`,
+          text: `Zonas generadas exitosamente (${data.zones?.length ?? 0} zonas con ${targetZoneSize} parejas cada una).`,
         });
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Error al sortear zonas";
+        const msg = err instanceof Error ? err.message : "Error al generar zonas";
         setNotification({ type: "error", text: msg });
       }
     });
@@ -923,11 +935,22 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                         size="sm"
                         onClick={handleShuffleZones}
                         disabled={isPending || couples.length < 2}
-                        className="flex items-center gap-1.5"
+                        className="bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-black shadow-md flex items-center gap-1.5"
                       >
-                        <Shuffle className="w-4 h-4" />
-                        {zones.length === 0 ? "Realizar Sorteo" : "Re-sortear Zonas"}
+                        <Sparkles className="w-4 h-4" />
+                        {zones.length === 0 ? "Generar Zonas" : "Re-generar Zonas"}
                       </Button>
+                      {zones.length > 0 && !isEditingConformation && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setIsEditingConformation(true)}
+                          className="border-dark-700 hover:border-emerald-500/40 text-slate-200 font-bold flex items-center gap-1.5"
+                        >
+                          <Settings2 className="w-4 h-4 text-emerald-400" />
+                          Editar Conformación
+                        </Button>
+                      )}
                       {zones.length > 0 && (
                         <Button
                           variant="secondary"
@@ -944,13 +967,33 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                   </div>
                 </div>
 
-                {zones.length === 0 ? (
+                {/* Modo Edición Interactivo de Conformación de Zonas */}
+                {isEditingConformation ? (
+                  <ZoneConformationEditor
+                    tournamentId={tournamentId}
+                    zones={zones}
+                    couples={couples}
+                    zoneCouplesMap={zoneCouplesMap}
+                    coupleNumberMap={coupleNumberMap}
+                    coupleNamesMap={coupleNamesMap}
+                    targetZoneSize={tournament?.zone_size || targetZoneSize}
+                    onSaveSuccess={async () => {
+                      await loadData();
+                      setIsEditingConformation(false);
+                      setNotification({
+                        type: "success",
+                        text: "Conformación de zonas guardada y actualizada exitosamente.",
+                      });
+                    }}
+                    onCancel={() => setIsEditingConformation(false)}
+                  />
+                ) : zones.length === 0 ? (
                   <Card className="p-12 text-center">
                     <Shuffle className="w-12 h-12 text-dark-500 mx-auto mb-3" />
-                    <h4 className="text-base font-bold text-white mb-2">Aún no se han confeccionado las zonas</h4>
+                    <h4 className="text-base font-bold text-white mb-2">Aún no se han generado las zonas</h4>
                     <p className="text-dark-400 text-sm max-w-md mx-auto mb-6">
-                      Hay {couples.length} parejas inscritas. Con la configuración seleccionada arriba, se crearán{" "}
-                      <strong>{zoneDistribution.summary}</strong>. Haz clic en el botón para sortear.
+                      Hay {couples.length} parejas inscritas. Con la configuración fijada para este torneo, se crearán{" "}
+                      <strong>{tournament?.num_zones ?? zoneDistribution.numZones} zonas de {tournament?.zone_size ?? targetZoneSize} parejas</strong>.
                     </p>
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                       <Link href={`/admin/parejas?torneo=${tournamentId}`}>
@@ -965,10 +1008,10 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                       <Button
                         onClick={handleShuffleZones}
                         disabled={isPending || couples.length < 2}
-                        className="flex items-center gap-2"
+                        className="bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-black shadow-lg flex items-center gap-2"
                       >
-                        <Shuffle className="w-4 h-4" />
-                        {isPending ? "Sorteando..." : "Realizar Sorteo Automático"}
+                        <Sparkles className="w-4 h-4" />
+                        {isPending ? "Generando Zonas..." : "Generar Zonas"}
                       </Button>
                     </div>
                   </Card>

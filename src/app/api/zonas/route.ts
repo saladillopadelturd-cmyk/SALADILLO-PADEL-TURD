@@ -129,45 +129,114 @@ export async function POST(request: Request) {
   }
 
   // ==========================================================================
-  // ACCIÓN 1: REORDENAMIENTO MANUAL DE PAREJAS EN ZONAS
+  // ACCIÓN 1: REORDENAMIENTO / EDICIÓN MANUAL DE PAREJAS EN ZONAS
   // ==========================================================================
   if (action === "manual" && Array.isArray(assignments)) {
     type Assignment = { zoneId: string; coupleId: string };
     const validAssignments = assignments as Assignment[];
-    // 1. Limpiar asignaciones previas en zone_couples
-    const zoneIds = Array.from(new Set(validAssignments.map((a) => a.zoneId)));
-    for (const zId of zoneIds) {
-      await supabase.from("zone_couples").delete().eq("zone_id", zId);
+
+    // 1. Obtener todas las zonas de este torneo
+    const { data: tourZones } = await supabase
+      .from("zones")
+      .select("*")
+      .eq("tournament_id", tournamentId)
+      .order("zone_number", { ascending: true });
+
+    const tourZoneIds = tourZones ? tourZones.map((z) => z.id) : [];
+
+    // 2. Limpiar asignaciones previas en zone_couples para las zonas de este torneo
+    if (tourZoneIds.length > 0) {
+      await supabase.from("zone_couples").delete().in("zone_id", tourZoneIds);
     }
 
-    // 2. Insertar nuevas asignaciones
+    // 3. Insertar nuevas asignaciones válidas
     const newZoneCouples = validAssignments.map((a) => ({
       zone_id: a.zoneId,
       couple_id: a.coupleId,
     }));
 
-    const { error: insertError } = await supabase
-      .from("zone_couples")
-      .insert(newZoneCouples);
+    if (newZoneCouples.length > 0) {
+      const { error: insertError } = await supabase
+        .from("zone_couples")
+        .insert(newZoneCouples);
 
-    if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 500 });
+      if (insertError) {
+        return NextResponse.json({ error: insertError.message }, { status: 500 });
+      }
     }
 
-    // 3. Sincronizar columna zone_id en couples y pairs
+    // 4. Sincronizar columna zone_id en couples
+    await supabase
+      .from("couples")
+      .update({ zone_id: null })
+      .eq("tournament_id", tournamentId);
+
     for (const a of validAssignments) {
-      await supabase.from("couples").update({ zone_id: a.zoneId }).eq("id", a.coupleId);
+      await supabase
+        .from("couples")
+        .update({ zone_id: a.zoneId })
+        .eq("id", a.coupleId);
+
       try {
-        await supabase.from("pairs").update({ zone_id: a.zoneId }).eq("id", a.coupleId);
+        await supabase
+          .from("pairs")
+          .update({ zone_id: a.zoneId })
+          .eq("id", a.coupleId);
       } catch {
         // Ignorar si tabla opcional no existe
       }
     }
 
+    // 5. Regenerar automáticamente los partidos de zona para reflejar la nueva conformación
+    await supabase
+      .from("matches")
+      .delete()
+      .eq("tournament_id", tournamentId)
+      .eq("stage", "zone");
+
+    let matchNumber = 1;
+    const matchesToInsert: {
+      tournament_id: string;
+      zone_id: string;
+      stage: string;
+      match_number: number;
+      couple1_id: string;
+      couple2_id: string;
+      status: string;
+    }[] = [];
+
+    if (tourZones && tourZones.length > 0) {
+      for (const zone of tourZones) {
+        const zoneCouplesList = validAssignments
+          .filter((a) => a.zoneId === zone.id)
+          .map((a) => a.coupleId);
+
+        if (zoneCouplesList.length >= 2) {
+          const rr = generateRoundRobinPairs(zoneCouplesList);
+          for (const pair of rr) {
+            matchesToInsert.push({
+              tournament_id: tournamentId,
+              zone_id: zone.id,
+              stage: "zone",
+              match_number: matchNumber++,
+              couple1_id: pair.couple1Id,
+              couple2_id: pair.couple2Id,
+              status: "pending",
+            });
+          }
+        }
+      }
+    }
+
+    if (matchesToInsert.length > 0) {
+      await supabase.from("matches").insert(matchesToInsert);
+    }
+
     return NextResponse.json({
       success: true,
-      message: "Zonas reordenadas manualmente con éxito",
-      assignedCount: assignments.length,
+      message: "Conformación de zonas guardada con éxito",
+      assignedCount: validAssignments.length,
+      matchesCreated: matchesToInsert.length,
     });
   }
 
@@ -261,19 +330,28 @@ export async function POST(request: Request) {
   }
 
   // ==========================================================================
-  // ACCIÓN 3: SORTEO AUTOMÁTICO DE ZONAS (Default)
+  // ACCIÓN 3: GENERACIÓN / SORTEO AUTOMÁTICO DE ZONAS
   // ==========================================================================
-  const zoneSize = reqZoneSize ? Number(reqZoneSize) : (tournament.zone_size || 4);
+  const targetZoneSize = reqZoneSize
+    ? Number(reqZoneSize)
+    : (tournament.zone_size ? Number(tournament.zone_size) : 4);
+  const targetNumZones = reqNumZones
+    ? Number(reqNumZones)
+    : (tournament.num_zones ? Number(tournament.num_zones) : 0);
+
   const optimal = calculateOptimalZones(
     couples.length,
-    zoneSize,
-    reqNumZones ? Number(reqNumZones) : null
+    targetZoneSize,
+    targetNumZones > 0 ? targetNumZones : null
   );
-  const numZones = optimal.numZones;
 
-  // Si no se cumple la igualdad de zonas y no se forzó explícitamente con force: true,
+  // Respetar estrictamente la cantidad fijada en la creación del torneo
+  const numZones = targetNumZones > 0 ? targetNumZones : optimal.numZones;
+  const zoneSize = targetZoneSize > 0 ? targetZoneSize : optimal.zoneSize;
+
+  // Si no se cumple la igualdad de zonas y no se forzó explícitamente ni es generate_zones,
   // advertir cuántos jugadores faltan
-  if (!optimal.isEqual && body.force !== true) {
+  if (action !== "generate_zones" && !optimal.isEqual && body.force !== true) {
     return NextResponse.json(
       {
         error: optimal.warningMessage,

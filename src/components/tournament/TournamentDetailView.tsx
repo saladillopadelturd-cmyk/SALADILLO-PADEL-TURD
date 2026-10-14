@@ -1,17 +1,31 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
+import Button from "@/components/ui/Button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/Tabs";
 import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
 import { calculateRoundRobinStandings } from "@/lib/tournament/standings";
 import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel, isSumaCategory } from "@/lib/tournament/couples";
 import { propagatePlayoffWinners, getStageName } from "@/lib/tournament/elimination";
 import Bracket from "@/components/tournament/Bracket";
-import { Calendar, MapPin, Trophy, Clock, ArrowLeft, Users } from "lucide-react";
+import ZoneConformationEditor from "@/components/tournament/ZoneConformationEditor";
+import {
+  Calendar,
+  MapPin,
+  Trophy,
+  Clock,
+  ArrowLeft,
+  Users,
+  Sparkles,
+  Settings2,
+  CheckCircle2,
+  AlertCircle,
+} from "lucide-react";
 
 interface TournamentDetailProps {
   id: string;
@@ -41,6 +55,7 @@ const STATUS_VARIANTS: Record<string, "default" | "success" | "warning" | "dange
 };
 
 export default function TournamentDetailView({ id, initialTab }: TournamentDetailProps) {
+  const { isAdmin } = useAuth();
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
   const [couples, setCouples] = useState<Couple[]>([]);
@@ -48,68 +63,106 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
   const [zoneCouplesMap, setZoneCouplesMap] = useState<Record<string, string[]>>({});
   const [fixtureFilter, setFixtureFilter] = useState<"all" | "zone" | "playoff">("all");
   const [loading, setLoading] = useState(true);
+  const [isGeneratingZones, setIsGeneratingZones] = useState(false);
+  const [isEditingConformation, setIsEditingConformation] = useState(false);
+  const [notification, setNotification] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const supabase = useMemo(() => createClient(), []);
 
-  useEffect(() => {
-    async function loadTournamentData() {
-      try {
-        // Fetch tournament
-        const { data: tourData } = await supabase
-          .from("tournaments")
-          .select("*")
-          .eq("id", id)
-          .maybeSingle();
+  const loadTournamentData = useCallback(async () => {
+    try {
+      // Fetch tournament
+      const { data: tourData } = await supabase
+        .from("tournaments")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
 
-        if (tourData) {
-          setTournament(tourData);
-        }
-
-        // Fetch zones
-        const { data: zonesData } = await supabase
-          .from("zones")
-          .select("*")
-          .eq("tournament_id", id)
-          .order("zone_number", { ascending: true });
-
-        if (zonesData) setZones(zonesData);
-
-        // Fetch couples with players
-        const { data: couplesData } = await supabase
-          .from("couples")
-          .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*)")
-          .eq("tournament_id", id);
-
-        if (couplesData) setCouples(couplesData);
-
-        // Fetch zone_couples
-        const { data: zcData } = await supabase
-          .from("zone_couples")
-          .select("zone_id, couple_id");
-
-        if (zcData) {
-          const map: Record<string, string[]> = {};
-          zcData.forEach((item) => {
-            if (!map[item.zone_id]) map[item.zone_id] = [];
-            map[item.zone_id].push(item.couple_id);
-          });
-          setZoneCouplesMap(map);
-        }
-
-        // Fetch matches
-        const { data: matchesData } = await supabase
-          .from("matches")
-          .select("*, couple1:couples!matches_couple1_id_fkey(*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*)), couple2:couples!matches_couple2_id_fkey(*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*))")
-          .eq("tournament_id", id)
-          .order("scheduled_time", { ascending: true, nullsFirst: false });
-
-        if (matchesData) setMatches(matchesData);
-      } catch (err) {
-        console.error("Error loading tournament details:", err);
-      } finally {
-        setLoading(false);
+      if (tourData) {
+        setTournament(tourData);
       }
-    }
 
+      // Fetch zones
+      const { data: zonesData } = await supabase
+        .from("zones")
+        .select("*")
+        .eq("tournament_id", id)
+        .order("zone_number", { ascending: true });
+
+      if (zonesData) setZones(zonesData);
+
+      // Fetch couples with players
+      const { data: couplesData } = await supabase
+        .from("couples")
+        .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*)")
+        .eq("tournament_id", id);
+
+      if (couplesData) setCouples(couplesData);
+
+      // Fetch zone_couples
+      const { data: zcData } = await supabase
+        .from("zone_couples")
+        .select("zone_id, couple_id");
+
+      if (zcData) {
+        const map: Record<string, string[]> = {};
+        zcData.forEach((item) => {
+          if (!map[item.zone_id]) map[item.zone_id] = [];
+          map[item.zone_id].push(item.couple_id);
+        });
+        setZoneCouplesMap(map);
+      }
+
+      // Fetch matches
+      const { data: matchesData } = await supabase
+        .from("matches")
+        .select("*, couple1:couples!matches_couple1_id_fkey(*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*)), couple2:couples!matches_couple2_id_fkey(*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*))")
+        .eq("tournament_id", id)
+        .order("scheduled_time", { ascending: true, nullsFirst: false });
+
+      if (matchesData) setMatches(matchesData);
+    } catch (err) {
+      console.error("Error loading tournament details:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [id, supabase]);
+
+  const handleGenerateZones = async () => {
+    if (!tournament) return;
+    setIsGeneratingZones(true);
+    setNotification(null);
+    try {
+      const res = await fetch("/api/zonas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tournamentId: id,
+          action: "generate_zones",
+          numZones: tournament.num_zones,
+          zoneSize: tournament.zone_size,
+          force: true,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Error al generar zonas");
+      }
+
+      await loadTournamentData();
+      setNotification({
+        type: "success",
+        text: `Se generaron exitosamente ${data.zones?.length ?? tournament.num_zones} zonas con ${tournament.zone_size} parejas cada una.`,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error al generar zonas";
+      setNotification({ type: "error", text: msg });
+    } finally {
+      setIsGeneratingZones(false);
+    }
+  };
+
+  useEffect(() => {
     loadTournamentData();
 
     // Subscribe to realtime match score updates
@@ -308,6 +361,31 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
         </div>
       </div>
 
+      {notification && (
+        <div
+          className={`p-4 rounded-xl mb-6 flex items-center justify-between gap-3 text-xs font-semibold border ${
+            notification.type === "success"
+              ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300"
+              : "bg-rose-500/15 border-rose-500/30 text-rose-300"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {notification.type === "success" ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+            )}
+            <span>{notification.text}</span>
+          </div>
+          <button
+            onClick={() => setNotification(null)}
+            className="text-dark-400 hover:text-white px-2 py-0.5 rounded cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Tournament Header */}
       <div className="bg-gradient-to-b from-dark-900 via-dark-900/90 to-dark-950 border border-dark-700/80 rounded-2xl p-6 mb-8 backdrop-blur-xl shadow-2xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -460,27 +538,108 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
 
         {/* 2. TAB: ZONAS */}
         <TabsContent value="zonas">
-          <div className="mt-6">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-emerald-400" />
-                Fase de Zonas (Todos contra todos)
-              </h2>
-              <p className="text-xs text-dark-400 hidden sm:block">
-                * La peor pareja clasificada de cada zona queda eliminada
-              </p>
+          <div className="mt-6 space-y-6">
+            <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-dark-800">
+              <div>
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-emerald-400" />
+                  Fase de Zonas (Todos contra todos)
+                </h2>
+                <p className="text-xs text-dark-400 mt-0.5">
+                  Estructura fijada al crear el torneo:{" "}
+                  <strong className="text-white">
+                    {tournament.num_zones} {tournament.num_zones === 1 ? "zona" : "zonas"}
+                  </strong>{" "}
+                  de <strong className="text-white">{tournament.zone_size} parejas</strong>.
+                  <span className="hidden sm:inline"> (La peor clasificada de cada zona queda eliminada).</span>
+                </p>
+              </div>
+
+              {/* Botones de acción en la opción Zonas */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  size="sm"
+                  onClick={handleGenerateZones}
+                  disabled={isGeneratingZones}
+                  className="bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-black shadow-md flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>
+                    {isGeneratingZones
+                      ? "Generando..."
+                      : zones.length === 0
+                      ? "Generar Zonas"
+                      : "Re-generar Zonas"}
+                  </span>
+                </Button>
+
+                {zones.length > 0 && !isEditingConformation && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setIsEditingConformation(true)}
+                    className="border-dark-700 hover:border-emerald-500/40 text-slate-200 font-bold flex items-center gap-1.5"
+                  >
+                    <Settings2 className="w-4 h-4 text-emerald-400" />
+                    <span>Editar Conformación</span>
+                  </Button>
+                )}
+              </div>
             </div>
 
-            {zones.length === 0 ? (
-              <Card className="p-8 text-center text-dark-400 space-y-4">
-                <p className="text-sm">Aún no se han configurado las zonas para este torneo.</p>
-                <div className="flex justify-center">
+            {/* Modo Edición Interactivo de Conformación de Zonas */}
+            {isEditingConformation ? (
+              <ZoneConformationEditor
+                tournamentId={id}
+                zones={zones}
+                couples={couples}
+                zoneCouplesMap={zoneCouplesMap}
+                coupleNumberMap={coupleNumberMap}
+                coupleNamesMap={coupleNamesMap}
+                targetZoneSize={tournament.zone_size || 4}
+                onSaveSuccess={async () => {
+                  await loadTournamentData();
+                  setIsEditingConformation(false);
+                  setNotification({
+                    type: "success",
+                    text: "Conformación de zonas guardada y actualizada exitosamente.",
+                  });
+                }}
+                onCancel={() => setIsEditingConformation(false)}
+              />
+            ) : zones.length === 0 ? (
+              <Card className="p-10 text-center text-dark-400 space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center mx-auto text-emerald-400">
+                  <Trophy className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="text-white font-bold text-base mb-1">
+                    Aún no se han generado las zonas
+                  </h4>
+                  <p className="text-xs text-dark-300 max-w-md mx-auto">
+                    El torneo fue configurado con{" "}
+                    <strong className="text-emerald-400">{tournament.num_zones} zonas</strong> de{" "}
+                    <strong className="text-emerald-400">{tournament.zone_size} parejas</strong>.
+                    {couples.length > 0
+                      ? ` Hay ${couples.length} parejas confirmadas listas para ser distribuidas.`
+                      : " Recuerda cargar las parejas desde el editor."}
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                  <Button
+                    onClick={handleGenerateZones}
+                    disabled={isGeneratingZones}
+                    className="bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-black px-6 py-2.5 rounded-xl shadow-lg flex items-center gap-2"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>{isGeneratingZones ? "Generando Zonas..." : "Generar Zonas"}</span>
+                  </Button>
                   <Link
                     href={`/admin/parejas?torneo=${id}`}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold transition-all"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-200 border border-dark-700 text-xs font-bold transition-all"
                   >
                     <Users className="w-4 h-4 text-emerald-400" />
-                    <span>Parejas ({couples.length})</span>
+                    <span>Editor de Parejas ({couples.length})</span>
                   </Link>
                 </div>
               </Card>
