@@ -154,6 +154,10 @@ export function runSchedulerTests(): { passed: number; failed: number; errors: s
   assert(formatScoreInput("98108") === "9/8 (10-8)", "98108 debe formatear a 9/8 (10-8)");
   assert(formatScoreInput("9/8 (7-6)") === "9/8 (7-6)", "9/8 (7-6) debe mantenerse intacto");
   assert(formatScoreInput("9/8", "9/8 ( - )") === "9/8", "Backspace debe permitir volver a 9/8");
+  assert(formatScoreInput("9/8 ( - )7") === "9/8 (7- )", "Tipear 7 al final de ( - ) debe ir del lado izquierdo del separador '-'");
+  assert(formatScoreInput("9/8 ( - 7)") === "9/8 (7- )", "Tipear 7 del lado derecho de ( - ) debe colocarse a la izquierda de '-'");
+  assert(formatScoreInput("9/8 (7- )6") === "9/8 (7-6)", "Tipear 6 cuando ya hay 7 a la izquierda debe ir del lado derecho de '-'");
+  assert(formatScoreInput("9/8 ( - )76") === "9/8 (7-6)", "Tipear 76 al final de ( - ) debe colocar 7 a la izquierda y 6 a la derecha");
 
   return { passed, failed, errors };
 }

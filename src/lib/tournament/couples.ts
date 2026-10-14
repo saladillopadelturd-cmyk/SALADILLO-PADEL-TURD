@@ -650,12 +650,31 @@ export function formatScoreInput(val: string, prevVal?: string): string {
     // Si tiene guión dentro de afterBase (ej: '(7-6)', '(7- )', '7-6', '7-')
     if (afterBase.includes("-")) {
       const parts = afterBase.split("-");
-      const leftDigits = parts[0].replace(/\D/g, "");
-      const rightDigits = parts[1] ? parts[1].replace(/\D/g, "") : "";
+      let leftDigits = parts[0].replace(/\D/g, "");
+      let rightDigits = parts[1] ? parts[1].replace(/\D/g, "") : "";
 
       if (!leftDigits && !rightDigits) {
         return `${basePrefix} ( - )`;
       }
+
+      // El primer número ingresado siempre va del lado izquierdo del separador '-'
+      // Si el usuario tipeó con el cursor al final o a la derecha de '-', el dígito se ubica a la izquierda
+      if (!leftDigits && rightDigits) {
+        if (rightDigits.length === 1) {
+          leftDigits = rightDigits;
+          rightDigits = "";
+        } else if (rightDigits.length === 2) {
+          leftDigits = rightDigits[0];
+          rightDigits = rightDigits[1];
+        } else if (rightDigits.startsWith("10") || rightDigits.startsWith("11") || rightDigits.startsWith("12")) {
+          leftDigits = rightDigits.slice(0, 2);
+          rightDigits = rightDigits.slice(2);
+        } else {
+          leftDigits = rightDigits[0];
+          rightDigits = rightDigits.slice(1);
+        }
+      }
+
       if (leftDigits && !rightDigits) {
         return `${basePrefix} (${leftDigits}- )`;
       }
