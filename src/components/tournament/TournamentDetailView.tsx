@@ -1289,103 +1289,13 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                   const c1Name = coupleNamesMap[m.couple1_id ?? ""] ?? (m.couple1 ? getCoupleLabelWithNumber(m.couple1, coupleNumberMap.get(m.couple1.id)) : "Por definir");
                   const c2Name = coupleNamesMap[m.couple2_id ?? ""] ?? (m.couple2 ? getCoupleLabelWithNumber(m.couple2, coupleNumberMap.get(m.couple2.id)) : "Por definir");
 
-                  // Si ya tiene un resultado cargado, solo mostrar los nombres de los jugadores y el resultado
-                  if (hasResult) {
-                    return (
-                      <Card
-                        key={m.id}
-                        className="p-4 border border-emerald-500/30 bg-dark-900/90 shadow-md transition-all duration-200"
-                      >
-                        <div className="flex items-center justify-between text-xs text-dark-400 mb-3">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="px-2.5 py-0.5 rounded text-[11px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3 text-rose-400" />
-                              FINALIZADO
-                            </span>
-                            {isPlayoff && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
-                                CLASIFICÓ GANADOR
-                              </span>
-                            )}
-                          </div>
-                          <span className="font-semibold text-emerald-400/80 text-[11px] uppercase tracking-wider">
-                            {getStageName(m.stage)}
-                          </span>
-                        </div>
-
-                        {/* Electronic Scoreboard: solo nombres de jugadores y resultado */}
-                        <div className="space-y-1.5 bg-dark-950/80 p-2 rounded-xl border border-dark-800/80 mb-2">
-                          <div
-                            className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
-                              isP1Winner
-                                ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold"
-                                : "text-slate-200"
-                            }`}
-                          >
-                            <span className="truncate pr-2">{c1Players}</span>
-                            {m.score_set1 && (
-                              <span className="scoreboard-digit px-2 py-0.5 rounded bg-dark-900 border border-dark-700 text-xs font-mono font-black text-white">
-                                {m.score_set1}
-                              </span>
-                            )}
-                          </div>
-
-                          <div
-                            className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
-                              isP2Winner
-                                ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold"
-                                : "text-slate-200"
-                            }`}
-                          >
-                            <span className="truncate pr-2">{c2Players}</span>
-                            {m.score_set2 && (
-                              <span className="scoreboard-digit px-2 py-0.5 rounded bg-dark-900 border border-dark-700 text-xs font-mono font-black text-white">
-                                {m.score_set2}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-1 border-t border-dark-800/60 text-xs">
-                          <button
-                            type="button"
-                            onClick={() => isAdmin && openScoreModal(m)}
-                            title={isAdmin ? "Clic para modificar resultado" : "Partido Finalizado"}
-                            className={`px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/20 text-rose-400 border border-rose-500/40 flex items-center gap-1.5 transition-all ${
-                              isAdmin ? "hover:bg-rose-500/30 cursor-pointer" : "cursor-default"
-                            }`}
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5 text-rose-400" />
-                            Finalizado
-                          </button>
-                          <div className="flex items-center gap-2">
-                            {m.score_super_tb && (
-                              <span className="text-amber-400 text-xs font-mono font-bold bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/25">
-                                STB: {m.score_super_tb}
-                              </span>
-                            )}
-                            {isAdmin && (
-                              <button
-                                type="button"
-                                onClick={() => openScheduleModal(m)}
-                                title="Reprogramar cancha y horario"
-                                className="px-2.5 py-1 rounded-lg bg-dark-800 hover:bg-dark-700 text-dark-300 hover:text-white transition-colors flex items-center gap-1 text-xs font-medium border border-dark-700"
-                              >
-                                <Clock className="w-3.5 h-3.5 text-sky-400" />
-                                <span>Reprogramar</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </Card>
-                    );
-                  }
-
                   return (
                     <Card
                       key={m.id}
                       className={`p-4 border transition-all duration-200 ${
-                        isLive
+                        hasResult
+                          ? "border-emerald-500/30 bg-dark-900/90 shadow-md"
+                          : isLive
                           ? "border-rose-500/60 bg-gradient-to-b from-rose-950/20 via-dark-900/90 to-dark-950 shadow-lg shadow-rose-950/30"
                           : isPendingRival
                           ? "border-dark-800/80 bg-dark-950/40 opacity-80"
@@ -1408,12 +1318,17 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/10 text-amber-300 border border-amber-400/25">
                                 Esperando Rival
                               </span>
+                            ) : hasResult ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                                CLASIFICÓ GANADOR
+                              </span>
                             ) : (
                               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
                                 Cruce Confirmado
                               </span>
                             )
                           )}
+                          <span className="text-dark-500 text-[11px]">#{m.match_number ?? "-"}</span>
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -1433,60 +1348,128 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                         </div>
                       </div>
 
-                      {/* Electronic Scoreboard Box */}
+                      {/* Electronic Scoreboard Box: parejas interactivas para elegir ganadora */}
                       <div className="space-y-1.5 bg-dark-950/80 p-2 rounded-xl border border-dark-800/80 mb-3">
-                        <div
-                          className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
-                            isP1Winner
-                              ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold"
-                              : !m.couple1_id
-                              ? "text-dark-400 italic font-normal bg-dark-950/40"
-                              : "text-slate-200"
-                          }`}
-                        >
-                          <span className="truncate pr-2">{c1Name}</span>
-                          {m.score_set1 && (
-                            <span className="scoreboard-digit px-2 py-0.5 rounded bg-dark-900 border border-dark-700 text-xs font-mono font-black text-white">
-                              {m.score_set1}
-                            </span>
-                          )}
-                        </div>
-
-                        <div
-                          className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
-                            isP2Winner
-                              ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold"
-                              : !m.couple2_id
-                              ? "text-dark-400 italic font-normal bg-dark-950/40"
-                              : "text-slate-200"
-                          }`}
-                        >
-                          <span className="truncate pr-2">{c2Name}</span>
-                          {m.score_set2 && (
-                            <span className="scoreboard-digit px-2 py-0.5 rounded bg-dark-900 border border-dark-700 text-xs font-mono font-black text-white">
-                              {m.score_set2}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-2 border-t border-dark-800 text-xs">
+                        {/* Pareja 1 */}
                         <button
                           type="button"
                           onClick={() => {
-                            if (!isPendingRival) openScoreModal(m);
+                            if (m.couple1_id && !isPendingRival) {
+                              openScoreModal(m, m.couple1_id);
+                            }
                           }}
-                          disabled={isPendingRival}
-                          title={isPendingRival ? "Esperando definición de clasificados" : "Indicar resultado del partido"}
-                          className={`px-3 py-1 rounded-full text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 ${
-                            isPendingRival
-                              ? "bg-dark-800 text-dark-500 border border-dark-700 cursor-not-allowed"
-                              : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 hover:border-emerald-500/60 hover:scale-[1.02] cursor-pointer"
+                          disabled={!m.couple1_id || isPendingRival}
+                          title={
+                            !m.couple1_id || isPendingRival
+                              ? "Esperando definición de clasificados"
+                              : "Hacer clic para elegir como pareja ganadora y anotar el resultado"
+                          }
+                          className={`w-full text-left flex items-center justify-between px-2.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all group ${
+                            isP1Winner
+                              ? "bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-bold shadow-sm shadow-emerald-500/10"
+                              : isP2Winner
+                              ? "bg-rose-500/15 border border-rose-500/40 text-rose-300/90 line-through opacity-85"
+                              : !m.couple1_id
+                              ? "text-dark-400 italic font-normal bg-dark-950/40 cursor-not-allowed border border-transparent"
+                              : "bg-dark-900 border border-dark-800 text-slate-200 hover:border-emerald-500/50 hover:bg-emerald-500/10 cursor-pointer"
                           }`}
                         >
-                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                          Programado
+                          <div className="flex items-center gap-1.5 min-w-0 pr-2">
+                            {isP1Winner && (
+                              <Trophy className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                            )}
+                            <span className="truncate">{c1Name}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {m.score_set1 && (
+                              <span className="scoreboard-digit px-2 py-0.5 rounded bg-dark-900 border border-dark-700 text-xs font-mono font-black text-white">
+                                {m.score_set1}
+                              </span>
+                            )}
+                            {!hasResult && m.couple1_id && !isPendingRival && (
+                              <span className="text-[10px] text-emerald-400/80 font-bold hidden group-hover:inline uppercase tracking-wider">
+                                Ganadora
+                              </span>
+                            )}
+                          </div>
                         </button>
+
+                        {/* Pareja 2 */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (m.couple2_id && !isPendingRival) {
+                              openScoreModal(m, m.couple2_id);
+                            }
+                          }}
+                          disabled={!m.couple2_id || isPendingRival}
+                          title={
+                            !m.couple2_id || isPendingRival
+                              ? "Esperando definición de clasificados"
+                              : "Hacer clic para elegir como pareja ganadora y anotar el resultado"
+                          }
+                          className={`w-full text-left flex items-center justify-between px-2.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all group ${
+                            isP2Winner
+                              ? "bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-bold shadow-sm shadow-emerald-500/10"
+                              : isP1Winner
+                              ? "bg-rose-500/15 border border-rose-500/40 text-rose-300/90 line-through opacity-85"
+                              : !m.couple2_id
+                              ? "text-dark-400 italic font-normal bg-dark-950/40 cursor-not-allowed border border-transparent"
+                              : "bg-dark-900 border border-dark-800 text-slate-200 hover:border-emerald-500/50 hover:bg-emerald-500/10 cursor-pointer"
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0 pr-2">
+                            {isP2Winner && (
+                              <Trophy className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                            )}
+                            <span className="truncate">{c2Name}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {m.score_set2 && (
+                              <span className="scoreboard-digit px-2 py-0.5 rounded bg-dark-900 border border-dark-700 text-xs font-mono font-black text-white">
+                                {m.score_set2}
+                              </span>
+                            )}
+                            {!hasResult && m.couple2_id && !isPendingRival && (
+                              <span className="text-[10px] text-emerald-400/80 font-bold hidden group-hover:inline uppercase tracking-wider">
+                                Ganadora
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      </div>
+
+                      {/* Footer: leyenda Programado / Finalizado y botón Reprogramar */}
+                      <div className="flex items-center justify-between pt-2 border-t border-dark-800 text-xs">
+                        {hasResult ? (
+                          <button
+                            type="button"
+                            onClick={() => openScoreModal(m)}
+                            title="Partido finalizado. Clic para modificar marcador"
+                            className="px-3 py-1.5 rounded-full text-xs font-bold bg-rose-500/20 text-rose-400 border border-rose-500/40 flex items-center gap-1.5 hover:bg-rose-500/30 cursor-pointer transition-all shadow-sm"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 text-rose-400" />
+                            Finalizado
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!isPendingRival) openScoreModal(m);
+                            }}
+                            disabled={isPendingRival}
+                            title={isPendingRival ? "Esperando definición de clasificados" : "Clic para indicar resultado del partido"}
+                            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 ${
+                              isPendingRival
+                                ? "bg-dark-800 text-dark-500 border border-dark-700 cursor-not-allowed"
+                                : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 hover:border-emerald-500/60 hover:scale-[1.02] cursor-pointer"
+                            }`}
+                          >
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                            Programado
+                          </button>
+                        )}
+
                         <div className="flex items-center gap-2">
                           {m.score_super_tb && (
                             <span className="text-amber-400 text-xs font-mono font-bold bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/25">
