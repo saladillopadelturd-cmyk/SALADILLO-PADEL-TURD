@@ -1,7 +1,7 @@
 "use client";
 
 import Card from "@/components/ui/Card";
-import { Trophy, Award, ChevronRight, Flame, Star, Zap, Shield, Medal } from "lucide-react";
+import { Trophy, Award, ChevronRight, Flame, Star, Zap, Shield, Medal, Sparkles } from "lucide-react";
 
 export interface BracketMatch {
   id?: string;
@@ -20,7 +20,7 @@ export interface BracketRound {
 export interface BracketProps {
   rounds: BracketRound[];
   pairNames: Record<string, string>;
-  onMatchClick?: (matchId: string) => void;
+  onMatchClick?: (matchId: string, winningPairId?: string) => void;
   isAdmin?: boolean;
 }
 
@@ -265,6 +265,16 @@ export default function Bracket({ rounds, pairNames, onMatchClick, isAdmin }: Br
 
   return (
     <div className="relative">
+      {/* Indicador de ayuda para el administrador */}
+      {isAdmin && (
+        <div className="mb-4 p-3 rounded-xl bg-gradient-to-r from-emerald-950/40 via-dark-900 to-dark-950 border border-emerald-500/30 flex items-center gap-2.5 text-xs text-emerald-300">
+          <Sparkles className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+          <span>
+            <strong>Carga rápida de resultados:</strong> Hacé clic sobre la <strong>pareja ganadora</strong> de cualquier partido para anotar el resultado. La pareja ganadora se pintará de <strong className="text-emerald-400">verde</strong>, la perdedora de <strong className="text-rose-400">rojo</strong> y avanzará automáticamente a la próxima instancia del cuadro.
+          </span>
+        </div>
+      )}
+
       {/* Mobile Swipe Hint */}
       <div className="flex items-center justify-between text-xs text-dark-400 mb-3 px-1 sm:hidden">
         <span className="flex items-center gap-1 font-medium">
@@ -319,15 +329,19 @@ export default function Bracket({ rounds, pairNames, onMatchClick, isAdmin }: Br
                     }}
                   >
                     {round.matches.map((match, matchIndex) => {
-                      const isP1Winner = match.winner && match.winner === match.pair1;
-                      const isP2Winner = match.winner && match.winner === match.pair2;
+                      const hasWinner = Boolean(match.winner && match.winner !== "BYE");
+                      const isP1Winner = Boolean(hasWinner && match.winner === match.pair1);
+                      const isP2Winner = Boolean(hasWinner && match.winner === match.pair2);
                       const p1DisplayName = pairNames[match.pair1] ?? match.pair1;
                       const p2DisplayName = pairNames[match.pair2] ?? match.pair2;
 
                       const isP1Pending = match.pair1 === "Por definir" || p1DisplayName === "Por definir";
                       const isP2Pending = match.pair2 === "Por definir" || p2DisplayName === "Por definir";
 
-                      const isClickable = Boolean(
+                      const isP1Loser = Boolean(hasWinner && !isP1Winner && !isP1Pending && match.pair1 !== "BYE");
+                      const isP2Loser = Boolean(hasWinner && !isP2Winner && !isP2Pending && match.pair2 !== "BYE");
+
+                      const isP1Clickable = Boolean(
                         isAdmin &&
                         match.id &&
                         !isP1Pending &&
@@ -337,16 +351,28 @@ export default function Bracket({ rounds, pairNames, onMatchClick, isAdmin }: Br
                         match.pair2 !== "BYE"
                       );
 
+                      const isP2Clickable = Boolean(
+                        isAdmin &&
+                        match.id &&
+                        !isP1Pending &&
+                        !isP2Pending &&
+                        onMatchClick &&
+                        match.pair1 !== "BYE" &&
+                        match.pair2 !== "BYE"
+                      );
+
+                      const isMatchClickable = isP1Clickable || isP2Clickable;
+
                       return (
                         <div key={`${round.round}_${matchIndex}`} className="relative flex items-center">
                           <Card
                             onClick={() => {
-                              if (isClickable && match.id && onMatchClick) {
-                                onMatchClick(match.id);
+                              if (isMatchClickable && match.id && onMatchClick) {
+                                onMatchClick(match.id, match.winner || match.pair1);
                               }
                             }}
                             className={`p-3.5 w-full border transition-all relative z-10 ${
-                              isClickable ? "cursor-pointer hover:border-emerald-400/70 hover:scale-[1.01] active:scale-[0.99]" : ""
+                              isMatchClickable ? "cursor-pointer hover:border-emerald-400/60 hover:scale-[1.01] active:scale-[0.99]" : ""
                             } ${
                               isFinal && match.winner
                                 ? "border-amber-400/70 bg-dark-900/95 shadow-xl shadow-amber-400/20"
@@ -355,53 +381,131 @@ export default function Bracket({ rounds, pairNames, onMatchClick, isAdmin }: Br
                           >
                             {/* Pareja 1 */}
                             <div
-                              className={`flex items-center justify-between px-2.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors mb-1.5 ${
+                              onClick={(e) => {
+                                if (isP1Clickable && match.id && onMatchClick) {
+                                  e.stopPropagation();
+                                  onMatchClick(match.id, match.pair1);
+                                }
+                              }}
+                              title={
+                                isP1Clickable
+                                  ? "Hacé clic para marcar a esta pareja como ganadora y anotar el resultado"
+                                  : undefined
+                              }
+                              className={`group/p1 flex items-center justify-between px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all mb-1.5 ${
                                 isP1Winner
-                                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold"
+                                  ? "bg-emerald-500/25 text-emerald-300 border-2 border-emerald-500/80 font-bold shadow-md shadow-emerald-500/20"
+                                  : isP1Loser
+                                  ? "bg-rose-500/20 text-rose-300 border-2 border-rose-500/60 font-medium shadow-sm shadow-rose-500/10"
                                   : isP1Pending
                                   ? "bg-dark-950/40 text-dark-400 italic font-normal border border-dark-800/50"
-                                  : "bg-dark-950/70 text-slate-200 border border-dark-800"
-                              }`}
+                                  : `bg-dark-950/70 text-slate-200 border border-dark-800 ${
+                                      isP1Clickable
+                                        ? "hover:bg-emerald-500/15 hover:border-emerald-400/70 hover:text-emerald-200 cursor-pointer"
+                                        : ""
+                                    }`
+                              } ${isP1Clickable && (isP1Winner || isP1Loser) ? "cursor-pointer hover:opacity-95 hover:scale-[1.01]" : ""}`}
                             >
-                              <div className="flex items-center gap-1.5 truncate pr-2">
-                                {isP1Winner && (
-                                  <Trophy className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                                )}
+                              <div className="flex items-center gap-2 truncate pr-2">
+                                {isP1Winner ? (
+                                  <Trophy className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                                ) : isP1Loser ? (
+                                  <span className="w-2 h-2 rounded-full bg-rose-400 flex-shrink-0" />
+                                ) : isP1Clickable ? (
+                                  <span className="w-2 h-2 rounded-full bg-emerald-400/40 group-hover/p1:bg-emerald-400 flex-shrink-0 transition-colors" />
+                                ) : null}
                                 <span className="truncate">{p1DisplayName}</span>
                               </div>
-                              {match.score && (
-                                <span className="scoreboard-digit text-xs font-mono font-bold text-dark-300 flex-shrink-0">
-                                  {isP1Winner ? "VICTORIA" : ""}
-                                </span>
-                              )}
+
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                {isP1Winner && (
+                                  <span className="scoreboard-digit text-[10px] font-mono font-black text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded border border-emerald-500/40">
+                                    GANADOR
+                                  </span>
+                                )}
+                                {isP1Loser && (
+                                  <span className="scoreboard-digit text-[10px] font-mono font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/30">
+                                    ELIMINADO
+                                  </span>
+                                )}
+                                {!hasWinner && isP1Clickable && (
+                                  <span className="opacity-0 group-hover/p1:opacity-100 text-[10px] font-bold text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30 transition-opacity">
+                                    Elegir Ganador
+                                  </span>
+                                )}
+                                {match.score && isP1Winner && (
+                                  <span className="scoreboard-digit text-xs font-mono font-bold text-emerald-400 flex-shrink-0">
+                                    VICTORIA
+                                  </span>
+                                )}
+                              </div>
                             </div>
 
                             {/* Pareja 2 */}
                             <div
-                              className={`flex items-center justify-between px-2.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
+                              onClick={(e) => {
+                                if (isP2Clickable && match.id && onMatchClick) {
+                                  e.stopPropagation();
+                                  onMatchClick(match.id, match.pair2);
+                                }
+                              }}
+                              title={
+                                isP2Clickable
+                                  ? "Hacé clic para marcar a esta pareja como ganadora y anotar el resultado"
+                                  : undefined
+                              }
+                              className={`group/p2 flex items-center justify-between px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
                                 isP2Winner
-                                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold"
+                                  ? "bg-emerald-500/25 text-emerald-300 border-2 border-emerald-500/80 font-bold shadow-md shadow-emerald-500/20"
+                                  : isP2Loser
+                                  ? "bg-rose-500/20 text-rose-300 border-2 border-rose-500/60 font-medium shadow-sm shadow-rose-500/10"
                                   : isP2Pending
                                   ? "bg-dark-950/40 text-dark-400 italic font-normal border border-dark-800/50"
-                                  : "bg-dark-950/70 text-slate-200 border border-dark-800"
-                              }`}
+                                  : `bg-dark-950/70 text-slate-200 border border-dark-800 ${
+                                      isP2Clickable
+                                        ? "hover:bg-emerald-500/15 hover:border-emerald-400/70 hover:text-emerald-200 cursor-pointer"
+                                        : ""
+                                    }`
+                              } ${isP2Clickable && (isP2Winner || isP2Loser) ? "cursor-pointer hover:opacity-95 hover:scale-[1.01]" : ""}`}
                             >
-                              <div className="flex items-center gap-1.5 truncate pr-2">
-                                {isP2Winner && (
-                                  <Trophy className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                                )}
+                              <div className="flex items-center gap-2 truncate pr-2">
+                                {isP2Winner ? (
+                                  <Trophy className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                                ) : isP2Loser ? (
+                                  <span className="w-2 h-2 rounded-full bg-rose-400 flex-shrink-0" />
+                                ) : isP2Clickable ? (
+                                  <span className="w-2 h-2 rounded-full bg-emerald-400/40 group-hover/p2:bg-emerald-400 flex-shrink-0 transition-colors" />
+                                ) : null}
                                 <span className="truncate">{p2DisplayName}</span>
                               </div>
-                              {match.score && (
-                                <span className="scoreboard-digit text-xs font-mono font-bold text-dark-300 flex-shrink-0">
-                                  {isP2Winner ? "VICTORIA" : ""}
-                                </span>
-                              )}
+
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                {isP2Winner && (
+                                  <span className="scoreboard-digit text-[10px] font-mono font-black text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded border border-emerald-500/40">
+                                    GANADOR
+                                  </span>
+                                )}
+                                {isP2Loser && (
+                                  <span className="scoreboard-digit text-[10px] font-mono font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/30">
+                                    ELIMINADO
+                                  </span>
+                                )}
+                                {!hasWinner && isP2Clickable && (
+                                  <span className="opacity-0 group-hover/p2:opacity-100 text-[10px] font-bold text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30 transition-opacity">
+                                    Elegir Ganador
+                                  </span>
+                                )}
+                                {match.score && isP2Winner && (
+                                  <span className="scoreboard-digit text-xs font-mono font-bold text-emerald-400 flex-shrink-0">
+                                    VICTORIA
+                                  </span>
+                                )}
+                              </div>
                             </div>
 
                             {/* Resultado del Partido */}
                             {match.score && (
-                              <div className="mt-2 pt-1.5 border-t border-dark-800/80 flex items-center justify-between text-[11px]">
+                              <div className="mt-2.5 pt-2 border-t border-dark-800/80 flex items-center justify-between text-[11px]">
                                 <span className="text-dark-400 font-medium">Resultado:</span>
                                 <span className="scoreboard-digit font-mono font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
                                   {match.score}
@@ -410,9 +514,9 @@ export default function Bracket({ rounds, pairNames, onMatchClick, isAdmin }: Br
                             )}
 
                             {/* Indicador de acción para el administrador */}
-                            {isClickable && (
+                            {isMatchClickable && (
                               <div className="mt-2 pt-1.5 border-t border-dark-800/80 flex items-center justify-between text-[11px] font-semibold text-emerald-400">
-                                <span>{match.status === "completed" ? "Modificar marcador" : "Cargar marcador"}</span>
+                                <span>{match.status === "completed" ? "Modificar marcador" : "Hacé clic en el ganador para anotar marcador"}</span>
                                 <ChevronRight className="w-3.5 h-3.5" />
                               </div>
                             )}

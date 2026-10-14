@@ -18,6 +18,7 @@ import { findNextPlayoffMatchSlot, propagatePlayoffWinners, getStageName } from 
 import ZoneCard from "@/components/tournament/ZoneCard";
 import ZoneConformationEditor from "@/components/tournament/ZoneConformationEditor";
 import AutoScheduleModal from "@/components/tournament/AutoScheduleModal";
+import Bracket from "@/components/tournament/Bracket";
 import { normalizeScheduledTime } from "@/lib/tournament/scheduler";
 import {
   AlertCircle,
@@ -88,7 +89,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
 
   // Sync tab with URL parameter when parameter changes
   useEffect(() => {
-    if (tabParam && ["config", "parejas", "zonas", "fixture", "results"].includes(tabParam)) {
+    if (tabParam && ["config", "parejas", "zonas", "fixture", "playoffs", "results"].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [tabParam]);
@@ -199,6 +200,73 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
         (m.status === "completed" || Boolean(m.winner_couple_id))
     );
   }, [matches]);
+
+  // Propagación reactiva de ganadores de playoffs para la vista administrativa
+  const { updatedMatches: displayMatches } = useMemo(() => {
+    return propagatePlayoffWinners(matches);
+  }, [matches]);
+
+  const bracketPairNames = useMemo(() => {
+    const names: Record<string, string> = { ...coupleNamesMap };
+    names["BYE"] = "BYE (Pasa de ronda)";
+    names["Por definir"] = "Por definir";
+    return names;
+  }, [coupleNamesMap]);
+
+  const bracketRounds = useMemo(() => {
+    const STAGE_ORDER: Record<string, number> = {
+      round_of_32: 0,
+      dieciseisavos: 0,
+      round_of_16: 1,
+      octavos: 1,
+      quarter: 2,
+      cuartos: 2,
+      semi: 3,
+      semifinal: 3,
+      final: 4,
+      third_place: 5,
+      tercer_puesto: 5,
+    };
+
+    const playoffMatches = displayMatches
+      .filter((m) => m.stage !== "zone")
+      .sort((a, b) => {
+        if (a.match_number != null && b.match_number != null && a.match_number !== b.match_number) {
+          return a.match_number - b.match_number;
+        }
+        if (a.created_at && b.created_at && a.created_at !== b.created_at) {
+          return a.created_at.localeCompare(b.created_at);
+        }
+        return a.id.localeCompare(b.id);
+      });
+
+    if (playoffMatches.length > 0) {
+      const playoffRoundsMap: Record<string, { id?: string; pair1: string; pair2: string; winner?: string; score?: string; status?: string }[]> = {};
+
+      playoffMatches.forEach((m) => {
+        const stage = m.stage;
+        if (!playoffRoundsMap[stage]) playoffRoundsMap[stage] = [];
+        const scoreStr = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
+        playoffRoundsMap[stage].push({
+          id: m.id,
+          pair1: m.couple1_id ?? "Por definir",
+          pair2: m.couple2_id ?? "Por definir",
+          winner: m.winner_couple_id ?? undefined,
+          score: scoreStr || undefined,
+          status: m.status,
+        });
+      });
+
+      return Object.entries(playoffRoundsMap)
+        .sort(([roundA], [roundB]) => (STAGE_ORDER[roundA] ?? 99) - (STAGE_ORDER[roundB] ?? 99))
+        .map(([round, roundMatches]) => ({
+          round,
+          matches: roundMatches,
+        }));
+    }
+
+    return [];
+  }, [displayMatches]);
 
   // Configuración interactiva de Zonas para el sorteo
   const [targetZoneSize, setTargetZoneSize] = useState<number>(4);
@@ -372,12 +440,13 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
   };
 
   // 5. Action: Abrir Modal de Carga de Resultados
-  const openScoreModal = (m: Match) => {
+  const openScoreModal = (m: Match, preselectedWinnerId?: string) => {
     setScoringMatch(m);
     setFormScoreSet1(m.score_set1 || "");
     setFormScoreSet2(m.score_set2 || "");
     setFormScoreSuperTb(m.score_super_tb || "");
-    setFormWinnerCoupleId(m.winner_couple_id || m.couple1_id || "");
+    const initialWinner = preselectedWinnerId || m.winner_couple_id || m.couple1_id || "";
+    setFormWinnerCoupleId(initialWinner);
   };
 
   const handleSaveScore = async () => {
@@ -409,9 +478,14 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
 
         // En fase de eliminación directa (Playoffs), avanzar automáticamente a la pareja ganadora al siguiente cruce
         let advancedToNextStage = false;
+        let nextTargetMatchId: string | null = null;
+        let nextTargetSlotField: "couple1_id" | "couple2_id" | null = null;
+
         if (scoringMatch.stage !== "zone") {
           const nextSlot = findNextPlayoffMatchSlot(matches, scoringMatch);
           if (nextSlot) {
+            nextTargetMatchId = nextSlot.targetMatchId;
+            nextTargetSlotField = nextSlot.slotField;
             const targetMatch = matches.find((m) => m.id === nextSlot.targetMatchId);
             const updatePayload: Record<string, unknown> = {
               [nextSlot.slotField]: formWinnerCoupleId,
@@ -444,6 +518,33 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
             }
           }
         }
+
+        // Actualización optimista inmediata en memoria
+        setMatches((prev) => {
+          let updated = prev.map((m) =>
+            m.id === scoringMatch.id
+              ? {
+                  ...m,
+                  score_set1: formScoreSet1.trim(),
+                  score_set2: formScoreSet2.trim() || null,
+                  score_super_tb: formScoreSuperTb.trim() || null,
+                  winner_couple_id: formWinnerCoupleId,
+                  status: "completed" as const,
+                }
+              : m
+          );
+          if (nextTargetMatchId && nextTargetSlotField) {
+            updated = updated.map((m) =>
+              m.id === nextTargetMatchId
+                ? {
+                    ...m,
+                    [nextTargetSlotField!]: formWinnerCoupleId,
+                  }
+                : m
+            );
+          }
+          return updated;
+        });
 
         // Si el partido completado es la Gran Final, auto-liquidar los rankings oficiales de inmediato
         let finalCompleted = false;
@@ -647,6 +748,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
               <TabsTrigger value="config">Configuración</TabsTrigger>
               <TabsTrigger value="zonas">Zonas ({zones.length})</TabsTrigger>
               <TabsTrigger value="fixture">Fixture ({matches.length})</TabsTrigger>
+              <TabsTrigger value="playoffs">Cuadro de Eliminación</TabsTrigger>
               <TabsTrigger value="results">
                 Resultados ({matches.filter((m) => m.status === "completed").length}/{matches.length})
               </TabsTrigger>
@@ -1306,6 +1408,62 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
               </div>
             </TabsContent>
 
+            {/* TAB: CUADRO DE ELIMINACIÓN */}
+            <TabsContent value="playoffs">
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-dark-900/80 p-5 rounded-2xl border border-dark-700/80">
+                  <div>
+                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                      <Trophy className="w-5 h-5 text-amber-400" />
+                      Cuadro de Eliminación Directa
+                    </h3>
+                    <p className="text-dark-400 text-xs mt-1">
+                      Hacé clic sobre la pareja ganadora para cargar el resultado. La ganadora se pintará de verde, la perdedora de rojo y avanzará automáticamente a la próxima instancia del cuadro.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleGeneratePlayoffs}
+                      disabled={isPending || zones.length === 0}
+                      className="flex items-center gap-1.5"
+                    >
+                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      {bracketRounds.length > 0 ? "Regenerar Cuadro" : "Generar Cuadro"}
+                    </Button>
+                  </div>
+                </div>
+
+                {bracketRounds.length === 0 ? (
+                  <Card className="p-12 text-center text-dark-400">
+                    <Trophy className="w-12 h-12 text-dark-600 mx-auto mb-3" />
+                    <h4 className="text-base font-bold text-white mb-2">Aún no se ha generado el cuadro de eliminación</h4>
+                    <p className="text-dark-400 text-sm max-w-md mx-auto mb-4">
+                      Para armar los cruces de playoffs, primero completa los partidos de zona o hacé clic en Generar Cuadro Playoffs.
+                    </p>
+                    <Button onClick={handleGeneratePlayoffs} disabled={isPending || zones.length === 0}>
+                      Generar Cuadro Playoffs
+                    </Button>
+                  </Card>
+                ) : (
+                  <Card className="p-6 overflow-x-auto border-dark-800 bg-dark-950/40">
+                    <Bracket
+                      rounds={bracketRounds}
+                      pairNames={bracketPairNames}
+                      isAdmin={true}
+                      onMatchClick={(matchId, winningPairId) => {
+                        const found = matches.find((m) => m.id === matchId);
+                        if (found) {
+                          openScoreModal(found, winningPairId);
+                        }
+                      }}
+                    />
+                  </Card>
+                )}
+              </div>
+            </TabsContent>
+
             {/* TAB 4: RESULTADOS */}
             <TabsContent value="results">
               <div className="space-y-6">
@@ -1478,31 +1636,71 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
             title="Cargar / Modificar Marcador del Partido"
           >
             <div className="space-y-4">
-              {/* 1. Selector de Pareja Ganadora */}
+              {/* 1. Selector Visual de Pareja Ganadora */}
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider">
-                  Pareja Ganadora
+                <label className="block text-xs font-bold text-slate-300 mb-2 uppercase tracking-wider">
+                  Pareja Ganadora (Avanza a la Próxima Instancia)
                 </label>
-                <select
-                  value={formWinnerCoupleId}
-                  onChange={(e) => setFormWinnerCoupleId(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-dark-900 border border-dark-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"
-                >
-                  <option value="">Seleccionar pareja ganadora...</option>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {scoringMatch?.couple1_id && (
-                    <option value={scoringMatch.couple1_id}>
-                      🏆 {getCoupleLabel(scoringMatch.couple1, scoringMatch.couple1_id)}
-                    </option>
+                    <button
+                      type="button"
+                      onClick={() => setFormWinnerCoupleId(scoringMatch.couple1_id!)}
+                      className={`p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                        formWinnerCoupleId === scoringMatch.couple1_id
+                          ? "bg-emerald-500/25 border-emerald-500 text-white ring-2 ring-emerald-500/50 shadow-lg shadow-emerald-500/20"
+                          : "bg-rose-500/15 border-rose-500/50 text-rose-200 hover:bg-rose-500/20"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300">Pareja 1</span>
+                        {formWinnerCoupleId === scoringMatch.couple1_id ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-300 bg-emerald-500/30 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                            <Trophy className="w-3.5 h-3.5 text-amber-400" /> GANADORA
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-bold text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded-full border border-rose-500/30">
+                            PERDEDORA
+                          </span>
+                        )}
+                      </div>
+                      <p className="font-bold text-sm text-white">
+                        {getCoupleLabel(scoringMatch.couple1, scoringMatch.couple1_id)}
+                      </p>
+                    </button>
                   )}
+
                   {scoringMatch?.couple2_id && (
-                    <option value={scoringMatch.couple2_id}>
-                      🏆 {getCoupleLabel(scoringMatch.couple2, scoringMatch.couple2_id)}
-                    </option>
+                    <button
+                      type="button"
+                      onClick={() => setFormWinnerCoupleId(scoringMatch.couple2_id!)}
+                      className={`p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                        formWinnerCoupleId === scoringMatch.couple2_id
+                          ? "bg-emerald-500/25 border-emerald-500 text-white ring-2 ring-emerald-500/50 shadow-lg shadow-emerald-500/20"
+                          : "bg-rose-500/15 border-rose-500/50 text-rose-200 hover:bg-rose-500/20"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300">Pareja 2</span>
+                        {formWinnerCoupleId === scoringMatch.couple2_id ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-300 bg-emerald-500/30 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                            <Trophy className="w-3.5 h-3.5 text-amber-400" /> GANADORA
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-bold text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded-full border border-rose-500/30">
+                            PERDEDORA
+                          </span>
+                        )}
+                      </div>
+                      <p className="font-bold text-sm text-white">
+                        {getCoupleLabel(scoringMatch.couple2, scoringMatch.couple2_id)}
+                      </p>
+                    </button>
                   )}
-                </select>
+                </div>
               </div>
 
-              {/* 2. Debajo: Resultado del Partido con barra '/' automática */}
+              {/* 2. Marcador del Partido */}
               <div>
                 <label className="block text-xs font-bold text-slate-300 mb-1 uppercase tracking-wider">
                   Resultado del Partido {tournament?.game_mode === "american_2sets" ? "(Set 1)" : ""}
@@ -1510,13 +1708,38 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                 <input
                   type="text"
                   inputMode="numeric"
+                  autoFocus
                   placeholder="Ej: 9/4"
                   value={formScoreSet1}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleSaveScore();
+                    }
+                  }}
                   onChange={(e) => setFormScoreSet1(formatScoreInput(e.target.value))}
                   className="w-full px-4 py-2.5 bg-dark-900 border border-dark-600 rounded-lg text-white text-base font-bold font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500 text-center tracking-widest"
                 />
-                <p className="text-[11px] text-dark-400 mt-1 text-center">
-                  Tipeá solo los números (ej: 9 y 4) y la barra <span className="font-bold text-emerald-400">/</span> se colocará automáticamente.
+
+                {/* Chips de marcadores rápidos */}
+                <div className="flex items-center justify-center gap-1.5 mt-2 flex-wrap">
+                  {(tournament?.game_mode === "american_9games" || !tournament?.game_mode
+                    ? ["9/4", "9/5", "9/6", "9/7", "9/3", "9/8"]
+                    : ["6/3", "6/4", "6/2", "7/5", "7/6"]
+                  ).map((chip) => (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => setFormScoreSet1(chip)}
+                      className="px-2.5 py-1 text-xs font-mono font-bold rounded-lg bg-dark-800 hover:bg-dark-700 text-dark-300 hover:text-white border border-dark-700 transition-colors cursor-pointer"
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+
+                <p className="text-[11px] text-dark-400 mt-1.5 text-center">
+                  Tipeá solo los números (ej: 9 y 4) y la barra <span className="font-bold text-emerald-400">/</span> se colocará automáticamente. Presioná <kbd className="px-1.5 py-0.5 rounded bg-dark-800 border border-dark-700 text-[10px] text-white">Enter</kbd> para confirmar.
                 </p>
               </div>
 
@@ -1571,7 +1794,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                 <Button variant="ghost" onClick={() => setScoringMatch(null)} disabled={isPending}>
                   Cancelar
                 </Button>
-                <Button onClick={handleSaveScore} disabled={isPending}>
+                <Button onClick={handleSaveScore} disabled={isPending} className="font-bold bg-emerald-500 hover:bg-emerald-600 text-dark-950">
                   {isPending ? "Guardando..." : "Confirmar Resultado"}
                 </Button>
               </div>

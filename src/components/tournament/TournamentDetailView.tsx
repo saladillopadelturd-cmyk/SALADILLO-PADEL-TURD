@@ -154,12 +154,13 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
   const [formWinnerCoupleId, setFormWinnerCoupleId] = useState("");
   const [isSavingScore, setIsSavingScore] = useState(false);
 
-  const openScoreModal = (m: Match) => {
+  const openScoreModal = (m: Match, preselectedWinnerId?: string) => {
     setScoringMatch(m);
     setFormScoreSet1(m.score_set1 || "");
     setFormScoreSet2(m.score_set2 || "");
     setFormScoreSuperTb(m.score_super_tb || "");
-    setFormWinnerCoupleId(m.winner_couple_id || m.couple1_id || "");
+    const initialWinner = preselectedWinnerId || m.winner_couple_id || m.couple1_id || "";
+    setFormWinnerCoupleId(initialWinner);
   };
 
   const handleSaveScore = async () => {
@@ -190,9 +191,14 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
       if (error) throw error;
 
       // En fase de eliminación directa (Playoffs), avanzar automáticamente a la pareja ganadora al siguiente cruce
+      let nextTargetMatchId: string | null = null;
+      let nextTargetSlotField: "couple1_id" | "couple2_id" | null = null;
+
       if (scoringMatch.stage !== "zone") {
         const nextSlot = findNextPlayoffMatchSlot(matches, scoringMatch);
         if (nextSlot) {
+          nextTargetMatchId = nextSlot.targetMatchId;
+          nextTargetSlotField = nextSlot.slotField;
           const targetMatch = matches.find((m) => m.id === nextSlot.targetMatchId);
           const updatePayload: Record<string, unknown> = {
             [nextSlot.slotField]: formWinnerCoupleId,
@@ -216,6 +222,33 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
         }
       }
 
+      // Actualización optimista inmediata en memoria para que el cuadro refleje al instante la pareja ganadora en verde y avanzando
+      setMatches((prev) => {
+        let updated = prev.map((m) =>
+          m.id === scoringMatch.id
+            ? {
+                ...m,
+                score_set1: formScoreSet1.trim(),
+                score_set2: formScoreSet2.trim() || null,
+                score_super_tb: formScoreSuperTb.trim() || null,
+                winner_couple_id: formWinnerCoupleId,
+                status: "completed" as const,
+              }
+            : m
+        );
+        if (nextTargetMatchId && nextTargetSlotField) {
+          updated = updated.map((m) =>
+            m.id === nextTargetMatchId
+              ? {
+                  ...m,
+                  [nextTargetSlotField!]: formWinnerCoupleId,
+                }
+              : m
+          );
+        }
+        return updated;
+      });
+
       // Si el partido completado es la Final, auto-liquidar rankings
       if (scoringMatch.stage === "final") {
         try {
@@ -229,12 +262,13 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
         }
       }
 
-      await loadTournamentData();
       setScoringMatch(null);
       setNotification({
         type: "success",
-        text: "Marcador guardado exitosamente. El partido ahora figura como Finalizado.",
+        text: "Marcador guardado exitosamente. La pareja ganadora avanzó al siguiente cruce del cuadro.",
       });
+
+      await loadTournamentData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error al guardar resultado";
       setNotification({ type: "error", text: msg });
@@ -1461,10 +1495,10 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                   rounds={bracketRounds}
                   pairNames={bracketPairNames}
                   isAdmin={isAdmin}
-                  onMatchClick={(matchId) => {
+                  onMatchClick={(matchId, winningPairId) => {
                     const found = matches.find((m) => m.id === matchId);
                     if (found && isAdmin) {
-                      openScoreModal(found);
+                      openScoreModal(found, winningPairId);
                     }
                   }}
                 />
@@ -1594,35 +1628,75 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
         title="Cargar / Modificar Marcador del Partido"
       >
         <div className="space-y-4">
-          {/* 1. Selector de Pareja Ganadora */}
+          {/* 1. Selector Visual de Pareja Ganadora */}
           <div>
-            <label className="block text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider">
-              Pareja Ganadora
+            <label className="block text-xs font-bold text-slate-300 mb-2 uppercase tracking-wider">
+              Pareja Ganadora (Avanza a la Próxima Instancia)
             </label>
-            <select
-              value={formWinnerCoupleId}
-              onChange={(e) => setFormWinnerCoupleId(e.target.value)}
-              className="w-full px-3 py-2.5 bg-dark-900 border border-dark-600 rounded-lg text-white text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="">Seleccionar pareja ganadora...</option>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {scoringMatch?.couple1_id && (
-                <option value={scoringMatch.couple1_id}>
-                  🏆 {scoringMatch.couple1
-                    ? getCoupleLabelWithNumber(scoringMatch.couple1, coupleNumberMap.get(scoringMatch.couple1.id))
-                    : "Pareja 1"}
-                </option>
+                <button
+                  type="button"
+                  onClick={() => setFormWinnerCoupleId(scoringMatch.couple1_id!)}
+                  className={`p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                    formWinnerCoupleId === scoringMatch.couple1_id
+                      ? "bg-emerald-500/25 border-emerald-500 text-white ring-2 ring-emerald-500/50 shadow-lg shadow-emerald-500/20"
+                      : "bg-rose-500/15 border-rose-500/50 text-rose-200 hover:bg-rose-500/20"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300">Pareja 1</span>
+                    {formWinnerCoupleId === scoringMatch.couple1_id ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-300 bg-emerald-500/30 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                        <Trophy className="w-3.5 h-3.5 text-amber-400" /> GANADORA
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-bold text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded-full border border-rose-500/30">
+                        PERDEDORA
+                      </span>
+                    )}
+                  </div>
+                  <p className="font-bold text-sm text-white">
+                    {scoringMatch.couple1
+                      ? getCoupleLabelWithNumber(scoringMatch.couple1, coupleNumberMap.get(scoringMatch.couple1.id))
+                      : coupleNamesMap[scoringMatch.couple1_id] || "Pareja 1"}
+                  </p>
+                </button>
               )}
+
               {scoringMatch?.couple2_id && (
-                <option value={scoringMatch.couple2_id}>
-                  🏆 {scoringMatch.couple2
-                    ? getCoupleLabelWithNumber(scoringMatch.couple2, coupleNumberMap.get(scoringMatch.couple2.id))
-                    : "Pareja 2"}
-                </option>
+                <button
+                  type="button"
+                  onClick={() => setFormWinnerCoupleId(scoringMatch.couple2_id!)}
+                  className={`p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                    formWinnerCoupleId === scoringMatch.couple2_id
+                      ? "bg-emerald-500/25 border-emerald-500 text-white ring-2 ring-emerald-500/50 shadow-lg shadow-emerald-500/20"
+                      : "bg-rose-500/15 border-rose-500/50 text-rose-200 hover:bg-rose-500/20"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300">Pareja 2</span>
+                    {formWinnerCoupleId === scoringMatch.couple2_id ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-300 bg-emerald-500/30 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                        <Trophy className="w-3.5 h-3.5 text-amber-400" /> GANADORA
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-bold text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded-full border border-rose-500/30">
+                        PERDEDORA
+                      </span>
+                    )}
+                  </div>
+                  <p className="font-bold text-sm text-white">
+                    {scoringMatch.couple2
+                      ? getCoupleLabelWithNumber(scoringMatch.couple2, coupleNumberMap.get(scoringMatch.couple2.id))
+                      : coupleNamesMap[scoringMatch.couple2_id] || "Pareja 2"}
+                  </p>
+                </button>
               )}
-            </select>
+            </div>
           </div>
 
-          {/* 2. Debajo: Resultado del Partido con barra '/' automática */}
+          {/* 2. Marcador del Partido */}
           <div>
             <label className="block text-xs font-bold text-slate-300 mb-1 uppercase tracking-wider">
               Resultado del Partido {tournament?.game_mode === "american_2sets" ? "(Set 1)" : ""}
@@ -1630,13 +1704,38 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
             <input
               type="text"
               inputMode="numeric"
+              autoFocus
               placeholder="Ej: 9/4"
               value={formScoreSet1}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleSaveScore();
+                }
+              }}
               onChange={(e) => setFormScoreSet1(formatScoreInput(e.target.value))}
               className="w-full px-4 py-2.5 bg-dark-900 border border-dark-600 rounded-lg text-white text-base font-bold font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500 text-center tracking-widest"
             />
-            <p className="text-[11px] text-dark-400 mt-1 text-center">
-              Tipeá solo los números (ej: 9 y 4) y la barra <span className="font-bold text-emerald-400">/</span> se colocará automáticamente.
+            
+            {/* Chips de marcadores rápidos */}
+            <div className="flex items-center justify-center gap-1.5 mt-2 flex-wrap">
+              {(tournament?.game_mode === "american_9games" || !tournament?.game_mode
+                ? ["9/4", "9/5", "9/6", "9/7", "9/3", "9/8"]
+                : ["6/3", "6/4", "6/2", "7/5", "7/6"]
+              ).map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => setFormScoreSet1(chip)}
+                  className="px-2.5 py-1 text-xs font-mono font-bold rounded-lg bg-dark-800 hover:bg-dark-700 text-dark-300 hover:text-white border border-dark-700 transition-colors cursor-pointer"
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+
+            <p className="text-[11px] text-dark-400 mt-1.5 text-center">
+              Tipeá solo los números (ej: 9 y 4) y la barra <span className="font-bold text-emerald-400">/</span> se colocará automáticamente. Presioná <kbd className="px-1.5 py-0.5 rounded bg-dark-800 border border-dark-700 text-[10px] text-white">Enter</kbd> para confirmar.
             </p>
           </div>
 
@@ -1691,7 +1790,7 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
             <Button variant="ghost" onClick={() => setScoringMatch(null)} disabled={isSavingScore}>
               Cancelar
             </Button>
-            <Button onClick={handleSaveScore} disabled={isSavingScore}>
+            <Button onClick={handleSaveScore} disabled={isSavingScore} className="font-bold bg-emerald-500 hover:bg-emerald-600 text-dark-950">
               {isSavingScore ? "Guardando..." : "Confirmar Resultado"}
             </Button>
           </div>

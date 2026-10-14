@@ -1299,6 +1299,89 @@ export function runTournamentBusinessLogicTests(): TestResult {
     assert(check.isValid === true && check.sum >= 10, "Cada pareja generada automáticamente cumple la Suma 10");
   }
 
+  // ==========================================================================
+  // 12. CUADRO DE ELIMINACIÓN: CLIC EN GANADOR, MARCADORES Y AVANCE A PRÓXIMA INSTANCIA
+  // ==========================================================================
+  const bracketMatchesSim: Match[] = [
+    // Cuartos de Final (4 partidos)
+    { id: "m_qf_1", tournament_id: "t_elim", stage: "quarter", match_number: 101, couple1_id: "c_1A", couple2_id: "c_2D", status: "pending", created_at: "2026-10-14T10:00:00Z" },
+    { id: "m_qf_2", tournament_id: "t_elim", stage: "quarter", match_number: 102, couple1_id: "c_1C", couple2_id: "c_2B", status: "pending", created_at: "2026-10-14T10:05:00Z" },
+    { id: "m_qf_3", tournament_id: "t_elim", stage: "quarter", match_number: 103, couple1_id: "c_1D", couple2_id: "c_2C", status: "pending", created_at: "2026-10-14T10:10:00Z" },
+    { id: "m_qf_4", tournament_id: "t_elim", stage: "quarter", match_number: 104, couple1_id: "c_1B", couple2_id: "c_2A", status: "pending", created_at: "2026-10-14T10:15:00Z" },
+    // Semifinales (2 partidos con slots pendientes)
+    { id: "m_sf_1", tournament_id: "t_elim", stage: "semi", match_number: 105, couple1_id: null, couple2_id: null, status: "pending", created_at: "2026-10-14T11:00:00Z" },
+    { id: "m_sf_2", tournament_id: "t_elim", stage: "semi", match_number: 106, couple1_id: null, couple2_id: null, status: "pending", created_at: "2026-10-14T11:05:00Z" },
+    // Gran Final (1 partido)
+    { id: "m_final", tournament_id: "t_elim", stage: "final", match_number: 107, couple1_id: null, couple2_id: null, status: "pending", created_at: "2026-10-14T12:00:00Z" },
+  ];
+
+  // Simulación Paso 1: Administrador hace clic en la pareja 1A de Cuartos 1 y anota marcador "9/4"
+  const qf1Slot = findNextPlayoffMatchSlot(bracketMatchesSim, bracketMatchesSim[0]);
+  assert(qf1Slot !== null, "Cuartos 1 encuentra slot sucesivo en semifinales");
+  assert(qf1Slot?.targetMatchId === "m_sf_1" && qf1Slot?.slotField === "couple1_id", "Ganador Cuartos 1 avanza a Semifinal 1 (couple1_id)");
+
+  // Aplicar resultado en Cuartos 1
+  bracketMatchesSim[0].winner_couple_id = "c_1A";
+  bracketMatchesSim[0].score_set1 = "9/4";
+  bracketMatchesSim[0].status = "completed";
+
+  // Verificar propagación reactiva hacia Semifinal 1
+  const simStep1 = propagatePlayoffWinners(bracketMatchesSim);
+  const sf1AfterQf1 = simStep1.updatedMatches.find((m) => m.id === "m_sf_1");
+  assert(sf1AfterQf1?.couple1_id === "c_1A", "La pareja ganadora (1A) aparece automáticamente en la próxima instancia (Semifinal 1 como pareja 1)");
+  assert(sf1AfterQf1?.couple2_id === null, "La pareja 2 de Semifinal 1 sigue pendiente de rival");
+
+  // Simulación Paso 2: Administrador hace clic en la pareja 2B de Cuartos 2 y anota marcador "9/6"
+  bracketMatchesSim[1].winner_couple_id = "c_2B";
+  bracketMatchesSim[1].score_set1 = "9/6";
+  bracketMatchesSim[1].status = "completed";
+
+  const simStep2 = propagatePlayoffWinners(bracketMatchesSim);
+  const sf1AfterQf2 = simStep2.updatedMatches.find((m) => m.id === "m_sf_1");
+  assert(sf1AfterQf2?.couple1_id === "c_1A" && sf1AfterQf2?.couple2_id === "c_2B", "Semifinal 1 ahora tiene a sus dos parejas completas: 1A vs 2B");
+
+  // Simulación Paso 3: Completar Cuartos 3 (gana 1D) y Cuartos 4 (gana 1B)
+  bracketMatchesSim[2].winner_couple_id = "c_1D";
+  bracketMatchesSim[2].score_set1 = "9/5";
+  bracketMatchesSim[2].status = "completed";
+
+  bracketMatchesSim[3].winner_couple_id = "c_1B";
+  bracketMatchesSim[3].score_set1 = "9/7";
+  bracketMatchesSim[3].status = "completed";
+
+  const simStep3 = propagatePlayoffWinners(bracketMatchesSim);
+  const sf2AfterQf = simStep3.updatedMatches.find((m) => m.id === "m_sf_2");
+  assert(sf2AfterQf?.couple1_id === "c_1D" && sf2AfterQf?.couple2_id === "c_1B", "Semifinal 2 conformada con 1D vs 1B");
+
+  // Simulación Paso 4: Completar Semifinales hacia la Gran Final
+  // Clic en 1A en Semifinal 1 -> Marcador "9/5"
+  bracketMatchesSim[4].couple1_id = "c_1A";
+  bracketMatchesSim[4].couple2_id = "c_2B";
+  bracketMatchesSim[4].winner_couple_id = "c_1A";
+  bracketMatchesSim[4].score_set1 = "9/5";
+  bracketMatchesSim[4].status = "completed";
+
+  // Clic en 1B en Semifinal 2 -> Marcador "9/8"
+  bracketMatchesSim[5].couple1_id = "c_1D";
+  bracketMatchesSim[5].couple2_id = "c_1B";
+  bracketMatchesSim[5].winner_couple_id = "c_1B";
+  bracketMatchesSim[5].score_set1 = "9/8";
+  bracketMatchesSim[5].status = "completed";
+
+  const simStep4 = propagatePlayoffWinners(bracketMatchesSim);
+  const finalMatch = simStep4.updatedMatches.find((m) => m.id === "m_final");
+  assert(finalMatch?.couple1_id === "c_1A" && finalMatch?.couple2_id === "c_1B", "La Gran Final tiene a las dos parejas finalistas que avanzaron: 1A vs 1B");
+
+  // Simulación Paso 5: Clic en pareja 1A en la Gran Final -> Marcador "9/6" -> ¡Campeones!
+  bracketMatchesSim[6].couple1_id = "c_1A";
+  bracketMatchesSim[6].couple2_id = "c_1B";
+  bracketMatchesSim[6].winner_couple_id = "c_1A";
+  bracketMatchesSim[6].score_set1 = "9/6";
+  bracketMatchesSim[6].status = "completed";
+
+  assert(bracketMatchesSim[6].winner_couple_id === "c_1A", "Pareja ganadora de la Final (1A) identificada para pintar de verde");
+  assert(bracketMatchesSim[6].couple2_id === "c_1B" && bracketMatchesSim[6].winner_couple_id !== "c_1B", "Pareja perdedora de la Final (1B) identificada para pintar de rojo");
+
   return {
     passed,
     failed,
