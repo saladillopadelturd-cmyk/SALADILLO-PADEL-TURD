@@ -146,27 +146,20 @@ export default async function HomePage() {
           <NewsCarousel flyers={flyers} />
 
           {/* Quick Action CTA */}
-          <div className="mt-2 sm:mt-8 flex flex-row gap-2 sm:gap-3 justify-center w-full mx-auto sm:max-w-none">
+          <div className="mt-2 sm:mt-8 flex flex-row gap-2 sm:gap-4 justify-center w-full mx-auto sm:max-w-none">
             <Link
               href="#torneos-activos"
-              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-6 py-3 bg-gradient-to-r from-emerald-500 to-lime-500 text-dark-950 font-black text-xs sm:text-sm rounded-xl hover:from-emerald-400 hover:to-lime-400 active:scale-95 transition-all shadow-lg shadow-emerald-500/25 cursor-pointer min-h-[44px] sm:min-h-[48px]"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-8 py-3 bg-gradient-to-r from-emerald-500 to-lime-500 text-dark-950 font-black text-xs sm:text-sm rounded-xl hover:from-emerald-400 hover:to-lime-400 active:scale-95 transition-all shadow-lg shadow-emerald-500/25 cursor-pointer min-h-[44px] sm:min-h-[48px]"
             >
               <Activity className="w-4 h-4 stroke-[2.5]" />
               <span>TORNEO EN VIVO</span>
             </Link>
             <Link
               href="/rankings"
-              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-6 py-3 bg-dark-900/90 hover:bg-dark-850 text-white font-bold text-xs sm:text-sm rounded-xl transition-all border border-dark-700/80 active:scale-95 shadow-md cursor-pointer min-h-[44px] sm:min-h-[48px]"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-8 py-3 bg-dark-900/90 hover:bg-dark-850 text-white font-bold text-xs sm:text-sm rounded-xl transition-all border border-dark-700/80 active:scale-95 shadow-md cursor-pointer min-h-[44px] sm:min-h-[48px]"
             >
               <Trophy className="w-4 h-4 text-amber-400" />
               <span>RANKINGS</span>
-            </Link>
-            <Link
-              href="/jugadores"
-              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-6 py-3 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 hover:text-white font-bold text-xs sm:text-sm rounded-xl transition-all border border-blue-500/30 active:scale-95 shadow-md cursor-pointer min-h-[44px] sm:min-h-[48px]"
-            >
-              <Users className="w-4 h-4 text-blue-400" />
-              <span>JUGADORES</span>
             </Link>
           </div>
         </div>

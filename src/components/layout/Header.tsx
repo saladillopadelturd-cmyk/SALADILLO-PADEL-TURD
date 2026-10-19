@@ -96,18 +96,20 @@ export default function Header() {
               );
             })}
 
-            {/* Enlace Jugadores en Desktop Navigation */}
-            <Link
-              href="/jugadores"
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all min-h-[38px] ${
-                pathname.startsWith("/jugadores")
-                  ? "bg-gradient-to-r from-blue-600 to-emerald-600 text-white shadow-sm shadow-blue-500/30"
-                  : "text-dark-300 hover:text-white hover:bg-dark-800/80"
-              }`}
-            >
-              <Users className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Jugadores</span>
-            </Link>
+            {/* Enlace Jugadores en Desktop Navigation: Solo visible en modo administrador */}
+            {isAdmin && (
+              <Link
+                href="/admin/jugadores"
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all min-h-[38px] ${
+                  pathname.startsWith("/admin/jugadores") || pathname.startsWith("/jugadores")
+                    ? "bg-gradient-to-r from-blue-600 to-emerald-600 text-white shadow-sm shadow-blue-500/30"
+                    : "text-dark-300 hover:text-white hover:bg-dark-800/80"
+                }`}
+              >
+                <Users className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Jugadores</span>
+              </Link>
+            )}
           </nav>
 
           {/* Header Actions (Visible en versión móvil y desktop) */}
@@ -469,15 +471,17 @@ export default function Header() {
               );
             })}
 
-            {/* Opción Jugadores en menú móvil */}
-            <Link
-              href="/jugadores"
-              onClick={() => setMobileMenuOpen(false)}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold min-h-[48px] text-dark-300 hover:text-white hover:bg-dark-900 transition-all text-left"
-            >
-              <Users className="w-4 h-4 text-emerald-400" />
-              <span>Jugadores</span>
-            </Link>
+            {/* Opción Jugadores en menú móvil: Solo visible en modo administrador */}
+            {isAdmin && (
+              <Link
+                href="/admin/jugadores"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold min-h-[48px] text-dark-300 hover:text-white hover:bg-dark-900 transition-all text-left"
+              >
+                <Users className="w-4 h-4 text-emerald-400" />
+                <span>Jugadores</span>
+              </Link>
+            )}
 
             {/* SOLO SI ES ADMIN: Panel Administrador */}
             {isAdmin && (

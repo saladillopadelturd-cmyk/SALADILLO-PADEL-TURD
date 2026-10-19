@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { usePlayerIdentity } from "@/context/PlayerIdentityContext";
 import { useAuth } from "@/hooks/useAuth";
 import PlayerAvatar from "@/components/player/PlayerAvatar";
@@ -24,8 +25,19 @@ import {
 } from "lucide-react";
 
 export default function JugadoresPage() {
+  const router = useRouter();
   const { player, stats, isIdentified, isLoading, openFicha, clearIdentity } = usePlayerIdentity();
-  const { isAdmin, signOut } = useAuth();
+  const { isAdmin, loading: authLoading, signOut } = useAuth();
+
+  useEffect(() => {
+    if (!authLoading && !isAdmin) {
+      router.replace("/rankings");
+    }
+  }, [isAdmin, authLoading, router]);
+
+  if (!authLoading && !isAdmin) {
+    return null;
+  }
 
 
   const resolvedPhoto =
