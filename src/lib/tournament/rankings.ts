@@ -453,18 +453,17 @@ export async function syncAllTournamentsRankings(supabase: any) {
     }
   }
 
-  // 4. Persistir registros consolidados en la tabla rankings de Supabase
+  // 4. Persistir registros consolidados en la tabla rankings de Supabase mediante upsert atómico
   try {
-    // Limpiar tabla rankings para evitar registros huérfanos o duplicados por torneo/categoría
-    await supabase.from("rankings").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-
     const coupleRows = Array.from(coupleRankingsMap.values()).map((r) => ({
       ...r,
       updated_at: new Date().toISOString(),
     }));
     if (coupleRows.length > 0) {
       for (let i = 0; i < coupleRows.length; i += 100) {
-        await supabase.from("rankings").insert(coupleRows.slice(i, i + 100));
+        await supabase
+          .from("rankings")
+          .upsert(coupleRows.slice(i, i + 100), { onConflict: "ranking_type,couple_key,category" });
       }
     }
 
@@ -474,7 +473,9 @@ export async function syncAllTournamentsRankings(supabase: any) {
     }));
     if (indivRows.length > 0) {
       for (let i = 0; i < indivRows.length; i += 100) {
-        await supabase.from("rankings").insert(indivRows.slice(i, i + 100));
+        await supabase
+          .from("rankings")
+          .upsert(indivRows.slice(i, i + 100), { onConflict: "ranking_type,player_id,category" });
       }
     }
   } catch (err) {

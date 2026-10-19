@@ -67,8 +67,11 @@ export default async function RankingsPage({
   }
 
   try {
-    // 1. Auto-sincronizar siempre para consolidar todos los puntos de torneos disputados
-    await syncAllTournamentsRankings(supabase);
+    // 1. Sincronizar únicamente si la tabla rankings está vacía (p.ej. arranque inicial del sistema)
+    const { count: rankCount } = await supabase.from("rankings").select("*", { count: "exact", head: true });
+    if (!rankCount || rankCount === 0) {
+      await syncAllTournamentsRankings(supabase);
+    }
 
     // 2. Traer jugadores para resolución de nombres, género y categorías oficiales
     const { data: allPlayers } = await supabase.from("players").select("*");
