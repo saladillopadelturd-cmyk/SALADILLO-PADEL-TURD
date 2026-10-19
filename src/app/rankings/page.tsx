@@ -41,11 +41,28 @@ export default async function RankingsPage({
 }) {
   const resolvedParams = searchParams ? await searchParams : {};
   const selectedCategory = resolvedParams.category || "all";
-  const supabase = await createClient();
-
   let coupleRankings: CoupleRankingItem[] = [];
   let individualRankings: IndividualRankingItem[] = [];
   let availableCategories: string[] = [];
+  const supabase = await createClient();
+  let isAdmin = false;
+
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const isRootAdmin = user.email?.toLowerCase() === "matiasvidal11972@gmail.com";
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+      isAdmin = isRootAdmin || profile?.role === "admin" || (profile as unknown as { role: string })?.role === "super_admin";
+    }
+  } catch {
+    // Sesión no autenticada
+  }
 
   try {
     // 1. Auto-sincronizar siempre para consolidar todos los puntos de torneos disputados
@@ -385,7 +402,7 @@ export default async function RankingsPage({
                             />
                             <div className="flex items-center gap-2">
                               <span>{p.name}</span>
-                              {p.isObserved && (
+                              {isAdmin && p.isObserved && (
                                 <span
                                   title="Jugador en observación para ascenso de categoría"
                                   className="text-amber-400 text-[11px] inline-flex items-center gap-1 font-semibold bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30"

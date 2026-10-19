@@ -4,6 +4,7 @@ import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import PlayerAvatar from "./PlayerAvatar";
+import { useAuth } from "@/hooks/useAuth";
 import type { Player } from "@/types/tournament";
 import {
   Trophy,
@@ -37,6 +38,7 @@ export default function PlayerProfileModal({
   onEdit,
   stats,
 }: PlayerProfileModalProps) {
+  const { isAdmin } = useAuth();
   if (!player) return null;
 
   const isFemenino = (player.gender || "").toLowerCase() === "femenino";
@@ -116,7 +118,7 @@ export default function PlayerProfileModal({
                   </span>
                 )}
 
-                {player.is_observed && (
+                {isAdmin && player.is_observed && (
                   <Badge variant="warning" className="font-bold text-[11px] flex items-center gap-1">
                     <Eye className="w-3.5 h-3.5" />
                     Observado (Ascenso)
@@ -131,7 +133,7 @@ export default function PlayerProfileModal({
                 Jugador Oficial • Saladillo Padel Tour
               </p>
 
-              {player.is_observed && (
+              {isAdmin && player.is_observed && (
                 <div className="mt-2 p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-start gap-2 text-xs text-amber-200">
                   <Eye className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
                   <div>

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { usePlayerIdentity } from "@/context/PlayerIdentityContext";
+import { useAuth } from "@/hooks/useAuth";
 import PlayerAvatar from "@/components/player/PlayerAvatar";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
@@ -23,6 +24,7 @@ import {
 
 export default function JugadoresPage() {
   const { player, stats, isIdentified, isLoading, openFicha } = usePlayerIdentity();
+  const { isAdmin } = useAuth();
 
   // Si no está identificado, abrir la ficha automáticamente al entrar a /jugadores
   useEffect(() => {
@@ -112,7 +114,7 @@ export default function JugadoresPage() {
                   <Badge variant="default" className="text-xs">
                     {player.gender || "Masculino"}
                   </Badge>
-                  {player.is_observed && (
+                  {isAdmin && player.is_observed && (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse shadow-sm shadow-amber-500/20">
                       <Eye className="w-3.5 h-3.5 text-amber-400" />
                       JUGADOR OBSERVADO
@@ -129,7 +131,7 @@ export default function JugadoresPage() {
                   </p>
                 </div>
 
-                {player.is_observed && (
+                {isAdmin && player.is_observed && (
                   <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-start gap-2.5 text-xs text-amber-200">
                     <Eye className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
                     <div>

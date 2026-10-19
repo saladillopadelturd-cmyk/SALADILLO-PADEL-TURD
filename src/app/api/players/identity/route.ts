@@ -359,14 +359,21 @@ export async function POST(req: Request) {
       }
     }
 
-    // Determinación del estado observado:
+    // Determinación del estado observado y categoría (Ascensos):
     // Solo el administrador tiene potestad para marcar o desmarcar a un jugador como observado
+    // y para ascender o cambiar la categoría deportiva de un jugador registrado.
     let finalIsObserved = false;
     if (existingPlayer) {
       finalIsObserved = isAdmin && typeof is_observed === "boolean" ? is_observed : !!existingPlayer.is_observed;
     } else {
       finalIsObserved = isAdmin && typeof is_observed === "boolean" ? is_observed : false;
     }
+
+    // Regla de Ascenso de Categoría:
+    // El poder de ascender o cambiar de categoría lo tienen ÚNICAMENTE los administradores del sitio.
+    const finalCategory = existingPlayer
+      ? (isAdmin && category ? category : (existingPlayer.category || "5ta"))
+      : (category || "5ta");
 
     let finalPlayer = null;
 
@@ -377,7 +384,7 @@ export async function POST(req: Request) {
         last_name: cleanLastName,
         phone: cleanPhone,
         gender,
-        category,
+        category: finalCategory,
         is_observed: finalIsObserved,
       };
 
@@ -420,7 +427,7 @@ export async function POST(req: Request) {
         finalPlayer = {
           ...fallbackUpdated,
           gender,
-          category,
+          category: finalCategory,
           photo_url: photo_url || null,
           is_observed: finalIsObserved,
         };
@@ -435,7 +442,7 @@ export async function POST(req: Request) {
         email: cleanEmail,
         phone: cleanPhone,
         gender,
-        category,
+        category: finalCategory,
         photo_url: photo_url || null,
         is_observed: finalIsObserved,
       };
@@ -468,7 +475,7 @@ export async function POST(req: Request) {
         finalPlayer = {
           ...fallbackInserted,
           gender,
-          category,
+          category: finalCategory,
           photo_url: photo_url || null,
           is_observed: finalIsObserved,
         };

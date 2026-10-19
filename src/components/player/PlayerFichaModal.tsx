@@ -188,7 +188,7 @@ export default function PlayerFichaModal() {
         email: email.trim().toLowerCase(),
         phone: phone.trim() || null,
         gender,
-        category,
+        category: isAdmin ? category : (player?.category || category),
         photo_url: uploadedUrl,
         is_observed: isAdmin ? isObserved : !!player?.is_observed,
       });
@@ -389,7 +389,7 @@ export default function PlayerFichaModal() {
                     <Badge variant="default" className="font-semibold text-[11px]">
                       {player.gender || "Masculino"}
                     </Badge>
-                    {player.is_observed && (
+                    {isAdmin && player.is_observed && (
                       <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse shadow-sm shadow-amber-500/20">
                         <Eye className="w-3.5 h-3.5 text-amber-400" />
                         JUGADOR OBSERVADO
@@ -401,7 +401,7 @@ export default function PlayerFichaModal() {
                     {player.first_name} {player.last_name}
                   </h3>
 
-                  {player.is_observed && (
+                  {isAdmin && player.is_observed && (
                     <div className="mt-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-start gap-2.5 text-xs text-amber-200">
                       <Eye className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
                       <div>
@@ -820,20 +820,58 @@ export default function PlayerFichaModal() {
                 </div>
 
                 <div>
-                  <label className="block text-xs sm:text-sm font-semibold text-slate-300 mb-1.5">
-                    Categoría
-                  </label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-dark-950/80 border border-dark-700/80 rounded-xl text-white text-sm focus:outline-none focus:border-emerald-500"
-                  >
-                    {CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat} Categoría
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs sm:text-sm font-semibold text-slate-300">
+                      Categoría Deportiva
+                    </label>
+                    {isAdmin ? (
+                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                        Poder de Ascenso (Admin)
+                      </span>
+                    ) : isIdentified ? (
+                      <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20 flex items-center gap-1">
+                        <Shield className="w-3 h-3" />
+                        Ascenso Exclusivo Admin
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {isAdmin || !isIdentified ? (
+                    <>
+                      <select
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        className={`w-full px-3.5 py-2.5 bg-dark-950/80 rounded-xl text-white text-sm focus:outline-none ${
+                          isAdmin
+                            ? "border border-emerald-500/40 focus:border-emerald-500"
+                            : "border border-dark-700/80 focus:border-emerald-500"
+                        }`}
+                      >
+                        {CATEGORIES.map((cat) => (
+                          <option key={cat} value={cat}>
+                            {cat} Categoría
+                          </option>
+                        ))}
+                      </select>
+                      {!isAdmin && !isIdentified && (
+                        <p className="text-[11px] text-dark-400 mt-1">
+                          Categoría inicial para tu debut. El poder de ascender un jugador únicamente lo tienen los administradores del sitio.
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <div>
+                      <div className="w-full px-3.5 py-2.5 bg-dark-900 border border-dark-700/60 rounded-xl text-white text-sm flex items-center justify-between select-none">
+                        <span className="font-bold text-emerald-400">{player?.category || category} Categoría</span>
+                        <span className="text-[11px] text-dark-400 font-semibold bg-dark-950 px-2 py-0.5 rounded-md border border-dark-800">
+                          Oficial Asignada
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-dark-400 mt-1 leading-relaxed">
+                        El poder de ascender un jugador únicamente lo tienen los administradores del sitio.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
