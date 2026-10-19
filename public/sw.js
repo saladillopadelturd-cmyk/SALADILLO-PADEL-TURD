@@ -1,10 +1,11 @@
-const CACHE_NAME = "spt-v3";
+const CACHE_NAME = "spt-v4";
 const STATIC_ASSETS = [
   "/",
   "/torneos",
   "/rankings",
   "/icon-192x192.png",
   "/icon-512x512.png",
+  "/apple-touch-icon.png",
   "/manifest.webmanifest",
 ];
 

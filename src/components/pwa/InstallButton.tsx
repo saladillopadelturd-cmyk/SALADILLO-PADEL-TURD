@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { Download, X } from "lucide-react";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -77,8 +78,14 @@ export default function InstallButton({ showButton = false }: { showButton?: boo
       {!bannerDismissed && (
         <div className="fixed bottom-4 left-3 right-3 z-50 sm:hidden bg-dark-900/95 backdrop-blur-xl border border-emerald-500/40 p-3 rounded-2xl shadow-2xl shadow-emerald-500/15 flex items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom duration-300">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 via-emerald-500 to-lime-400 flex items-center justify-center flex-shrink-0 shadow-md shadow-emerald-500/20">
-              <span className="text-dark-950 font-black text-xs">SPT</span>
+            <div className="w-9 h-9 rounded-xl bg-black border border-dark-700 overflow-hidden flex items-center justify-center flex-shrink-0 shadow-md">
+              <Image
+                src="/icon-192x192.png"
+                alt="Saladillo Padel Tour"
+                width={36}
+                height={36}
+                className="w-full h-full object-cover"
+              />
             </div>
             <div className="min-w-0">
               <p className="text-xs font-bold text-white truncate">Instalar Saladillo Padel Tour</p>
