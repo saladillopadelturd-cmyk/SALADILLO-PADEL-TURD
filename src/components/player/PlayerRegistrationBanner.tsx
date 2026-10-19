@@ -63,6 +63,9 @@ export default function PlayerRegistrationBanner({
             <p className="text-sm text-dark-300 max-w-2xl leading-relaxed">
               Creá tu perfil en forma autónoma con tu foto de rostro (encuadre cuadrado 1:1), categoría y datos de contacto. Al registrarte con tu correo, el administrador podrá convocarte y asignarte a los torneos oficiales.
             </p>
+            <p className="text-xs sm:text-sm text-emerald-300/90 max-w-2xl leading-relaxed pt-2 border-t border-emerald-500/20">
+              <strong className="text-white">Rankings Oficiales SPT:</strong> Al competir sumás puntos en el <strong className="text-white">Ranking Individual</strong> (que refleja tu desempeño personal acumulado en cada torneo de tu categoría) y en el <strong className="text-white">Ranking por Parejas</strong> (que registra automáticamente los puntos que consigas junto a cada compañero/a como dupla, clave para clasificaciones y definiciones de temporada).
+            </p>
           </div>
           <button
             type="button"

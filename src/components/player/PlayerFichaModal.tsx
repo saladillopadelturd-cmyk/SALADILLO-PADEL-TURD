@@ -350,7 +350,7 @@ export default function PlayerFichaModal() {
             ? "Acceso a Saladillo Padel Tour"
             : isIdentified
             ? "Editar mi Perfil de Usuario"
-            : "Nuevo Usuario - Crear Perfil de Jugador"
+            : "¿Querés participar en los torneos oficiales SPT?"
         }
         size="lg"
       >
@@ -806,17 +806,20 @@ export default function PlayerFichaModal() {
               {/* Información explicativa para el jugador */}
               {!isIdentified ? (
                 <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/70 via-dark-900 to-dark-950 border border-emerald-500/30 text-xs text-dark-200 flex items-start gap-3 shadow-md">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 flex-shrink-0">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 flex-shrink-0 mt-0.5">
                     <UserPlus className="w-5 h-5" />
                   </div>
-                  <div>
-                    <strong className="text-white block font-bold mb-0.5">
-                      Nuevo Usuario Detectado
+                  <div className="space-y-1.5 flex-1">
+                    <strong className="text-white block font-bold text-sm">
+                      ¿Querés participar en los torneos oficiales SPT?
                     </strong>
-                    <span>
+                    <p className="text-dark-300 leading-relaxed">
                       Estás creando tu perfil oficial para la cuenta{" "}
                       <strong className="text-emerald-300 font-mono">{email || loggedEmail}</strong>. Completa tus datos personales y sube tu foto cuadrada para comenzar a competir en el circuito.
-                    </span>
+                    </p>
+                    <p className="text-emerald-300/90 leading-relaxed pt-2 border-t border-emerald-500/20 text-xs">
+                      <strong className="text-white">Rankings Oficiales SPT:</strong> Cada torneo disputado te otorga puntos personales en el <strong className="text-white">Ranking Individual</strong> de tu categoría reglamentaria, y a su vez computa automáticamente los puntos obtenidos en el <strong className="text-white">Ranking por Parejas</strong> con tu compañero/a de dupla para la clasificación a fases finales y torneos Master del circuito.
+                    </p>
                   </div>
                 </div>
               ) : (
