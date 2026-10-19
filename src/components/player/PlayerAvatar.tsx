@@ -7,6 +7,9 @@ import { User } from "lucide-react";
 export type AvatarSize = "xs" | "sm" | "md" | "lg" | "xl" | "2xl";
 
 interface PlayerAvatarProps {
+  id?: string;
+  playerId?: string;
+  email?: string | null;
   photoUrl?: string | null;
   firstName: string;
   lastName: string;
@@ -26,6 +29,9 @@ const SIZE_MAP: Record<AvatarSize, { container: string; text: string; icon: stri
 };
 
 export default function PlayerAvatar({
+  id,
+  playerId,
+  email,
   photoUrl,
   firstName,
   lastName,
@@ -35,15 +41,36 @@ export default function PlayerAvatar({
   showCategoryBorder = false,
 }: PlayerAvatarProps) {
   const [imgError, setImgError] = useState(false);
+  const [localPhotoUrl, setLocalPhotoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (photoUrl) {
+      setLocalPhotoUrl(null);
+      return;
+    }
+    if (typeof window !== "undefined") {
+      const emailKey = email?.toLowerCase().trim();
+      const cached =
+        (emailKey ? localStorage.getItem(`spt_player_photo_${emailKey}`) : null) ||
+        (playerId ? localStorage.getItem(`spt_player_photo_id_${playerId}`) : null) ||
+        (id ? localStorage.getItem(`spt_player_photo_id_${id}`) : null);
+
+      if (cached) {
+        setLocalPhotoUrl(cached);
+      }
+    }
+  }, [photoUrl, email, playerId, id]);
+
+  const rawUrl = photoUrl || localPhotoUrl;
 
   // Sanitizar URL de la foto
   const validPhotoUrl =
-    photoUrl &&
-    typeof photoUrl === "string" &&
-    photoUrl.trim() !== "" &&
-    photoUrl !== "null" &&
-    photoUrl !== "undefined"
-      ? photoUrl.trim()
+    rawUrl &&
+    typeof rawUrl === "string" &&
+    rawUrl.trim() !== "" &&
+    rawUrl !== "null" &&
+    rawUrl !== "undefined"
+      ? rawUrl.trim()
       : null;
 
   // Si la URL de la foto cambia o se actualiza, resetear el estado de error

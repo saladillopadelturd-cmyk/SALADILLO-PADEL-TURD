@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient, verifyIsAdmin } from "@/lib/supabase/admin";
+import { getPlayerPhotosMap, enrichPlayerPhoto } from "@/lib/tournament/player-photos";
 
 export const dynamic = "force-dynamic";
 
@@ -109,21 +110,23 @@ export async function DELETE(request: Request) {
 
 /**
  * GET /api/players
- * Lista los jugadores del padrón.
+ * Lista los jugadores del padrón enriquecidos con su fotografía de perfil oficial.
  */
 export async function GET() {
   try {
     const supabase = await getSupabaseClient();
-    const { data, error } = await supabase
-      .from("players")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const [{ data, error }, photosMap] = await Promise.all([
+      supabase.from("players").select("*").order("created_at", { ascending: false }),
+      getPlayerPhotosMap(),
+    ]);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ players: data || [] });
+    const enrichedPlayers = (data || []).map((p) => enrichPlayerPhoto(p, photosMap));
+
+    return NextResponse.json({ players: enrichedPlayers });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error interno del servidor";
     return NextResponse.json({ error: msg }, { status: 500 });

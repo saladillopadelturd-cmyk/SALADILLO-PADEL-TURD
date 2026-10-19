@@ -25,6 +25,7 @@ import { normalizeScheduledTime } from "@/lib/tournament/scheduler";
 import Bracket from "@/components/tournament/Bracket";
 import ZoneConformationEditor from "@/components/tournament/ZoneConformationEditor";
 import AutoScheduleModal from "@/components/tournament/AutoScheduleModal";
+import PlayerAvatar from "@/components/player/PlayerAvatar";
 import {
   Calendar,
   MapPin,
@@ -1085,12 +1086,46 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                           Cat. {c.player1?.category ?? "?"} + {c.player2?.category ?? "?"}
                         </span>
                       </div>
-                      <h4 className="text-sm font-bold text-white mb-1">
-                        {coupleNamesMap[c.id] || getCoupleLabelWithNumber(c, num)}
-                      </h4>
-                      <p className="text-xs text-dark-400">
-                        {c.player1?.first_name} {c.player1?.last_name} &amp; {c.player2?.first_name} {c.player2?.last_name}
-                      </p>
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="flex -space-x-2 overflow-hidden flex-shrink-0">
+                          {c.player1 && (
+                            <PlayerAvatar
+                              id={c.player1.id}
+                              playerId={c.player1.id}
+                              email={c.player1.email}
+                              photoUrl={c.player1.photo_url || c.player1.avatar_url}
+                              firstName={c.player1.first_name}
+                              lastName={c.player1.last_name}
+                              category={c.player1.category}
+                              size="sm"
+                              showCategoryBorder
+                              className="ring-2 ring-dark-900"
+                            />
+                          )}
+                          {c.player2 && (
+                            <PlayerAvatar
+                              id={c.player2.id}
+                              playerId={c.player2.id}
+                              email={c.player2.email}
+                              photoUrl={c.player2.photo_url || c.player2.avatar_url}
+                              firstName={c.player2.first_name}
+                              lastName={c.player2.last_name}
+                              category={c.player2.category}
+                              size="sm"
+                              showCategoryBorder
+                              className="ring-2 ring-dark-900"
+                            />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-sm font-bold text-white truncate">
+                            {coupleNamesMap[c.id] || getCoupleLabelWithNumber(c, num)}
+                          </h4>
+                          <p className="text-xs text-dark-400 truncate">
+                            {c.player1?.first_name} {c.player1?.last_name} &amp; {c.player2?.first_name} {c.player2?.last_name}
+                          </p>
+                        </div>
+                      </div>
                     </Card>
                   );
                 })}

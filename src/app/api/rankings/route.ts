@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { SPT_POINTS_SCALE, getCoupleKey, syncAllTournamentsRankings } from "@/lib/tournament/rankings";
 import { formatPlayerShortName } from "@/lib/tournament/couples";
+import { getPlayerPhotosMap, enrichPlayerPhoto } from "@/lib/tournament/player-photos";
 
 /**
  * GET /api/rankings?category=5ta&type=individual&sync=true
@@ -89,10 +90,13 @@ export async function GET(request: Request) {
     ...Array.from(indivMap.values()),
   ];
 
-  // Cargar jugadores para hidratar nombres y género de forma 100% segura
-  const { data: allPlayers } = await supabase.from("players").select("*");
+  // Cargar jugadores y fotografías oficiales de Storage
+  const [{ data: allPlayers }, photosMap] = await Promise.all([
+    supabase.from("players").select("*"),
+    getPlayerPhotosMap(),
+  ]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const playersMap = new Map((allPlayers || []).map((p: any) => [p.id, p]));
+  const playersMap = new Map((allPlayers || []).map((p: any) => [p.id, enrichPlayerPhoto(p, photosMap)]));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const enrichedRankings = consolidatedRankings.map((r: any) => {
@@ -115,11 +119,14 @@ export async function GET(request: Request) {
       const p = r.player_id ? playersMap.get(r.player_id) : null;
       const pName = p ? formatPlayerShortName(p) : "Jugador";
       const pGender = p?.gender || "Masculino";
+      const pPhoto = p?.photo_url || p?.avatar_url || (r.player_id ? photosMap.get(r.player_id) : null) || null;
       return {
         ...r,
         category: p?.category || r.category || "General",
         gender: pGender,
         name: pName,
+        photo_url: pPhoto,
+        avatar_url: pPhoto,
         player: p,
       };
     }
@@ -144,18 +151,23 @@ export async function GET(request: Request) {
         return;
       }
 
+      const pPhoto = p.photo_url || p.avatar_url || photosMap.get(p.id) || null;
+      const enrichedP = { ...p, photo_url: pPhoto, avatar_url: pPhoto };
+
       enrichedRankings.push({
         id: `p-${p.id}`,
         ranking_type: "individual",
         player_id: p.id,
         category: p.category || (category && category !== "all" ? category : "General"),
         gender: pGender,
+        photo_url: pPhoto,
+        avatar_url: pPhoto,
         points: 0,
         tournaments_played: 0,
         matches_won: 0,
         matches_lost: 0,
         name: formatPlayerShortName(p),
-        player: p,
+        player: enrichedP,
       });
     });
 

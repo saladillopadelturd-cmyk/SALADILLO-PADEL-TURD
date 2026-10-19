@@ -111,6 +111,9 @@ export default function JugadoresPage() {
               {/* Foto Cuadrada Zona Útil */}
               <div className="flex flex-col items-center gap-2">
                 <PlayerAvatar
+                  id={player.id}
+                  playerId={player.id}
+                  email={player.email}
                   photoUrl={resolvedPhoto}
                   firstName={player.first_name}
                   lastName={player.last_name}

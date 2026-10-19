@@ -7,6 +7,7 @@ import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
 import Modal from "@/components/ui/Modal";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import PlayerAvatar from "@/components/player/PlayerAvatar";
 import { createClient } from "@/lib/supabase/client";
 import type { Couple, Player, Tournament } from "@/types/tournament";
 import {
@@ -636,10 +637,40 @@ function AdminParejasContent() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-white font-medium">
-                        {getPlayerLabel(pair.player1)}
+                        <div className="flex items-center gap-2.5">
+                          {pair.player1 && (
+                            <PlayerAvatar
+                              id={pair.player1.id}
+                              playerId={pair.player1.id}
+                              email={pair.player1.email}
+                              photoUrl={pair.player1.photo_url || pair.player1.avatar_url}
+                              firstName={pair.player1.first_name}
+                              lastName={pair.player1.last_name}
+                              category={pair.player1.category}
+                              size="xs"
+                              showCategoryBorder
+                            />
+                          )}
+                          <span>{getPlayerLabel(pair.player1)}</span>
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-white font-medium">
-                        {getPlayerLabel(pair.player2)}
+                        <div className="flex items-center gap-2.5">
+                          {pair.player2 && (
+                            <PlayerAvatar
+                              id={pair.player2.id}
+                              playerId={pair.player2.id}
+                              email={pair.player2.email}
+                              photoUrl={pair.player2.photo_url || pair.player2.avatar_url}
+                              firstName={pair.player2.first_name}
+                              lastName={pair.player2.last_name}
+                              category={pair.player2.category}
+                              size="xs"
+                              showCategoryBorder
+                            />
+                          )}
+                          <span>{getPlayerLabel(pair.player2)}</span>
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-dark-300">
                         <div className="flex flex-col">

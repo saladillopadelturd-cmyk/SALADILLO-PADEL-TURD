@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getPlayerPhotosMap, enrichPlayerPhoto } from "@/lib/tournament/player-photos";
 
 export const dynamic = "force-dynamic";
 
@@ -60,13 +61,14 @@ async function computePlayerStats(
       .order("points", { ascending: false })
       .order("matches_won", { ascending: false });
 
-    // 2. Traer todos los jugadores para resolver nombres y fotos de parejas
-    const { data: allPlayers } = await supabase
-      .from("players")
-      .select("id, first_name, last_name, photo_url, avatar_url, gender");
+    // 2. Traer todos los jugadores y fotografías oficiales de Storage para resolver nombres y fotos
+    const [{ data: allPlayers }, photosMap] = await Promise.all([
+      supabase.from("players").select("id, first_name, last_name, photo_url, avatar_url, gender"),
+      getPlayerPhotosMap(),
+    ]);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const playersMap = new Map((allPlayers || []).map((p: any) => [p.id, p]));
+    const playersMap = new Map((allPlayers || []).map((p: any) => [p.id, enrichPlayerPhoto(p, photosMap)]));
 
     if (allRankings && allRankings.length > 0) {
       // --- Ranking Individual ---
@@ -272,6 +274,8 @@ export async function GET(req: Request) {
     }
 
     const player = players[0];
+    const photosMap = await getPlayerPhotosMap();
+    const enrichedPlayer = enrichPlayerPhoto(player, photosMap);
 
     // 2. Obtener estadísticas deportivas completas (individual y por parejas)
     const stats = await computePlayerStats(supabase, player.id, player.category || "5ta", player.gender || "Masculino");
@@ -280,7 +284,7 @@ export async function GET(req: Request) {
       success: true,
       identified: true,
       isAdmin: isAdminUser,
-      player,
+      player: enrichedPlayer,
       stats,
     });
   } catch (err: unknown) {

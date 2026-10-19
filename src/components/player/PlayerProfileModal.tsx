@@ -68,6 +68,9 @@ export default function PlayerProfileModal({
           {/* Zona útil cuadrada de la foto del jugador */}
           <div className="relative group">
             <PlayerAvatar
+              id={player.id}
+              playerId={player.id}
+              email={player.email}
               photoUrl={profilePhoto}
               firstName={player.first_name}
               lastName={player.last_name}

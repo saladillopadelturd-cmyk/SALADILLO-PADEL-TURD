@@ -73,13 +73,32 @@ export default function AdminJugadoresPage() {
   const loadPlayers = useCallback(async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("players")
-        .select("*")
-        .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      if (data) setPlayers(data);
+      // Cargar jugadores a través de la API que enriquece automáticamente con fotos desde Supabase Storage
+      try {
+        const res = await fetch("/api/players");
+        if (res.ok) {
+          const json = await res.json();
+          if (Array.isArray(json.players)) {
+            setPlayers(json.players);
+          }
+        } else {
+          // Fallback directo a Supabase
+          const { data, error } = await supabase
+            .from("players")
+            .select("*")
+            .order("created_at", { ascending: false });
+          if (error) throw error;
+          if (data) setPlayers(data);
+        }
+      } catch {
+        const { data, error } = await supabase
+          .from("players")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (error) throw error;
+        if (data) setPlayers(data);
+      }
 
       // Traer estadísticas individuales para la ficha de perfil
       try {
@@ -604,6 +623,9 @@ export default function AdminJugadoresPage() {
                             title="Ver perfil oficial del jugador"
                           >
                             <PlayerAvatar
+                              id={player.id}
+                              playerId={player.id}
+                              email={player.email}
                               photoUrl={player.photo_url || player.avatar_url}
                               firstName={player.first_name}
                               lastName={player.last_name}

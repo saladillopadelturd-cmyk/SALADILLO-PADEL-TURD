@@ -184,6 +184,9 @@ export default function Header() {
                     title="Ver tu perfil de jugador"
                   >
                     <PlayerAvatar
+                      id={player.id}
+                      playerId={player.id}
+                      email={player.email}
                       photoUrl={headerPlayerPhoto}
                       firstName={player.first_name}
                       lastName={player.last_name}
@@ -214,6 +217,9 @@ export default function Header() {
                 >
                   <div className="relative group-hover:scale-105 transition-transform flex-shrink-0">
                     <PlayerAvatar
+                      id={player?.id}
+                      playerId={player?.id}
+                      email={player?.email}
                       photoUrl={headerPlayerPhoto}
                       firstName={player?.first_name || "Usuario"}
                       lastName={player?.last_name || ""}
@@ -360,6 +366,9 @@ export default function Header() {
                   className="flex items-center gap-3 cursor-pointer flex-1 min-w-0"
                 >
                   <PlayerAvatar
+                    id={player?.id}
+                    playerId={player?.id}
+                    email={player?.email}
                     photoUrl={headerPlayerPhoto}
                     firstName={player?.first_name || "Usuario"}
                     lastName={player?.last_name || ""}

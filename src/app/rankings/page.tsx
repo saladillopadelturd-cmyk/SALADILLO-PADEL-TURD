@@ -4,6 +4,7 @@ import PlayerAvatar from "@/components/player/PlayerAvatar";
 import { createClient } from "@/lib/supabase/server";
 import { formatPlayerShortName } from "@/lib/tournament/couples";
 import { syncAllTournamentsRankings } from "@/lib/tournament/rankings";
+import { getPlayerPhotosMap } from "@/lib/tournament/player-photos";
 import { Trophy, Medal, User, Sparkles } from "lucide-react";
 
 export const revalidate = 0;
@@ -73,8 +74,11 @@ export default async function RankingsPage({
       await syncAllTournamentsRankings(supabase);
     }
 
-    // 2. Traer jugadores para resolución de nombres, género y categorías oficiales
-    const { data: allPlayers } = await supabase.from("players").select("*");
+    // 2. Traer jugadores y fotografías de perfil para resolución completa
+    const [{ data: allPlayers }, photosMap] = await Promise.all([
+      supabase.from("players").select("*"),
+      getPlayerPhotosMap(),
+    ]);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const playersMap = new Map((allPlayers || []).map((p: any) => [p.id, p]));
 
@@ -115,7 +119,7 @@ export default async function RankingsPage({
             firstName: p?.first_name || "J",
             lastName: p?.last_name || "",
             gender: playerGender,
-            photoUrl: p?.photo_url || p?.avatar_url || null,
+            photoUrl: p?.photo_url || p?.avatar_url || (r.player_id ? photosMap.get(r.player_id) : null) || null,
             category: p?.category || playerCategory,
             tournaments: r.tournaments_played || 0,
             points: r.points || 0,
@@ -147,7 +151,7 @@ export default async function RankingsPage({
         firstName: p.first_name || "J",
         lastName: p.last_name || "",
         gender: pGender,
-        photoUrl: p.photo_url || p.avatar_url || null,
+        photoUrl: p.photo_url || p.avatar_url || photosMap.get(p.id) || null,
         category: p.category || "General",
         tournaments: 0,
         points: 0,
@@ -441,6 +445,8 @@ export default async function RankingsPage({
                     <td className="px-6 py-4 text-white font-bold text-sm sm:text-base">
                       <div className="flex items-center gap-3">
                         <PlayerAvatar
+                          id={p.playerId}
+                          playerId={p.playerId}
                           photoUrl={p.photoUrl}
                           firstName={p.firstName}
                           lastName={p.lastName}

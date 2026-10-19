@@ -428,6 +428,9 @@ export default function PlayerFichaModal() {
                 <div className="flex flex-col items-center gap-2">
                   <div className="relative group">
                     <PlayerAvatar
+                      id={player.id}
+                      playerId={player.id}
+                      email={player.email}
                       photoUrl={resolvedPhotoUrl}
                       firstName={player.first_name}
                       lastName={player.last_name}
@@ -844,6 +847,9 @@ export default function PlayerFichaModal() {
                   {/* Vista previa en formato cuadrado estricto */}
                   <div className="relative group">
                     <PlayerAvatar
+                      id={player?.id}
+                      playerId={player?.id}
+                      email={email || player?.email}
                       photoUrl={resolvedPhotoUrl}
                       firstName={firstName || "P"}
                       lastName={lastName || ""}
