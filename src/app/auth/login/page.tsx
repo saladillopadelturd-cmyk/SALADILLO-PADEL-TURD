@@ -104,7 +104,7 @@ export default function LoginPage() {
 
           {/* Google OAuth */}
           <div className="mb-6">
-            <GoogleSignInButton />
+            <GoogleSignInButton redirectTo="/admin" />
           </div>
 
           <div className="relative flex py-2 items-center mb-6">

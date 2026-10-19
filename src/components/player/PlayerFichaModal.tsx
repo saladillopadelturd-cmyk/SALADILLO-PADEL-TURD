@@ -7,12 +7,14 @@ import Input from "@/components/ui/Input";
 import Badge from "@/components/ui/Badge";
 import PlayerAvatar from "./PlayerAvatar";
 import PhotoCropModal from "./PhotoCropModal";
+import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import { usePlayerIdentity } from "@/context/PlayerIdentityContext";
 import { useAuth } from "@/hooks/useAuth";
 import type { Player } from "@/types/tournament";
 import {
   User,
   Users,
+  UserPlus,
   Mail,
   Phone,
   Camera,
@@ -41,6 +43,7 @@ export default function PlayerFichaModal() {
     stats,
     isIdentified,
     isLoading,
+    isNewUser,
     loggedEmail,
     isFichaOpen,
     closeFicha,
@@ -77,6 +80,7 @@ export default function PlayerFichaModal() {
   // Inicializar formulario al abrir o cuando cambia el estado de identificación
   useEffect(() => {
     if (isIdentified && player) {
+      // Usuario con perfil ya creado
       setMode("view");
       setFirstName(player.first_name || "");
       setLastName(player.last_name || "");
@@ -92,7 +96,8 @@ export default function PlayerFichaModal() {
           : null;
 
       setPhotoUrl(player.photo_url || player.avatar_url || localCachedPhoto || null);
-    } else {
+    } else if (loggedEmail || isNewUser) {
+      // Cuenta de correo determinada en el navegador pero es un NUEVO USUARIO sin perfil creado
       setMode("edit");
       setFirstName("");
       setLastName("");
@@ -103,9 +108,21 @@ export default function PlayerFichaModal() {
       setIsObserved(false);
       setPhotoUrl(null);
       setPhotoBlob(null);
+    } else {
+      // Sin cuenta de correo logueada en el navegador: Modo de determinación de cuenta
+      setMode("lookup");
+      setFirstName("");
+      setLastName("");
+      setEmail("");
+      setPhone("");
+      setGender("Masculino");
+      setCategory("5ta");
+      setIsObserved(false);
+      setPhotoUrl(null);
+      setPhotoBlob(null);
     }
     setFeedback(null);
-  }, [isIdentified, player, loggedEmail, isFichaOpen]);
+  }, [isIdentified, player, loggedEmail, isNewUser, isFichaOpen]);
 
   // Selección de foto
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -210,25 +227,35 @@ export default function PlayerFichaModal() {
     }
   };
 
-  // Buscar ficha por correo
+  // Determinar si se trata de un nuevo usuario o de un usuario que ya tiene perfil creado
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
     setFeedback(null);
 
-    if (!lookupEmail.trim() || !lookupEmail.includes("@")) {
+    const cleanInput = lookupEmail.trim().toLowerCase();
+    if (!cleanInput || !cleanInput.includes("@")) {
       setFeedback({ type: "error", message: "Ingresa un correo electrónico válido." });
       return;
     }
 
     setSubmitting(true);
     try {
-      const res = await identifyWithEmail(lookupEmail.trim().toLowerCase());
-      if (res.success && res.player) {
+      const res = await identifyWithEmail(cleanInput);
+      if (res.identified && res.player) {
+        // Usuario que ya tiene su perfil creado
         setFeedback({
           type: "success",
-          message: `¡Bienvenido de nuevo, ${res.player.first_name}! Tu identidad ha sido activada en este dispositivo.`,
+          message: `¡Perfil encontrado! Bienvenido/a de nuevo, ${res.player.first_name}. Tu identidad ha sido activada en este navegador.`,
         });
         setMode("view");
+      } else if (res.isNew) {
+        // Se determina que es un NUEVO USUARIO
+        setEmail(cleanInput);
+        setFeedback({
+          type: "success",
+          message: `¡Hola! Detectamos que eres un nuevo usuario. Completa tus datos para crear tu perfil oficial de jugador.`,
+        });
+        setMode("edit");
       } else {
         setFeedback({
           type: "error",
@@ -282,10 +309,10 @@ export default function PlayerFichaModal() {
           mode === "view"
             ? "Ficha Oficial de Jugador"
             : mode === "lookup"
-            ? "Identifícate con tu Correo"
+            ? "Acceso a Saladillo Padel Tour"
             : isIdentified
             ? "Editar mi Ficha de Jugador"
-            : "Cargar Ficha de Jugador"
+            : "Nuevo Usuario - Crear Perfil de Jugador"
         }
         size="lg"
       >
@@ -597,40 +624,92 @@ export default function PlayerFichaModal() {
             </div>
           )}
 
-          {/* VISTA 2: Buscar Ficha por Correo Existente */}
+          {/* VISTA 2: Determinar cuenta de correo / Usuario existente o Nuevo usuario */}
           {mode === "lookup" && (
-            <div className="space-y-5">
-              <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs sm:text-sm text-blue-300 flex items-start gap-2.5">
-                <Search className="w-4 h-4 flex-shrink-0 text-blue-400 mt-0.5" />
-                <p>
-                  Ingresa el correo electrónico que utilizaste al registrarte. Si coincide con un jugador en nuestra base de datos, tu identidad y foto se activarán inmediatamente en este navegador.
+            <div className="space-y-6">
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-950/60 via-dark-900 to-dark-950 border border-blue-500/30 text-xs sm:text-sm text-blue-200 flex items-start gap-3 shadow-lg">
+                <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400 flex-shrink-0">
+                  <Search className="w-4 h-4" />
+                </div>
+                <div>
+                  <strong className="text-white block font-bold mb-0.5">
+                    Determinación de Cuenta y Perfil
+                  </strong>
+                  <p className="text-xs text-blue-200/90 leading-relaxed">
+                    Identificaremos la cuenta de correo con la que accedes en este navegador para determinar si ya tienes tu perfil oficial de jugador creado o si se trata de un nuevo usuario.
+                  </p>
+                </div>
+              </div>
+
+              {/* Opción 1: Acceso rápido con Google */}
+              <div className="space-y-2">
+                <GoogleSignInButton
+                  redirectTo="/"
+                  label="Continuar con mi cuenta de Google"
+                />
+                <p className="text-[11px] text-center text-dark-400">
+                  Detecta de forma instantánea la cuenta de correo activa en tu navegador.
                 </p>
               </div>
 
+              {/* Separador */}
+              <div className="relative flex py-1 items-center">
+                <div className="flex-grow border-t border-dark-800"></div>
+                <span className="flex-shrink mx-4 text-[11px] font-bold uppercase tracking-wider text-dark-500">
+                  o ingresa tu correo electrónico
+                </span>
+                <div className="flex-grow border-t border-dark-800"></div>
+              </div>
+
+              {/* Opción 2: Formulario por correo */}
               <form onSubmit={handleLookup} className="space-y-4">
                 <Input
                   label="Correo Electrónico (Nombre de Usuario)"
                   type="email"
                   required
-                  placeholder="ejemplo@padel.com"
+                  placeholder="tu_correo@ejemplo.com"
                   value={lookupEmail}
                   onChange={(e) => setLookupEmail(e.target.value)}
                 />
 
-                <div className="flex items-center justify-between pt-2">
+                <Button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full text-xs font-bold py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-600/20"
+                >
+                  {submitting ? "Determinando perfil..." : "Verificar Cuenta y Continuar"}
+                </Button>
+              </form>
+
+              {/* Pie de navegación */}
+              <div className="pt-3 border-t border-dark-800 flex items-center justify-between text-xs">
+                {isIdentified ? (
                   <button
                     type="button"
-                    onClick={() => setMode(isIdentified ? "view" : "edit")}
-                    className="text-xs text-dark-400 hover:text-white transition-colors"
+                    onClick={() => setMode("view")}
+                    className="text-dark-400 hover:text-white transition-colors cursor-pointer"
                   >
-                    ← Volver
+                    ← Volver a mi Ficha
                   </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof window !== "undefined") {
+                        sessionStorage.setItem("spt_auth_dismissed", "true");
+                      }
+                      closeFicha();
+                    }}
+                    className="text-dark-400 hover:text-slate-300 transition-colors cursor-pointer"
+                  >
+                    Continuar como espectador
+                  </button>
+                )}
 
-                  <Button type="submit" disabled={submitting} className="text-xs font-bold">
-                    {submitting ? "Buscando..." : "Verificar e Identificarme"}
-                  </Button>
-                </div>
-              </form>
+                <span className="text-[11px] text-dark-500 font-medium">
+                  Saladillo Padel Tour Oficial
+                </span>
+              </div>
             </div>
           )}
 
@@ -638,16 +717,32 @@ export default function PlayerFichaModal() {
           {mode === "edit" && (
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Información explicativa para el jugador */}
-              <div className="p-3.5 rounded-xl bg-dark-950/70 border border-emerald-500/20 text-xs text-dark-300 flex items-start gap-2.5">
-                <Sparkles className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                <div>
-                  <strong className="text-white block mb-0.5">Ficha Oficial del Jugador</strong>
-                  <span>
-                    El correo electrónico que ingreses funcionará como tu{" "}
-                    <strong className="text-emerald-300">nombre de usuario</strong> para identificarte e iniciar sesión en el sistema.
-                  </span>
+              {!isIdentified ? (
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/70 via-dark-900 to-dark-950 border border-emerald-500/30 text-xs text-dark-200 flex items-start gap-3 shadow-md">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 flex-shrink-0">
+                    <UserPlus className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <strong className="text-white block font-bold mb-0.5">
+                      Nuevo Usuario Detectado
+                    </strong>
+                    <span>
+                      Estás creando tu perfil oficial para la cuenta{" "}
+                      <strong className="text-emerald-300 font-mono">{email || loggedEmail}</strong>. Completa tus datos personales y sube tu foto cuadrada para comenzar a competir en el circuito.
+                    </span>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="p-3.5 rounded-xl bg-dark-950/70 border border-emerald-500/20 text-xs text-dark-300 flex items-start gap-2.5">
+                  <Sparkles className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="text-white block mb-0.5">Editar Ficha de Jugador</strong>
+                    <span>
+                      Modifica tus datos de contacto o actualiza tu foto de perfil cuadrada (1:1).
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Subida y Recorte Cuadrado de Foto */}
               <div className="p-4 rounded-2xl bg-dark-950/80 border border-dark-800 space-y-4">
@@ -904,14 +999,14 @@ export default function PlayerFichaModal() {
                   <button
                     type="button"
                     onClick={() => {
-                      setLookupEmail(email);
+                      setLookupEmail(email || loggedEmail || "");
                       setMode("lookup");
                       setFeedback(null);
                     }}
                     className="text-xs text-primary-400 hover:text-primary-300 transition-colors inline-flex items-center gap-1 cursor-pointer"
                   >
                     <Search className="w-3.5 h-3.5" />
-                    <span>¿Ya tienes ficha registrada? Identifícate con tu correo</span>
+                    <span>¿Ingresar con otra cuenta o verificar perfil existente?</span>
                   </button>
                 </div>
               )}
@@ -921,18 +1016,31 @@ export default function PlayerFichaModal() {
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={isIdentified ? () => setMode("view") : closeFicha}
+                  onClick={() => {
+                    if (!isIdentified && typeof window !== "undefined") {
+                      sessionStorage.setItem("spt_auth_dismissed", "true");
+                    }
+                    if (isIdentified) {
+                      setMode("view");
+                    } else {
+                      closeFicha();
+                    }
+                  }}
                   className="text-xs"
                 >
-                  Cancelar
+                  {isIdentified ? "Cancelar" : "Continuar como espectador"}
                 </Button>
 
                 <Button
                   type="submit"
                   disabled={submitting}
-                  className="text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white"
+                  className="text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20"
                 >
-                  {submitting ? "Guardando..." : "Guardar Ficha e Identificarme"}
+                  {submitting
+                    ? "Guardando..."
+                    : isIdentified
+                    ? "Guardar Cambios"
+                    : "Crear Mi Perfil Oficial de Jugador"}
                 </Button>
               </div>
             </form>

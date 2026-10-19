@@ -61,11 +61,18 @@ interface PlayerIdentityContextType {
   stats: PlayerStats | null;
   isIdentified: boolean;
   isLoading: boolean;
+  isNewUser: boolean;
   loggedEmail: string | null;
   isFichaOpen: boolean;
   openFicha: () => void;
   closeFicha: () => void;
-  identifyWithEmail: (email: string) => Promise<{ success: boolean; player?: Player; message?: string }>;
+  identifyWithEmail: (email: string) => Promise<{
+    success: boolean;
+    identified?: boolean;
+    isNew?: boolean;
+    player?: Player;
+    message?: string;
+  }>;
   saveFicha: (formData: FichaFormData) => Promise<{ success: boolean; player?: Player; message?: string }>;
   clearIdentity: () => Promise<void>;
   refreshIdentity: () => Promise<void>;
@@ -79,6 +86,7 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
   const [player, setPlayer] = useState<Player | null>(null);
   const [stats, setStats] = useState<PlayerStats | null>(null);
   const [isIdentified, setIsIdentified] = useState(false);
+  const [isNewUser, setIsNewUser] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loggedEmail, setLoggedEmail] = useState<string | null>(null);
   const [isFichaOpen, setIsFichaOpen] = useState(false);
@@ -88,63 +96,83 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
   const openFicha = useCallback(() => setIsFichaOpen(true), []);
   const closeFicha = useCallback(() => setIsFichaOpen(false), []);
 
-  // Función para consultar la API y resolver la identidad por email
-  const resolveIdentityByEmail = useCallback(async (email: string): Promise<{ success: boolean; player?: Player; message?: string }> => {
-    if (!email || !email.trim()) {
-      return { success: false, message: "Correo no válido" };
-    }
-
-    const cleanEmail = email.trim().toLowerCase();
-
-    try {
-      const res = await fetch(`/api/players/identity?email=${encodeURIComponent(cleanEmail)}`);
-      const data = await res.json();
-
-      if (data.success && data.identified && data.player) {
-        const resolvedPlayer: Player = { ...data.player };
-
-        // Preservar foto de perfil desde almacenamiento local si la BD remota aún no la devuelve
-        if (typeof window !== "undefined") {
-          const localPhoto = localStorage.getItem(`spt_player_photo_${cleanEmail}`);
-          if (!resolvedPlayer.photo_url && localPhoto) {
-            resolvedPlayer.photo_url = localPhoto;
-          } else if (resolvedPlayer.photo_url) {
-            localStorage.setItem(`spt_player_photo_${cleanEmail}`, resolvedPlayer.photo_url);
-          }
-          localStorage.setItem(LOCAL_STORAGE_KEY, cleanEmail);
-        }
-
-        setPlayer(resolvedPlayer);
-        setStats(data.stats || null);
-        setIsIdentified(true);
-        setLoggedEmail(cleanEmail);
-
-        return { success: true, player: resolvedPlayer };
-      } else {
-        // Correo no encontrado en la base de datos de jugadores
-        setIsIdentified(false);
-        setPlayer(null);
-        setStats(null);
-        setLoggedEmail(cleanEmail);
-        return {
-          success: false,
-          message: "No se encontró ningún jugador registrado con este correo.",
-        };
+  // Función para consultar la API y determinar si se trata de un nuevo usuario o un perfil existente
+  const resolveIdentityByEmail = useCallback(
+    async (
+      email: string
+    ): Promise<{
+      success: boolean;
+      identified: boolean;
+      isNew: boolean;
+      player?: Player;
+      message?: string;
+    }> => {
+      if (!email || !email.trim()) {
+        return { success: false, identified: false, isNew: false, message: "Correo no válido" };
       }
-    } catch (err: unknown) {
-      console.error("Error al resolver identidad del jugador:", err);
-      const msg = err instanceof Error ? err.message : "Error de conexión";
-      return { success: false, message: msg };
-    }
-  }, []);
 
-  // Verificar el correo logueado en el navegador al montar
+      const cleanEmail = email.trim().toLowerCase();
+
+      try {
+        const res = await fetch(`/api/players/identity?email=${encodeURIComponent(cleanEmail)}`);
+        const data = await res.json();
+
+        if (data.success && data.identified && data.player) {
+          const resolvedPlayer: Player = { ...data.player };
+
+          // Preservar foto de perfil desde almacenamiento local si la BD remota aún no la devuelve
+          if (typeof window !== "undefined") {
+            const localPhoto = localStorage.getItem(`spt_player_photo_${cleanEmail}`);
+            if (!resolvedPlayer.photo_url && localPhoto) {
+              resolvedPlayer.photo_url = localPhoto;
+            } else if (resolvedPlayer.photo_url) {
+              localStorage.setItem(`spt_player_photo_${cleanEmail}`, resolvedPlayer.photo_url);
+            }
+            localStorage.setItem(LOCAL_STORAGE_KEY, cleanEmail);
+          }
+
+          setPlayer(resolvedPlayer);
+          setStats(data.stats || null);
+          setIsIdentified(true);
+          setIsNewUser(false);
+          setLoggedEmail(cleanEmail);
+
+          return { success: true, identified: true, isNew: false, player: resolvedPlayer };
+        } else {
+          // Correo determinado en el navegador pero NO tiene perfil creado -> NUEVO USUARIO
+          setIsIdentified(false);
+          setPlayer(null);
+          setStats(null);
+          setIsNewUser(true);
+          setLoggedEmail(cleanEmail);
+
+          if (typeof window !== "undefined") {
+            localStorage.setItem(LOCAL_STORAGE_KEY, cleanEmail);
+          }
+
+          return {
+            success: true,
+            identified: false,
+            isNew: true,
+            message: "Nuevo usuario detectado. Te invitamos a crear tu perfil oficial de jugador.",
+          };
+        }
+      } catch (err: unknown) {
+        console.error("Error al resolver identidad del jugador:", err);
+        const msg = err instanceof Error ? err.message : "Error de conexión";
+        return { success: false, identified: false, isNew: false, message: msg };
+      }
+    },
+    []
+  );
+
+  // Determinar la cuenta de correo logueada en el navegador al ingresar a la app (desktop y móvil)
   const checkBrowserIdentity = useCallback(async () => {
     setIsLoading(true);
     try {
       let candidateEmail: string | null = null;
 
-      // 1. Verificar si hay un usuario de Supabase Auth en el navegador
+      // 1. Determinar si hay una sesión activa de Supabase Auth en el navegador
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -153,7 +181,7 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
         candidateEmail = user.email;
       }
 
-      // 2. Si no hay auth user, verificar localStorage del dispositivo
+      // 2. Si no hay auth user, determinar si hay un correo guardado en este navegador/dispositivo
       if (!candidateEmail && typeof window !== "undefined") {
         const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
         if (stored && stored.trim()) {
@@ -161,14 +189,29 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // 3. Si hay correo candidato, verificar si coincide con algún jugador en BD
+      // 3. Evaluar identidad y determinar si es usuario existente o nuevo usuario
       if (candidateEmail) {
-        await resolveIdentityByEmail(candidateEmail);
+        const res = await resolveIdentityByEmail(candidateEmail);
+        if (res.isNew) {
+          // Es un nuevo usuario con cuenta de correo en el navegador:
+          // Inmediatamente abrimos la ficha para que complete su perfil
+          setIsFichaOpen(true);
+        }
       } else {
+        // NO hay cuenta de correo logueada en el navegador (primer ingreso en desktop o móvil)
         setIsIdentified(false);
         setPlayer(null);
         setStats(null);
         setLoggedEmail(null);
+        setIsNewUser(false);
+
+        // Si el usuario aún no determinó su cuenta en esta sesión, abrir el modal inicial de identificación
+        if (typeof window !== "undefined") {
+          const dismissed = sessionStorage.getItem("spt_auth_dismissed");
+          if (!dismissed) {
+            setIsFichaOpen(true);
+          }
+        }
       }
     } catch (err) {
       console.warn("Error comprobando identidad del navegador:", err);
@@ -186,7 +229,11 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const authEmail = session?.user?.email;
       if (authEmail) {
-        await resolveIdentityByEmail(authEmail);
+        const res = await resolveIdentityByEmail(authEmail);
+        if (res.isNew) {
+          setIsNewUser(true);
+          setIsFichaOpen(true);
+        }
       }
     });
 
@@ -235,6 +282,7 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
 
       setPlayer(savedPlayer);
       setIsIdentified(true);
+      setIsNewUser(false);
       setLoggedEmail(cleanEmail);
 
       if (typeof window !== "undefined") {
@@ -262,10 +310,12 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
   const clearIdentity = async () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem(LOCAL_STORAGE_KEY);
+      sessionStorage.removeItem("spt_auth_dismissed");
     }
     setPlayer(null);
     setStats(null);
     setIsIdentified(false);
+    setIsNewUser(false);
     setLoggedEmail(null);
   };
 
@@ -284,6 +334,7 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
         stats,
         isIdentified,
         isLoading,
+        isNewUser,
         loggedEmail,
         isFichaOpen,
         openFicha,
