@@ -13,7 +13,7 @@ export default function PlayerRegistrationBanner({
   variant = "home",
   className = "",
 }: PlayerRegistrationBannerProps) {
-  const { isIdentified, isLoading, openFicha } = usePlayerIdentity();
+  const { isIdentified, isLoading, openCreateProfile } = usePlayerIdentity();
 
   // Si está verificando identidad o si ya hay un jugador logueado identificado en la base de datos, NO APARECE
   if (isLoading || isIdentified) {
@@ -38,7 +38,7 @@ export default function PlayerRegistrationBanner({
         </div>
         <button
           type="button"
-          onClick={openFicha}
+          onClick={openCreateProfile}
           className="w-full sm:w-auto text-center px-4 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold text-xs transition-all whitespace-nowrap active:scale-95 cursor-pointer"
         >
           Crear Mi Perfil
@@ -66,7 +66,7 @@ export default function PlayerRegistrationBanner({
           </div>
           <button
             type="button"
-            onClick={openFicha}
+            onClick={openCreateProfile}
             className="inline-flex items-center gap-2 px-6 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-dark-950 font-black text-sm rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer whitespace-nowrap"
           >
             <Users className="w-4 h-4" />

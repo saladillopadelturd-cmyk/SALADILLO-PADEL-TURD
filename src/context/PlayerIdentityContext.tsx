@@ -64,11 +64,15 @@ interface PlayerIdentityContextType {
   isNewUser: boolean;
   loggedEmail: string | null;
   isFichaOpen: boolean;
-  openFicha: () => void;
+  fichaInitialMode?: "view" | "edit" | "lookup" | null;
+  openFicha: (mode?: "view" | "edit" | "lookup" | unknown) => void;
+  openLogin: () => void;
+  openCreateProfile: () => void;
   closeFicha: () => void;
   identifyWithEmail: (email: string) => Promise<{
     success: boolean;
     identified?: boolean;
+    isAdmin?: boolean;
     isNew?: boolean;
     player?: Player;
     message?: string;
@@ -91,11 +95,33 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [loggedEmail, setLoggedEmail] = useState<string | null>(null);
   const [isFichaOpen, setIsFichaOpen] = useState(false);
+  const [fichaInitialMode, setFichaInitialMode] = useState<"view" | "edit" | "lookup" | null>(null);
 
   const supabase = createClient();
 
-  const openFicha = useCallback(() => setIsFichaOpen(true), []);
-  const closeFicha = useCallback(() => setIsFichaOpen(false), []);
+  const openFicha = useCallback((mode?: "view" | "edit" | "lookup" | unknown) => {
+    if (typeof mode === "string" && (mode === "view" || mode === "edit" || mode === "lookup")) {
+      setFichaInitialMode(mode);
+    } else {
+      setFichaInitialMode(null);
+    }
+    setIsFichaOpen(true);
+  }, []);
+
+  const openLogin = useCallback(() => {
+    setFichaInitialMode("lookup");
+    setIsFichaOpen(true);
+  }, []);
+
+  const openCreateProfile = useCallback(() => {
+    setFichaInitialMode("edit");
+    setIsFichaOpen(true);
+  }, []);
+
+  const closeFicha = useCallback(() => {
+    setIsFichaOpen(false);
+    setFichaInitialMode(null);
+  }, []);
 
   // Función para consultar la API y determinar si se trata de un nuevo usuario o un perfil existente
   const resolveIdentityByEmail = useCallback(
@@ -104,6 +130,7 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
     ): Promise<{
       success: boolean;
       identified: boolean;
+      isAdmin?: boolean;
       isNew: boolean;
       player?: Player;
       message?: string;
@@ -117,6 +144,7 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
       try {
         const res = await fetch(`/api/players/identity?email=${encodeURIComponent(cleanEmail)}`);
         const data = await res.json();
+        const isAdmin = Boolean(data.isAdmin);
 
         if (data.success && data.identified && data.player) {
           const resolvedPlayer: Player = { ...data.player };
@@ -138,9 +166,9 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
           setIsNewUser(false);
           setLoggedEmail(cleanEmail);
 
-          return { success: true, identified: true, isNew: false, player: resolvedPlayer };
+          return { success: true, identified: true, isAdmin, isNew: false, player: resolvedPlayer };
         } else {
-          // Correo determinado en el navegador pero NO tiene perfil creado -> NUEVO USUARIO
+          // Correo determinado pero NO tiene perfil creado
           setIsIdentified(false);
           setPlayer(null);
           setStats(null);
@@ -154,8 +182,11 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
           return {
             success: true,
             identified: false,
+            isAdmin,
             isNew: true,
-            message: "Nuevo usuario detectado. Te invitamos a crear tu perfil oficial de jugador.",
+            message: isAdmin
+              ? "Cuenta de Administrador detectada."
+              : "Nuevo usuario detectado. Te invitamos a crear tu perfil oficial de jugador.",
           };
         }
       } catch (err: unknown) {
@@ -385,8 +416,11 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
         isLoading,
         isNewUser,
         loggedEmail,
+        fichaInitialMode,
         isFichaOpen,
         openFicha,
+        openLogin,
+        openCreateProfile,
         closeFicha,
         identifyWithEmail,
         saveFicha,

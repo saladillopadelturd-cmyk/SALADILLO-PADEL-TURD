@@ -1,15 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import Button from "@/components/ui/Button";
 import { Sparkles, AlertCircle, CheckCircle2 } from "lucide-react";
 
-export default function LoginPage() {
-  const [email, setEmail] = useState("");
+function LoginForm() {
+  const searchParams = useSearchParams();
+  const [email, setEmail] = useState(searchParams.get("email") || "");
   const [password, setPassword] = useState("");
   const [isMagicLink, setIsMagicLink] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -17,6 +18,11 @@ export default function LoginPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const router = useRouter();
   const supabase = createClient();
+
+  useEffect(() => {
+    const p = searchParams.get("email");
+    if (p) setEmail(p);
+  }, [searchParams]);
 
   const handleEmailPasswordSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -190,5 +196,19 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center text-dark-400">
+          Cargando...
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

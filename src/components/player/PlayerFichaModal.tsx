@@ -45,6 +45,7 @@ export default function PlayerFichaModal() {
     isLoading,
     isNewUser,
     loggedEmail,
+    fichaInitialMode,
     isFichaOpen,
     closeFicha,
     saveFicha,
@@ -81,7 +82,11 @@ export default function PlayerFichaModal() {
   useEffect(() => {
     if (isIdentified && player) {
       // Usuario con perfil ya creado
-      setMode("view");
+      if (fichaInitialMode === "edit") {
+        setMode("edit");
+      } else {
+        setMode("view");
+      }
       setFirstName(player.first_name || "");
       setLastName(player.last_name || "");
       setEmail(player.email || loggedEmail || "");
@@ -96,8 +101,21 @@ export default function PlayerFichaModal() {
           : null;
 
       setPhotoUrl(player.photo_url || player.avatar_url || localCachedPhoto || null);
-    } else if (loggedEmail || isNewUser) {
-      // Cuenta de correo determinada en el navegador pero es un NUEVO USUARIO sin perfil creado
+    } else if (fichaInitialMode === "lookup") {
+      // Forzado explícitamente a modo INGRESAR / Lookup
+      setMode("lookup");
+      setLookupEmail("");
+      setFirstName("");
+      setLastName("");
+      setEmail("");
+      setPhone("");
+      setGender("Masculino");
+      setCategory("5ta");
+      setIsObserved(false);
+      setPhotoUrl(null);
+      setPhotoBlob(null);
+    } else if (fichaInitialMode === "edit" || loggedEmail || isNewUser) {
+      // Invitación a Crear Perfil o Nuevo Usuario sin perfil
       setMode("edit");
       setFirstName("");
       setLastName("");
@@ -109,8 +127,9 @@ export default function PlayerFichaModal() {
       setPhotoUrl(null);
       setPhotoBlob(null);
     } else {
-      // Sin cuenta de correo logueada en el navegador: Modo de determinación de cuenta
+      // Sin cuenta de correo y sin modo forzado: por defecto ingreso
       setMode("lookup");
+      setLookupEmail("");
       setFirstName("");
       setLastName("");
       setEmail("");
@@ -122,7 +141,7 @@ export default function PlayerFichaModal() {
       setPhotoBlob(null);
     }
     setFeedback(null);
-  }, [isIdentified, player, loggedEmail, isNewUser, isFichaOpen]);
+  }, [isIdentified, player, loggedEmail, isNewUser, isFichaOpen, fichaInitialMode]);
 
   // Selección de foto
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -227,7 +246,7 @@ export default function PlayerFichaModal() {
     }
   };
 
-  // Determinar si se trata de un nuevo usuario o de un usuario que ya tiene perfil creado
+  // Determinar si se trata de un nuevo usuario o de un usuario que ya tiene perfil creado o un administrador
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
     setFeedback(null);
@@ -241,19 +260,35 @@ export default function PlayerFichaModal() {
     setSubmitting(true);
     try {
       const res = await identifyWithEmail(cleanInput);
-      if (res.identified && res.player) {
-        // Usuario que ya tiene su perfil creado
+
+      // CASO A: Es Administrador
+      if (res.isAdmin) {
         setFeedback({
           type: "success",
-          message: `¡Perfil encontrado! Bienvenido/a de nuevo, ${res.player.first_name}. Tu identidad ha sido activada en este navegador.`,
+          message: `Cuenta de Administrador detectada (${cleanInput}). Redirigiendo al panel de acceso seguro...`,
         });
-        setMode("view");
+        setTimeout(() => {
+          closeFicha();
+          window.location.href = `/auth/login?email=${encodeURIComponent(cleanInput)}`;
+        }, 1200);
+        return;
+      }
+
+      // CASO B: Usuario que ya tiene su perfil creado
+      if (res.identified && res.player) {
+        setFeedback({
+          type: "success",
+          message: `¡Perfil encontrado! Bienvenido/a de nuevo, ${res.player.first_name}. Tu perfil ha sido activado.`,
+        });
+        setTimeout(() => {
+          closeFicha();
+        }, 900);
       } else if (res.isNew) {
-        // Se determina que es un NUEVO USUARIO
+        // CASO C: Se determina que es un NUEVO USUARIO
         setEmail(cleanInput);
         setFeedback({
           type: "success",
-          message: `¡Hola! Detectamos que eres un nuevo usuario. Completa tus datos para crear tu perfil oficial de jugador.`,
+          message: `Detectamos que es tu primera vez aquí. Completa tus datos para crear tu perfil oficial de jugador.`,
         });
         setMode("edit");
       } else {
@@ -262,6 +297,9 @@ export default function PlayerFichaModal() {
           message: res.message || "No se encontró ningún jugador registrado con este correo.",
         });
       }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error al procesar la solicitud.";
+      setFeedback({ type: "error", message: msg });
     } finally {
       setSubmitting(false);
     }
@@ -658,7 +696,7 @@ export default function PlayerFichaModal() {
             </div>
           )}
 
-          {/* VISTA 2: Determinar cuenta de correo / Usuario existente o Nuevo usuario */}
+          {/* VISTA 2: Determinar cuenta de correo / Usuario existente, Nuevo usuario o Administrador */}
           {mode === "lookup" && (
             <div className="space-y-6">
               <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-950/60 via-dark-900 to-dark-950 border border-blue-500/30 text-xs sm:text-sm text-blue-200 flex items-start gap-3 shadow-lg">
@@ -667,10 +705,10 @@ export default function PlayerFichaModal() {
                 </div>
                 <div>
                   <strong className="text-white block font-bold mb-0.5">
-                    Determinación de Cuenta y Perfil
+                    Ingresar con Correo Electrónico
                   </strong>
                   <p className="text-xs text-blue-200/90 leading-relaxed">
-                    Identificaremos la cuenta de correo con la que accedes en este navegador para determinar si ya tienes tu perfil oficial de jugador creado o si se trata de un nuevo usuario.
+                    Ingresa tu correo. La aplicación determinará automáticamente si accedes con tu perfil oficial de jugador o si eres administrador del sistema.
                   </p>
                 </div>
               </div>
@@ -698,7 +736,7 @@ export default function PlayerFichaModal() {
               {/* Opción 2: Formulario por correo */}
               <form onSubmit={handleLookup} className="space-y-4">
                 <Input
-                  label="Correo Electrónico (Nombre de Usuario)"
+                  label="Correo Electrónico"
                   type="email"
                   required
                   placeholder="tu_correo@ejemplo.com"
@@ -711,9 +749,24 @@ export default function PlayerFichaModal() {
                   disabled={submitting}
                   className="w-full text-xs font-bold py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-600/20"
                 >
-                  {submitting ? "Determinando perfil..." : "Verificar Cuenta y Continuar"}
+                  {submitting ? "Determinando cuenta..." : "INGRESAR"}
                 </Button>
               </form>
+
+              {/* Opción para quien aún no tiene perfil */}
+              <div className="p-3.5 rounded-xl bg-dark-900/60 border border-dark-800 flex items-center justify-between text-xs">
+                <span className="text-dark-300 font-medium">¿Aún no tienes tu perfil de jugador?</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFeedback(null);
+                    setMode("edit");
+                  }}
+                  className="text-emerald-400 hover:text-emerald-300 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  Crear mi Perfil →
+                </button>
+              </div>
 
               {/* Pie de navegación */}
               <div className="pt-3 border-t border-dark-800 flex items-center justify-between text-xs">

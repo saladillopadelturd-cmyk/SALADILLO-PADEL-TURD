@@ -209,6 +209,24 @@ export async function GET(req: Request) {
     const email = emailParam.trim().toLowerCase();
     const supabase = await getSupabaseClient();
 
+    // 0. Comprobar si el correo corresponde a un administrador del circuito
+    const isRootAdmin = email === "matiasvidal11972@gmail.com";
+    let isAdminUser = isRootAdmin;
+
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .ilike("email", email)
+        .maybeSingle();
+
+      if (profile && (profile.role === "admin" || profile.role === "super_admin")) {
+        isAdminUser = true;
+      }
+    } catch (profileErr) {
+      console.warn("Aviso consultando rol de administrador:", profileErr);
+    }
+
     // 1. Buscar jugador por correo electrónico (coincidencia exacta case-insensitive)
     const { data: players, error } = await supabase
       .from("players")
@@ -218,7 +236,7 @@ export async function GET(req: Request) {
     if (error) {
       console.error("Error buscando jugador por email:", error);
       return NextResponse.json(
-        { success: false, identified: false, error: error.message },
+        { success: false, identified: false, isAdmin: isAdminUser, error: error.message },
         { status: 500 }
       );
     }
@@ -227,6 +245,7 @@ export async function GET(req: Request) {
       return NextResponse.json({
         success: true,
         identified: false,
+        isAdmin: isAdminUser,
         player: null,
       });
     }
@@ -239,6 +258,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       success: true,
       identified: true,
+      isAdmin: isAdminUser,
       player,
       stats,
     });

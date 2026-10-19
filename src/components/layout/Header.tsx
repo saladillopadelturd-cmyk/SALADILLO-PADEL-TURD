@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { Activity, Trophy, Shield, Menu, X, Calendar, Users, LogOut, UserPlus } from "lucide-react";
+import { Activity, Trophy, Shield, Menu, X, Calendar, Users, LogOut, UserPlus, LogIn } from "lucide-react";
 import { usePlayerIdentity } from "@/context/PlayerIdentityContext";
 import PlayerAvatar from "@/components/player/PlayerAvatar";
 import { useAuth } from "@/hooks/useAuth";
@@ -13,7 +13,7 @@ export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const { player, isIdentified, openFicha, clearIdentity, loggedEmail } = usePlayerIdentity();
+  const { player, isIdentified, openFicha, openLogin, openCreateProfile, clearIdentity, loggedEmail } = usePlayerIdentity();
   const { user, isAdmin, signOut } = useAuth();
 
   const isUserLoggedIn = Boolean(isIdentified || loggedEmail || user);
@@ -201,13 +201,13 @@ export default function Header() {
               </div>
             ) : (
               /* CASO 3: Usuario DESCONOCIDO -> 2 opciones:
-                 1. Tocar el botón ADMIN para ingresar su email
+                 1. Tocar el botón INGRESAR para ingresar su email y la app decidirá si es usuario normal o administrador
                  2. Tocar la invitación a crear su perfil
               */
               <div className="hidden md:flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={openFicha}
+                  onClick={openCreateProfile}
                   className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-dark-950 shadow-md shadow-emerald-500/25 active:scale-95 transition-all cursor-pointer min-h-[38px]"
                   title="Crea tu perfil oficial de jugador"
                 >
@@ -215,14 +215,15 @@ export default function Header() {
                   <span>Crear mi Perfil</span>
                 </button>
 
-                <Link
-                  href="/auth/login"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl text-dark-400 hover:text-white bg-dark-900/80 hover:bg-dark-800 border border-dark-800 transition-all cursor-pointer min-h-[38px]"
-                  title="Acceso Administrador (Ingresar email)"
+                <button
+                  type="button"
+                  onClick={openLogin}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl text-white bg-dark-900/90 hover:bg-dark-800 border border-emerald-500/40 hover:border-emerald-400 shadow-sm transition-all cursor-pointer min-h-[38px]"
+                  title="Ingresar con tu correo electrónico"
                 >
-                  <Shield className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Admin</span>
-                </Link>
+                  <LogIn className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>INGRESAR</span>
+                </button>
               </div>
             )}
 
@@ -302,27 +303,55 @@ export default function Header() {
               </div>
             )}
 
-            {/* Si es usuario DESCONOCIDO -> Tarjeta de invitación a crear su perfil */}
+            {/* Si es usuario DESCONOCIDO -> 2 opciones:
+                1. Tocar el botón INGRESAR para ingresar su email
+                2. Tocar la invitación a crear su perfil
+            */}
             {isUnknown && (
-              <div
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  openFicha();
-                }}
-                className="p-3.5 mb-2 rounded-xl bg-gradient-to-r from-emerald-950/70 to-dark-900 border border-emerald-500/30 flex items-center justify-between cursor-pointer active:scale-98 transition-all"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-                    <UserPlus className="w-4 h-4" />
+              <div className="space-y-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    openLogin();
+                  }}
+                  className="w-full p-3.5 rounded-xl bg-dark-900 border border-emerald-500/40 hover:border-emerald-400 flex items-center justify-between text-left active:scale-98 transition-all cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                      <LogIn className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-white">INGRESAR</div>
+                      <div className="text-[11px] text-dark-300">Ingresa tu email para acceder a tu perfil o admin</div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-sm font-bold text-white">¿Sos jugador de pádel?</div>
-                    <div className="text-[11px] text-emerald-400 font-medium">Toca aquí para crear tu perfil oficial</div>
+                  <span className="text-xs px-2.5 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                    Ingresar
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    openCreateProfile();
+                  }}
+                  className="w-full p-3.5 rounded-xl bg-gradient-to-r from-emerald-950/70 to-dark-900 border border-emerald-500/30 flex items-center justify-between text-left active:scale-98 transition-all cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                      <UserPlus className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-white">¿Sos jugador de pádel?</div>
+                      <div className="text-[11px] text-emerald-400 font-medium">Toca aquí para crear tu perfil oficial</div>
+                    </div>
                   </div>
-                </div>
-                <span className="text-xs px-2.5 py-1.5 rounded-lg bg-emerald-500 text-dark-950 font-bold">
-                  Crear
-                </span>
+                  <span className="text-xs px-2.5 py-1.5 rounded-lg bg-emerald-500 text-dark-950 font-bold">
+                    Crear Perfil
+                  </span>
+                </button>
               </div>
             )}
 
@@ -382,20 +411,6 @@ export default function Header() {
                       Encendido
                     </span>
                   )}
-                </Link>
-              </div>
-            )}
-
-            {/* SI ES USUARIO DESCONOCIDO: Opción ADMIN para ingresar su email */}
-            {isUnknown && (
-              <div className="pt-2 border-t border-dark-800">
-                <Link
-                  href="/auth/login"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold min-h-[48px] text-dark-400 hover:text-white hover:bg-dark-900 transition-all"
-                >
-                  <Shield className="w-4 h-4 text-blue-400" />
-                  <span>Acceso Administrador (Ingresar email)</span>
                 </Link>
               </div>
             )}
