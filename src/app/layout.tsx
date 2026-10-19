@@ -60,23 +60,26 @@ export default function RootLayout({
           <PlayerFichaModal />
           <main className="flex-1">{children}</main>
         </PlayerIdentityProvider>
-        <footer className="border-t border-dark-700 bg-dark-900 py-6">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="relative h-8 w-28 flex items-center justify-start">
+        <InstallButton />
+        <footer className="border-t border-dark-800 bg-dark-900/90 py-2 sm:py-2.5">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-row items-center justify-between gap-4">
+            <div className="flex items-center">
+              <div className="relative h-6 sm:h-7 w-auto flex items-center justify-start">
                 <Image
                   src="/LOGOSPT.png"
                   alt="Saladillo Padel Tour"
-                  width={120}
-                  height={34}
-                  className="h-full w-auto object-contain"
+                  width={100}
+                  height={28}
+                  className="h-6 sm:h-7 w-auto object-contain"
                 />
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <InstallButton />
-              <span className="text-dark-500 text-xs">
-                &copy; {new Date().getFullYear()} SPT
+            <div className="text-right leading-tight">
+              <span className="block text-xs sm:text-sm font-semibold text-white">
+                Matias Vidal
+              </span>
+              <span className="block text-[10px] sm:text-xs text-dark-400">
+                desarrollo de software
               </span>
             </div>
           </div>

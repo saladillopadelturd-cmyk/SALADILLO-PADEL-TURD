@@ -8,7 +8,7 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-export default function InstallButton() {
+export default function InstallButton({ showButton = false }: { showButton?: boolean } = {}) {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstallable, setIsInstallable] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -63,13 +63,15 @@ export default function InstallButton() {
   return (
     <>
       {/* Botón estándar para footer */}
-      <button
-        onClick={handleInstall}
-        className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-gradient-to-r from-emerald-500 to-lime-500 text-dark-950 text-xs font-black rounded-xl hover:from-emerald-400 hover:to-lime-400 active:scale-95 transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
-      >
-        <Download className="w-3.5 h-3.5" />
-        Instalar App
-      </button>
+      {showButton && (
+        <button
+          onClick={handleInstall}
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-gradient-to-r from-emerald-500 to-lime-500 text-dark-950 text-xs font-black rounded-xl hover:from-emerald-400 hover:to-lime-400 active:scale-95 transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
+        >
+          <Download className="w-3.5 h-3.5" />
+          Instalar App
+        </button>
+      )}
 
       {/* Banner flotante en móviles para promover la instalación en 1 tap */}
       {!bannerDismissed && (
