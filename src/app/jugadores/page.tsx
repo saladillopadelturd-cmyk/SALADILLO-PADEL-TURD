@@ -58,19 +58,37 @@ export default function JugadoresPage() {
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-            Ficha de Jugadores
+            Perfil de Usuario • Ficha de Jugador
           </h1>
           <p className="text-sm text-dark-400 mt-1">
-            Gestiona tu ficha personal, sube tu foto con encuadre cuadrado y consulta tus estadísticas y rankings oficiales.
+            Gestiona tu perfil personal, sube tu foto con encuadre cuadrado y consulta tus estadísticas y rankings oficiales.
           </p>
         </div>
 
-        <Button
-          onClick={openFicha}
-          className="self-start sm:self-auto bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-emerald-600/20"
-        >
-          {isIdentified ? "Ver / Editar Mi Ficha" : "Cargar Mi Ficha de Jugador"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <Button
+            onClick={openFicha}
+            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-emerald-600/20"
+          >
+            {isIdentified ? "Ver / Editar Mi Perfil" : "Cargar Mi Perfil de Jugador"}
+          </Button>
+
+          {isIdentified && (
+            <Button
+              onClick={async () => {
+                await clearIdentity();
+                await signOut();
+              }}
+              variant="danger"
+              size="sm"
+              className="text-xs font-bold shadow-md shadow-rose-600/20"
+              title="Cerrar sesión en este dispositivo"
+            >
+              <LogOut className="w-3.5 h-3.5 mr-1" />
+              Cerrar Sesión
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Contenido Principal */}

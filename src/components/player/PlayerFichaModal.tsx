@@ -307,11 +307,11 @@ export default function PlayerFichaModal() {
         onClose={closeFicha}
         title={
           mode === "view"
-            ? "Ficha Oficial de Jugador"
+            ? "Perfil de Usuario • Saladillo Padel Tour"
             : mode === "lookup"
             ? "Acceso a Saladillo Padel Tour"
             : isIdentified
-            ? "Editar mi Ficha de Jugador"
+            ? "Editar mi Perfil de Usuario"
             : "Nuevo Usuario - Crear Perfil de Jugador"
         }
         size="lg"
@@ -358,14 +358,30 @@ export default function PlayerFichaModal() {
                   </div>
                 </div>
 
-                <Button
-                  variant="ghost"
-                  onClick={handleStartEdit}
-                  className="text-xs flex items-center gap-1.5 border border-dark-700 hover:border-emerald-500/40"
-                >
-                  <Edit3 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Editar</span>
-                </Button>
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  <Button
+                    variant="ghost"
+                    onClick={handleStartEdit}
+                    className="text-xs flex items-center gap-1.5 border border-dark-700 hover:border-emerald-500/40"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Editar</span>
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={async () => {
+                      await clearIdentity();
+                      await signOut();
+                      closeFicha();
+                    }}
+                    className="text-xs flex items-center gap-1.5 font-bold shadow-md shadow-rose-600/30"
+                    title="Cerrar sesión en este dispositivo"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Cerrar Sesión</span>
+                  </Button>
+                </div>
               </div>
 
               {/* Ficha Visual con Foto Cuadrada Cargada */}
@@ -440,13 +456,28 @@ export default function PlayerFichaModal() {
                     </div>
                   )}
 
-                  <div className="pt-2 space-y-1.5 text-xs text-dark-300">
-                    <div className="flex items-center justify-center sm:justify-start gap-2">
-                      <Mail className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                      <span className="font-mono text-white">{player.email || "Sin email registrado"}</span>
+                  <div className="pt-2 space-y-2 text-xs text-dark-300">
+                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                        <span className="font-mono text-white">{player.email || "Sin email registrado"}</span>
+                      </div>
                       <span className="text-[10px] text-dark-500 bg-dark-800 px-2 py-0.5 rounded-full">
                         Usuario de acceso
                       </span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await clearIdentity();
+                          await signOut();
+                          closeFicha();
+                        }}
+                        className="text-[11px] text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 px-2 py-0.5 rounded-md font-semibold inline-flex items-center gap-1 transition-all cursor-pointer"
+                        title="Cerrar sesión de esta cuenta"
+                      >
+                        <LogOut className="w-3 h-3" />
+                        <span>Cerrar Sesión</span>
+                      </button>
                     </div>
 
                     {player.phone && (
@@ -600,18 +631,20 @@ export default function PlayerFichaModal() {
 
               {/* Botones de acción en vista */}
               <div className="flex items-center justify-between pt-4 border-t border-dark-800">
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={async () => {
                     await clearIdentity();
                     await signOut();
                     closeFicha();
                   }}
-                  className="text-xs text-rose-400 hover:text-rose-300 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className="text-xs text-rose-400 hover:text-white hover:bg-rose-600/30 border border-rose-500/30 font-bold"
+                  title="Cerrar sesión en este dispositivo"
                 >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Cerrar Sesión</span>
-                </button>
+                  <LogOut className="w-3.5 h-3.5 mr-1.5" />
+                  Cerrar Sesión
+                </Button>
 
                 <div className="flex items-center gap-2">
                   <Button variant="ghost" onClick={closeFicha} className="text-xs">
