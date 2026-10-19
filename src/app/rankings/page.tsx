@@ -4,7 +4,7 @@ import PlayerAvatar from "@/components/player/PlayerAvatar";
 import { createClient } from "@/lib/supabase/server";
 import { formatPlayerShortName } from "@/lib/tournament/couples";
 import { syncAllTournamentsRankings } from "@/lib/tournament/rankings";
-import { Trophy, Medal, User } from "lucide-react";
+import { Trophy, Medal, User, Sparkles } from "lucide-react";
 
 export const revalidate = 0;
 
@@ -14,6 +14,7 @@ interface IndividualRankingItem {
   name: string;
   firstName: string;
   lastName: string;
+  gender: "Masculino" | "Femenino";
   photoUrl?: string | null;
   category: string;
   tournaments: number;
@@ -28,12 +29,23 @@ const DEFAULT_CATEGORIES = ["8va", "7ma", "6ta", "5ta", "4ta", "3ra", "2da", "1r
 export default async function RankingsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ category?: string }>;
+  searchParams?: Promise<{ category?: string; gender?: string; rama?: string }>;
 }) {
   const resolvedParams = searchParams ? await searchParams : {};
   const selectedCategory = resolvedParams.category?.trim() || "all";
+
+  // Determinar rama seleccionada: 'Caballeros' (Masculino) o 'Damas' (Femenino)
+  const rawGender = (resolvedParams.gender || resolvedParams.rama || "").trim().toLowerCase();
+  const isDamas = rawGender === "damas" || rawGender === "femenino" || rawGender === "fem";
+  const selectedGender = isDamas ? "Damas" : "Caballeros";
+  const selectedDbGender: "Masculino" | "Femenino" = isDamas ? "Femenino" : "Masculino";
+
   let individualRankings: IndividualRankingItem[] = [];
   let availableCategories: string[] = [];
+  let totalCaballeros = 0;
+  let totalDamas = 0;
+  const countByCategory: Record<string, number> = {};
+
   const supabase = await createClient();
   let isAdmin = false;
 
@@ -58,7 +70,7 @@ export default async function RankingsPage({
     // 1. Auto-sincronizar siempre para consolidar todos los puntos de torneos disputados
     await syncAllTournamentsRankings(supabase);
 
-    // 2. Traer jugadores para resolución de nombres y categorías oficiales
+    // 2. Traer jugadores para resolución de nombres, género y categorías oficiales
     const { data: allPlayers } = await supabase.from("players").select("*");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const playersMap = new Map((allPlayers || []).map((p: any) => [p.id, p]));
@@ -79,6 +91,7 @@ export default async function RankingsPage({
         const p = playersMap.get(r.player_id);
         const pName = p ? formatPlayerShortName(p) : "Jugador";
         const playerCategory = p?.category || r.category || "General";
+        const playerGender: "Masculino" | "Femenino" = p?.gender === "Femenino" ? "Femenino" : "Masculino";
 
         const existing = indivAggMap.get(r.player_id);
         if (existing) {
@@ -86,10 +99,11 @@ export default async function RankingsPage({
           existing.tournaments += (r.tournaments_played || 0);
           existing.matchesWon += (r.matches_won || 0);
           existing.matchesLost += (r.matches_lost || 0);
-          // La categoría oficial del jugador en la tabla players siempre manda
+          // La categoría y género oficiales del jugador en la tabla players siempre mandan
           if (p?.category) {
             existing.category = p.category;
           }
+          existing.gender = playerGender;
         } else {
           indivAggMap.set(r.player_id, {
             id: r.id,
@@ -97,6 +111,7 @@ export default async function RankingsPage({
             name: pName,
             firstName: p?.first_name || "J",
             lastName: p?.last_name || "",
+            gender: playerGender,
             photoUrl: p?.photo_url || p?.avatar_url || null,
             category: p?.category || playerCategory,
             tournaments: r.tournaments_played || 0,
@@ -111,19 +126,24 @@ export default async function RankingsPage({
     // 5. Incluir a todos los jugadores registrados con 0 puntos si no disputaron torneos aún
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (allPlayers || []).forEach((p: any) => {
+      const pGender: "Masculino" | "Femenino" = p.gender === "Femenino" ? "Femenino" : "Masculino";
+
       if (indivAggMap.has(p.id)) {
         const existing = indivAggMap.get(p.id)!;
         if (p.category) {
           existing.category = p.category;
         }
+        existing.gender = pGender;
         return;
       }
+
       indivAggMap.set(p.id, {
         id: `p-${p.id}`,
         playerId: p.id,
         name: formatPlayerShortName(p),
         firstName: p.first_name || "J",
         lastName: p.last_name || "",
+        gender: pGender,
         photoUrl: p.photo_url || p.avatar_url || null,
         category: p.category || "General",
         tournaments: 0,
@@ -134,20 +154,40 @@ export default async function RankingsPage({
       });
     });
 
-    // 6. Extraer categorías oficiales disponibles
+    // 6. Contabilizar totales globales por rama (Caballeros y Damas)
+    indivAggMap.forEach((p) => {
+      if (p.gender === "Femenino") {
+        totalDamas++;
+      } else {
+        totalCaballeros++;
+      }
+    });
+
+    // 7. Filtrar jugadores exclusivamente de la rama seleccionada
+    const ramaPlayers = Array.from(indivAggMap.values()).filter(
+      (p) => p.gender === selectedDbGender
+    );
+
+    // Contar jugadores de esta rama por cada categoría
+    ramaPlayers.forEach((p) => {
+      const c = p.category || "General";
+      countByCategory[c] = (countByCategory[c] || 0) + 1;
+    });
+
+    // 8. Extraer categorías oficiales disponibles en el sistema
     const catsSet = new Set<string>();
     indivAggMap.forEach((p) => {
       if (p.category && p.category !== "General") catsSet.add(p.category);
     });
 
-    // Mantener orden estándar de categorías (8va a 1ra) e incluir las registradas en BD
+    // Mantener orden estándar de categorías (8va a 1ra) e incluir cualquier otra registrada en BD
     availableCategories = [
       ...DEFAULT_CATEGORIES,
       ...Array.from(catsSet).filter((c) => !DEFAULT_CATEGORIES.includes(c)),
     ];
 
-    // 7. Filtrar estrictamente por la categoría seleccionada (solo jugadores de esa categoría)
-    individualRankings = Array.from(indivAggMap.values())
+    // 9. Filtrar estrictamente por la categoría seleccionada (solo jugadores de esa categoría y género)
+    individualRankings = ramaPlayers
       .filter((p) => {
         if (selectedCategory === "all" || selectedCategory === "Todas") return true;
         const pCat = (p.category || "").toLowerCase().trim();
@@ -180,7 +220,7 @@ export default async function RankingsPage({
             Rankings Oficiales
           </h1>
           <p className="text-dark-400 text-sm mt-1">
-            Puntajes oficiales acumulados del circuito de jugadores de Saladillo Padel Tour.
+            Puntajes oficiales acumulados del circuito por rama (Damas / Caballeros) y categoría deportiva.
           </p>
         </div>
 
@@ -192,64 +232,153 @@ export default async function RankingsPage({
         </div>
       </div>
 
-      {/* Selector de Categorías (Pills) */}
+      {/* Selector Principal de Rama (Damas / Caballeros) */}
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        {/* Pestaña Caballeros */}
+        <a
+          href={`/rankings?gender=Caballeros&category=${encodeURIComponent(selectedCategory)}`}
+          className={`flex items-center gap-2.5 px-6 py-3 rounded-2xl font-black text-sm tracking-wide transition-all shadow-lg ${
+            !isDamas
+              ? "bg-gradient-to-r from-emerald-500 to-lime-500 text-dark-950 shadow-emerald-500/25 ring-2 ring-emerald-400"
+              : "bg-dark-900/80 text-dark-300 hover:text-white hover:bg-dark-800 border border-dark-800"
+          }`}
+        >
+          <span className="text-base font-black">♂</span>
+          <span>CABALLEROS</span>
+          <span
+            className={`text-xs px-2 py-0.5 rounded-full font-black ${
+              !isDamas ? "bg-dark-950/30 text-dark-950" : "bg-dark-800 text-dark-400"
+            }`}
+          >
+            {totalCaballeros}
+          </span>
+        </a>
+
+        {/* Pestaña Damas */}
+        <a
+          href={`/rankings?gender=Damas&category=${encodeURIComponent(selectedCategory)}`}
+          className={`flex items-center gap-2.5 px-6 py-3 rounded-2xl font-black text-sm tracking-wide transition-all shadow-lg ${
+            isDamas
+              ? "bg-gradient-to-r from-pink-500 via-rose-500 to-fuchsia-500 text-white shadow-rose-500/25 ring-2 ring-rose-400"
+              : "bg-dark-900/80 text-dark-300 hover:text-white hover:bg-dark-800 border border-dark-800"
+          }`}
+        >
+          <span className="text-base font-black">♀</span>
+          <span>DAMAS</span>
+          <span
+            className={`text-xs px-2 py-0.5 rounded-full font-black ${
+              isDamas ? "bg-white/20 text-white" : "bg-dark-800 text-dark-400"
+            }`}
+          >
+            {totalDamas}
+          </span>
+        </a>
+      </div>
+
+      {/* Selector de Categorías de la Rama Activa (Pills) */}
       <div className="mb-6 flex items-center gap-1.5 bg-dark-900/80 p-1.5 rounded-2xl border border-dark-800 text-xs overflow-x-auto max-w-full">
         <a
-          href="/rankings"
-          className={`px-3.5 py-2 rounded-xl font-extrabold whitespace-nowrap transition-all ${
+          href={`/rankings?gender=${selectedGender}&category=all`}
+          className={`px-3.5 py-2 rounded-xl font-extrabold whitespace-nowrap transition-all flex items-center gap-1.5 ${
             isAllCategory
-              ? "bg-gradient-to-r from-emerald-500 to-lime-500 text-dark-950 shadow-md shadow-emerald-500/25"
+              ? isDamas
+                ? "bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-md shadow-rose-500/25"
+                : "bg-gradient-to-r from-emerald-500 to-lime-500 text-dark-950 shadow-md shadow-emerald-500/25"
               : "text-dark-300 hover:text-white hover:bg-dark-800"
           }`}
         >
-          Todas
+          <span>Todas</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+              isAllCategory
+                ? isDamas
+                  ? "bg-white/20 text-white"
+                  : "bg-dark-950/30 text-dark-950"
+                : "bg-dark-800 text-dark-400"
+            }`}
+          >
+            {isDamas ? totalDamas : totalCaballeros}
+          </span>
         </a>
         {availableCategories.map((cat) => {
           const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase();
+          const catCount = countByCategory[cat] || 0;
           return (
             <a
               key={cat}
-              href={`/rankings?category=${encodeURIComponent(cat)}`}
-              className={`px-3.5 py-2 rounded-xl font-extrabold whitespace-nowrap transition-all ${
+              href={`/rankings?gender=${selectedGender}&category=${encodeURIComponent(cat)}`}
+              className={`px-3.5 py-2 rounded-xl font-extrabold whitespace-nowrap transition-all flex items-center gap-1.5 ${
                 isSelected
-                  ? "bg-gradient-to-r from-emerald-500 to-lime-500 text-dark-950 shadow-md shadow-emerald-500/25"
+                  ? isDamas
+                    ? "bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-md shadow-rose-500/25"
+                    : "bg-gradient-to-r from-emerald-500 to-lime-500 text-dark-950 shadow-md shadow-emerald-500/25"
                   : "text-dark-300 hover:text-white hover:bg-dark-800"
               }`}
             >
-              {cat} Categoría
+              <span>{cat} Categoría</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                  isSelected
+                    ? isDamas
+                      ? "bg-white/20 text-white"
+                      : "bg-dark-950/30 text-dark-950"
+                    : "bg-dark-800 text-dark-400"
+                }`}
+              >
+                {catCount}
+              </span>
             </a>
           );
         })}
       </div>
 
-      {/* Título de la Categoría Activa */}
+      {/* Título de la Rama y Categoría Activa */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <User className="w-5 h-5 text-emerald-400" />
+          <span
+            className={`p-1.5 rounded-xl ${
+              isDamas ? "bg-pink-500/10 text-pink-400" : "bg-emerald-500/10 text-emerald-400"
+            }`}
+          >
+            <User className="w-5 h-5" />
+          </span>
           <h2 className="text-lg sm:text-xl font-black text-white">
             {isAllCategory
-              ? "Ranking General de Jugadores"
-              : `Ranking Oficial de Jugadores • ${selectedCategory} Categoría`}
+              ? `Ranking General • Rama ${selectedGender} (${isDamas ? "Femenino" : "Masculino"})`
+              : `Ranking Oficial ${selectedGender} • ${selectedCategory} Categoría`}
           </h2>
         </div>
-        <span className="text-xs font-bold text-dark-400 bg-dark-900 px-3 py-1 rounded-full border border-dark-800">
-          {individualRankings.length} {individualRankings.length === 1 ? "jugador" : "jugadores"}
+        <span
+          className={`text-xs font-bold px-3 py-1 rounded-full border ${
+            isDamas
+              ? "text-pink-400 bg-pink-500/10 border-pink-500/20"
+              : "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+          }`}
+        >
+          {individualRankings.length}{" "}
+          {isDamas
+            ? individualRankings.length === 1
+              ? "jugadora"
+              : "jugadoras"
+            : individualRankings.length === 1
+            ? "jugador"
+            : "jugadores"}
         </span>
       </div>
 
-      {/* TABLA EXCLUSIVA DE RANKING DE JUGADORES */}
+      {/* TABLA EXCLUSIVA DE RANKING POR GÉNERO Y CATEGORÍA */}
       {individualRankings.length === 0 ? (
         <Card className="mt-4 p-12 text-center border-dark-700/80 shadow-xl bg-dark-900/60">
           <User className="w-12 h-12 text-dark-500 mx-auto mb-3" />
           <h3 className="text-lg font-bold text-white mb-1">
             {isAllCategory
-              ? "Sin rankings de jugadores registrados aún"
-              : `Sin jugadores registrados en ${selectedCategory} Categoría aún`}
+              ? `Sin rankings registrados aún en Rama ${selectedGender}`
+              : `Sin ${isDamas ? "jugadoras registradas" : "jugadores registrados"} en ${selectedGender} • ${selectedCategory} Categoría aún`}
           </h3>
           <p className="text-dark-400 text-sm max-w-md mx-auto">
             {isAllCategory
-              ? "Los puntajes de los jugadores se actualizarán en tiempo real a medida que se disputen los torneos."
-              : `Los jugadores que pertenezcan a ${selectedCategory} categoría aparecerán listados automáticamente en este ranking.`}
+              ? `Los puntajes de la rama ${selectedGender} se actualizarán en tiempo real a medida que se disputen los torneos correspondientes.`
+              : `Las ${isDamas ? "jugadoras" : "los jugadores"} que pertenezcan a ${selectedCategory} categoría en la rama ${selectedGender.toLowerCase()} aparecerán automáticamente en este ranking.`}
           </p>
         </Card>
       ) : (
@@ -259,11 +388,19 @@ export default async function RankingsPage({
               <thead>
                 <tr className="bg-dark-950 text-dark-400 uppercase text-xs border-b border-dark-800">
                   <th className="px-6 py-3.5 text-left font-semibold">Pos.</th>
-                  <th className="px-6 py-3.5 text-left font-semibold">Jugador</th>
+                  <th className="px-6 py-3.5 text-left font-semibold">
+                    {isDamas ? "Jugadora" : "Jugador"}
+                  </th>
                   <th className="px-4 py-3.5 text-center font-semibold">Cat.</th>
                   <th className="px-4 py-3.5 text-center font-semibold">Torneos</th>
                   <th className="px-4 py-3.5 text-center font-semibold">PG / PP</th>
-                  <th className="px-6 py-3.5 text-center font-semibold text-emerald-400">Puntos</th>
+                  <th
+                    className={`px-6 py-3.5 text-center font-semibold ${
+                      isDamas ? "text-pink-400" : "text-emerald-400"
+                    }`}
+                  >
+                    Puntos
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-dark-800/80">
@@ -312,17 +449,20 @@ export default async function RankingsPage({
                           <span>{p.name}</span>
                           {isAdmin && p.isObserved && (
                             <span
-                              title="Jugador en observación para ascenso de categoría"
+                              title="Jugador/a en observación para ascenso de categoría"
                               className="text-amber-400 text-[11px] inline-flex items-center gap-1 font-semibold bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30"
                             >
-                              👁️ Observado
+                              👁️ Observado/a
                             </span>
                           )}
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-4 text-center text-xs font-semibold text-emerald-400">
-                      <Badge variant="success" className="font-bold uppercase text-[11px]">
+                    <td className="px-4 py-4 text-center text-xs font-semibold">
+                      <Badge
+                        variant={isDamas ? "gold" : "success"}
+                        className="font-bold uppercase text-[11px]"
+                      >
                         {p.category}
                       </Badge>
                     </td>
@@ -333,7 +473,11 @@ export default async function RankingsPage({
                       <span className="text-rose-400 font-medium">{p.matchesLost}</span>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className="scoreboard-digit font-mono font-black text-lg text-emerald-400">
+                      <span
+                        className={`scoreboard-digit font-mono font-black text-lg ${
+                          isDamas ? "text-pink-400" : "text-emerald-400"
+                        }`}
+                      >
                         {p.points}
                       </span>
                     </td>

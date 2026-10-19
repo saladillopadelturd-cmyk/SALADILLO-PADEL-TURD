@@ -18,7 +18,8 @@ async function computePlayerStats(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   playerId: string,
-  playerCategory: string
+  playerCategory: string,
+  playerGender: string = "Masculino"
 ) {
   const stats = {
     points: 0,
@@ -28,6 +29,7 @@ async function computePlayerStats(
     winRate: 0,
     individualRanking: {
       category: playerCategory || "5ta",
+      gender: playerGender || "Masculino",
       points: 0,
       position: 0,
       tournamentsPlayed: 0,
@@ -61,7 +63,7 @@ async function computePlayerStats(
     // 2. Traer todos los jugadores para resolver nombres y fotos de parejas
     const { data: allPlayers } = await supabase
       .from("players")
-      .select("id, first_name, last_name, photo_url, avatar_url");
+      .select("id, first_name, last_name, photo_url, avatar_url, gender");
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const playersMap = new Map((allPlayers || []).map((p: any) => [p.id, p]));
@@ -82,7 +84,13 @@ async function computePlayerStats(
 
       const categoryIndRankings = allRankings.filter(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (r: any) => r.ranking_type === "individual" && r.category === targetCategory
+        (r: any) => {
+          if (r.ranking_type !== "individual" || r.category !== targetCategory) return false;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const p: any = playersMap.get(r.player_id);
+          const pGender = p?.gender || "Masculino";
+          return pGender === playerGender;
+        }
       );
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -90,6 +98,7 @@ async function computePlayerStats(
 
       stats.individualRanking = {
         category: targetCategory,
+        gender: playerGender,
         points: totalPoints,
         position: indPos > 0 ? indPos : 1,
         tournamentsPlayed: totalTournaments,
@@ -135,9 +144,21 @@ async function computePlayerStats(
         const partnerPhotoUrl = partner?.photo_url || partner?.avatar_url || null;
 
         const coupleCat = cr.category || targetCategory;
+        const isPlayerFemale = playerGender === "Femenino";
+        const isPartnerFemale = (partner?.gender || "Masculino") === "Femenino";
+        const coupleGender = (isPlayerFemale && isPartnerFemale) ? "Femenino" : "Masculino";
+
         const categoryCouples = allRankings.filter(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (r: any) => r.ranking_type === "couple" && r.category === coupleCat
+          (r: any) => {
+            if (r.ranking_type !== "couple" || r.category !== coupleCat) return false;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const p1: any = playersMap.get(r.player1_id);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const p2: any = playersMap.get(r.player2_id);
+            const cG = (p1?.gender === "Femenino" && p2?.gender === "Femenino") ? "Femenino" : "Masculino";
+            return cG === coupleGender;
+          }
         );
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const cPos = categoryCouples.findIndex((r: any) => r.id === cr.id) + 1;
@@ -253,7 +274,7 @@ export async function GET(req: Request) {
     const player = players[0];
 
     // 2. Obtener estadísticas deportivas completas (individual y por parejas)
-    const stats = await computePlayerStats(supabase, player.id, player.category || "5ta");
+    const stats = await computePlayerStats(supabase, player.id, player.category || "5ta", player.gender || "Masculino");
 
     return NextResponse.json({
       success: true,
@@ -501,7 +522,7 @@ export async function POST(req: Request) {
     }
 
     // Computar estadísticas actualizadas del jugador
-    const stats = await computePlayerStats(supabase, finalPlayer.id, finalPlayer.category || category);
+    const stats = await computePlayerStats(supabase, finalPlayer.id, finalPlayer.category || category, finalPlayer.gender || gender || "Masculino");
 
     return NextResponse.json({
       success: true,

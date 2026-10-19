@@ -214,20 +214,20 @@ export default function JugadoresPage() {
               <div className="p-5 rounded-2xl bg-dark-900/70 border border-dark-800 shadow-lg space-y-3">
                 <div className="flex items-center justify-between pb-3 border-b border-dark-800">
                   <div className="flex items-center gap-2.5">
-                    <span className="p-2 rounded-xl bg-sky-500/10 text-sky-400">
+                    <span className={`p-2 rounded-xl ${player.gender === "Femenino" ? "bg-pink-500/10 text-pink-400" : "bg-sky-500/10 text-sky-400"}`}>
                       <User className="w-5 h-5" />
                     </span>
                     <div>
                       <h4 className="text-base font-bold text-white">Ranking Individual</h4>
                       <p className="text-xs text-dark-400">
-                        {indRank?.category || player.category || "5ta"} Categoría
+                        {player.gender === "Femenino" ? "Damas" : "Caballeros"} • {indRank?.category || player.category || "5ta"} Categoría
                       </p>
                     </div>
                   </div>
 
                   {indRank && indRank.position > 0 ? (
                     <span className="px-3 py-1 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-600/20 text-amber-300 border border-amber-500/40 text-xs font-black">
-                      #{indRank.position} Puesto
+                      #{indRank.position} en {player.gender === "Femenino" ? "Damas" : "Caballeros"}
                     </span>
                   ) : (
                     <span className="px-2.5 py-1 rounded-lg bg-dark-800 text-dark-400 text-xs font-medium">
@@ -262,6 +262,16 @@ export default function JugadoresPage() {
                   <strong className="text-slate-200">
                     {indRank?.matchesWon ?? 0} Ganados / {indRank?.matchesLost ?? 0} Perdidos
                   </strong>
+                </div>
+
+                <div className="pt-2 border-t border-dark-800/80">
+                  <a
+                    href={`/rankings?gender=${player.gender === "Femenino" ? "Damas" : "Caballeros"}&category=${encodeURIComponent(player.category || "5ta")}`}
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors"
+                  >
+                    <span>Ver tabla oficial de {player.gender === "Femenino" ? "Damas" : "Caballeros"} {player.category || "5ta"}</span>
+                    <span>→</span>
+                  </a>
                 </div>
               </div>
 

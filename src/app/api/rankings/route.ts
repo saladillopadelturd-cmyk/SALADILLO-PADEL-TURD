@@ -12,7 +12,18 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const category = searchParams.get("category");
   const type = searchParams.get("type"); // "couple" | "individual"
+  const genderParam = searchParams.get("gender") || searchParams.get("sexo") || searchParams.get("rama");
   const sync = searchParams.get("sync") === "true";
+
+  let targetGender: "Masculino" | "Femenino" | null = null;
+  if (genderParam && genderParam !== "all" && genderParam !== "Todas") {
+    const lower = genderParam.toLowerCase().trim();
+    if (lower.startsWith("fem") || lower.startsWith("dam") || lower === "f") {
+      targetGender = "Femenino";
+    } else if (lower.startsWith("masc") || lower.startsWith("cab") || lower === "m") {
+      targetGender = "Masculino";
+    }
+  }
 
   const supabase = await createClient();
 
@@ -78,7 +89,7 @@ export async function GET(request: Request) {
     ...Array.from(indivMap.values()),
   ];
 
-  // Cargar jugadores para hidratar nombres de forma 100% segura
+  // Cargar jugadores para hidratar nombres y género de forma 100% segura
   const { data: allPlayers } = await supabase.from("players").select("*");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const playersMap = new Map((allPlayers || []).map((p: any) => [p.id, p]));
@@ -90,18 +101,24 @@ export async function GET(request: Request) {
       const p2 = r.player2_id ? playersMap.get(r.player2_id) : null;
       const p1Name = p1 ? formatPlayerShortName(p1) : "Jugador 1";
       const p2Name = p2 ? formatPlayerShortName(p2) : "Jugador 2";
+      const p1Gender = p1?.gender || "Masculino";
+      const p2Gender = p2?.gender || "Masculino";
+      const coupleGender = (p1Gender === "Femenino" && p2Gender === "Femenino") ? "Femenino" : "Masculino";
       return {
         ...r,
         name: `${p1Name} / ${p2Name}`,
+        gender: coupleGender,
         player1: p1,
         player2: p2,
       };
     } else {
       const p = r.player_id ? playersMap.get(r.player_id) : null;
       const pName = p ? formatPlayerShortName(p) : "Jugador";
+      const pGender = p?.gender || "Masculino";
       return {
         ...r,
         category: p?.category || r.category || "General",
+        gender: pGender,
         name: pName,
         player: p,
       };
@@ -120,6 +137,8 @@ export async function GET(request: Request) {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (allPlayers || []).forEach((p: any) => {
+      const pGender = p.gender || "Masculino";
+      if (targetGender && pGender !== targetGender) return;
       if (includedPlayerIds.has(p.id)) return;
       if (category && category !== "all" && category !== "Todas" && (p.category || "").toLowerCase().trim() !== category.toLowerCase().trim()) {
         return;
@@ -130,6 +149,7 @@ export async function GET(request: Request) {
         ranking_type: "individual",
         player_id: p.id,
         category: p.category || (category && category !== "all" ? category : "General"),
+        gender: pGender,
         points: 0,
         tournaments_played: 0,
         matches_won: 0,
@@ -149,14 +169,26 @@ export async function GET(request: Request) {
     });
   }
 
-  // Filtrado final estricto por categoría si fue provista
-  const finalRankings = (category && category !== "all" && category !== "Todas")
+  // Filtrado final estricto por género y por categoría
+  let finalRankings = enrichedRankings;
+
+  if (targetGender) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ? enrichedRankings.filter((r: any) => (r.category || "").toLowerCase().trim() === category.toLowerCase().trim())
-    : enrichedRankings;
+    finalRankings = finalRankings.filter((r: any) => {
+      const g = r.gender || r.player?.gender || "Masculino";
+      return g === targetGender;
+    });
+  }
+
+  if (category && category !== "all" && category !== "Todas") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    finalRankings = finalRankings.filter((r: any) => (r.category || "").toLowerCase().trim() === category.toLowerCase().trim());
+  }
 
   return NextResponse.json({
     success: true,
+    gender: targetGender,
+    category: category || "all",
     rankings: finalRankings,
     count: finalRankings.length,
   });
