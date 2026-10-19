@@ -215,7 +215,7 @@ export default function AdminNovedadesPage() {
               onClick={() => fileInputRef.current?.click()}
             >
               {previewUrl ? (
-                <div className="relative aspect-[21/9] w-full rounded-lg overflow-hidden">
+                <div className="relative aspect-video w-full rounded-lg overflow-hidden bg-dark-950 flex items-center justify-center">
                   <Image src={previewUrl} alt="Preview" fill className="object-contain" />
                 </div>
               ) : (

@@ -139,8 +139,28 @@ export default function NewsCarousel({
     return () => clearInterval(interval);
   }, [flyers.length]);
 
+  const [aspectRatios, setAspectRatios] = useState<Record<string, string>>({});
+
   const activeFlyers = flyers.length > 0 ? flyers : [DEFAULT_FLYER];
   const currentFlyer = activeFlyers[currentIndex] || activeFlyers[0] || DEFAULT_FLYER;
+
+  // Medir y precargar las dimensiones reales de cada flyer para respetar su proporción original exacta
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    activeFlyers.forEach((flyer) => {
+      if (!flyer.image_url) return;
+      const img = new window.Image();
+      img.onload = () => {
+        if (img.naturalWidth && img.naturalHeight) {
+          setAspectRatios((prev) => ({
+            ...prev,
+            [flyer.image_url]: `${img.naturalWidth} / ${img.naturalHeight}`,
+          }));
+        }
+      };
+      img.src = flyer.image_url;
+    });
+  }, [activeFlyers]);
 
   const handlePrev = () => {
     setCurrentIndex((prev) => (prev - 1 + activeFlyers.length) % activeFlyers.length);
@@ -150,18 +170,31 @@ export default function NewsCarousel({
     setCurrentIndex((prev) => (prev + 1) % activeFlyers.length);
   };
 
+  const currentRatio = aspectRatios[currentFlyer.image_url] || "16/9";
+
   const content = (
-    <div className={`relative w-full aspect-[20/9] ${fullWidthOnMobile ? "rounded-none sm:rounded-2xl border-y sm:border" : "rounded-2xl border"} overflow-hidden shadow-2xl bg-dark-900 border-emerald-500/30 group`}>
+    <div 
+      className={`relative w-full ${fullWidthOnMobile ? "rounded-none sm:rounded-2xl border-y sm:border" : "rounded-2xl border"} overflow-hidden shadow-2xl bg-dark-950 border-emerald-500/30 group flex items-center justify-center transition-all duration-300`}
+      style={{
+        aspectRatio: currentRatio,
+      }}
+    >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={currentFlyer.image_url}
         alt={currentFlyer.title || "Flyer Oficial SPT"}
-        className="w-full h-full object-cover"
+        className="w-full h-full object-contain block mx-auto"
         loading="eager"
+        onLoad={(e) => {
+          const { naturalWidth, naturalHeight } = e.currentTarget;
+          if (naturalWidth && naturalHeight) {
+            setAspectRatios((prev) => ({
+              ...prev,
+              [currentFlyer.image_url]: `${naturalWidth} / ${naturalHeight}`,
+            }));
+          }
+        }}
       />
-      
-      {/* Degradado sutil */}
-      <div className="absolute inset-0 bg-gradient-to-t from-dark-950/70 via-transparent to-transparent opacity-50 pointer-events-none" />
       
       {/* Navigation Controls */}
       {flyers.length > 1 && (
@@ -181,8 +214,8 @@ export default function NewsCarousel({
             <ChevronRight className="w-5 h-5" />
           </button>
           
-          {/* Indicators */}
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none z-10">
+          {/* Indicators con cápsula translúcida para legibilidad sin oscurecer el flyer */}
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none z-10 px-2.5 py-1 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 shadow-lg">
             {flyers.map((_, idx) => (
               <span
                 key={idx}
@@ -221,7 +254,8 @@ export default function NewsCarousel({
             {flyers.map((flyer, idx) => (
               <div
                 key={flyer.id}
-                className={`relative aspect-[20/9] rounded-xl overflow-hidden bg-dark-900 border-2 transition-all ${
+                onClick={() => setCurrentIndex(idx)}
+                className={`relative aspect-video rounded-xl overflow-hidden bg-dark-950 border-2 transition-all cursor-pointer flex items-center justify-center ${
                   idx === currentIndex
                     ? "border-emerald-400 ring-2 ring-emerald-500/30"
                     : "border-dark-700 hover:border-dark-500"
@@ -230,10 +264,10 @@ export default function NewsCarousel({
                 <img
                   src={flyer.image_url}
                   alt={flyer.title || "Flyer"}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain"
                   loading="lazy"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
                 {isAdmin && onDelete && (
                   <button
                     onClick={(e) => {
@@ -251,7 +285,7 @@ export default function NewsCarousel({
                   {flyer.title || "Sin título"}
                 </div>
                 {idx === currentIndex && (
-                  <div className="absolute top-1 left-1 w-5 h-5 rounded-full bg-emerald-400 text-dark-950 flex items-center justify-center text-[10px] font-black shadow">
+                  <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded-full bg-emerald-400 text-dark-950 text-[9px] font-black shadow">
                     ACTIVO
                   </div>
                 )}
