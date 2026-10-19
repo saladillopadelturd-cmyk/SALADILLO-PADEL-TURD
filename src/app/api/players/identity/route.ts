@@ -379,9 +379,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // Determinación del estado observado y categoría (Ascensos):
-    // Solo el administrador tiene potestad para marcar o desmarcar a un jugador como observado
-    // y para ascender o cambiar la categoría deportiva de un jugador registrado.
+    // Determinación del estado observado
     let finalIsObserved = false;
     if (existingPlayer) {
       finalIsObserved = isAdmin && typeof is_observed === "boolean" ? is_observed : !!existingPlayer.is_observed;
@@ -389,21 +387,20 @@ export async function POST(req: Request) {
       finalIsObserved = isAdmin && typeof is_observed === "boolean" ? is_observed : false;
     }
 
-    // Regla de Ascenso de Categoría:
-    // El poder de ascender o cambiar de categoría lo tienen ÚNICAMENTE los administradores del sitio.
-    const finalCategory = existingPlayer
-      ? (isAdmin && category ? category : (existingPlayer.category || "5ta"))
-      : (category || "5ta");
+    // Categoría deportiva: respetar la categoría elegida por el jugador al darse de alta o editar
+    const finalCategory = (category && typeof category === "string" && category.trim())
+      ? category.trim()
+      : (existingPlayer?.category || "5ta");
 
     let finalPlayer = null;
 
     if (existingPlayer) {
-      // Actualizar el jugador existente
+      // Actualizar el jugador existente (solo columnas reales de la tabla players)
       const updatePayload: Record<string, unknown> = {
         first_name: cleanFirstName,
         last_name: cleanLastName,
         phone: cleanPhone,
-        gender,
+        gender: gender || "Masculino",
         category: finalCategory,
         is_observed: finalIsObserved,
       };
@@ -411,14 +408,6 @@ export async function POST(req: Request) {
       // Solo el administrador puede modificar el correo registrado de un jugador
       if (isAdmin || !existingPlayer.email) {
         updatePayload.email = cleanEmail;
-      }
-
-      if (photo_url) {
-        updatePayload.photo_url = photo_url;
-      }
-
-      if (currentUserId && !existingPlayer.user_id) {
-        updatePayload.user_id = currentUserId;
       }
 
       const { data: updated, error: updateError } = await supabase
@@ -429,12 +418,15 @@ export async function POST(req: Request) {
         .single();
 
       if (updateError) {
-        // Fallback por si la base de datos remota no tiene aún ciertas columnas
-        console.warn("Reintentando update con campos base:", updateError);
+        // Fallback garantizando que siempre se mantenga la categoría seleccionada
+        console.warn("Reintentando update con campos esenciales:", updateError);
         const basePayload: Record<string, unknown> = {
           first_name: cleanFirstName,
           last_name: cleanLastName,
           phone: cleanPhone,
+          gender: gender || "Masculino",
+          category: finalCategory,
+          is_observed: finalIsObserved,
         };
         const { data: fallbackUpdated, error: fallbackErr } = await supabase
           .from("players")
@@ -446,30 +438,28 @@ export async function POST(req: Request) {
         if (fallbackErr) throw fallbackErr;
         finalPlayer = {
           ...fallbackUpdated,
-          gender,
+          gender: gender || "Masculino",
           category: finalCategory,
           photo_url: photo_url || null,
           is_observed: finalIsObserved,
         };
       } else {
-        finalPlayer = updated;
+        finalPlayer = {
+          ...updated,
+          photo_url: photo_url || null,
+        };
       }
     } else {
-      // Insertar nuevo jugador
+      // Insertar nuevo jugador (solo columnas reales de la tabla players)
       const insertPayload: Record<string, unknown> = {
         first_name: cleanFirstName,
         last_name: cleanLastName,
         email: cleanEmail,
         phone: cleanPhone,
-        gender,
+        gender: gender || "Masculino",
         category: finalCategory,
-        photo_url: photo_url || null,
         is_observed: finalIsObserved,
       };
-
-      if (currentUserId) {
-        insertPayload.user_id = currentUserId;
-      }
 
       const { data: inserted, error: insertError } = await supabase
         .from("players")
@@ -478,12 +468,15 @@ export async function POST(req: Request) {
         .single();
 
       if (insertError) {
-        console.warn("Reintentando insert con campos base:", insertError);
+        console.warn("Reintentando insert con campos esenciales:", insertError);
         const basePayload: Record<string, unknown> = {
           first_name: cleanFirstName,
           last_name: cleanLastName,
           email: cleanEmail,
           phone: cleanPhone,
+          gender: gender || "Masculino",
+          category: finalCategory,
+          is_observed: finalIsObserved,
         };
         const { data: fallbackInserted, error: fallbackErr } = await supabase
           .from("players")
@@ -494,13 +487,16 @@ export async function POST(req: Request) {
         if (fallbackErr) throw fallbackErr;
         finalPlayer = {
           ...fallbackInserted,
-          gender,
+          gender: gender || "Masculino",
           category: finalCategory,
           photo_url: photo_url || null,
           is_observed: finalIsObserved,
         };
       } else {
-        finalPlayer = inserted;
+        finalPlayer = {
+          ...inserted,
+          photo_url: photo_url || null,
+        };
       }
     }
 

@@ -205,7 +205,7 @@ export default function AdminJugadoresPage() {
       try {
         const finalPhotoUrl = await uploadPhotoIfAvailable();
 
-        const payloadWithAllFields = {
+        const dbPayload = {
           first_name: formNombre.trim(),
           last_name: formApellido.trim(),
           email: formEmail.trim() || null,
@@ -213,23 +213,25 @@ export default function AdminJugadoresPage() {
           gender: formSexo,
           category: formCategoria,
           is_observed: formObservado,
-          photo_url: finalPhotoUrl,
         };
 
         let result = await supabase
           .from("players")
-          .insert(payloadWithAllFields)
+          .insert(dbPayload)
           .select()
           .single();
 
-        // Resiliencia: Si la base de datos remota aún no corrió la migración de las columnas extras
+        // Resiliencia: Si ocurre algún error de columnas, reintentar preservando la categoría
         if (result.error && (result.error.message.includes("column") || result.error.code === "PGRST204")) {
-          console.warn("Columnas no migradas aún en Supabase, reintentando con campos base:", result.error);
+          console.warn("Reintentando insert con campos esenciales:", result.error);
           const fallbackPayload = {
             first_name: formNombre.trim(),
             last_name: formApellido.trim(),
             email: formEmail.trim() || null,
             phone: formTelefono.trim() || null,
+            gender: formSexo,
+            category: formCategoria,
+            is_observed: formObservado,
           };
           result = await supabase
             .from("players")
@@ -238,30 +240,19 @@ export default function AdminJugadoresPage() {
             .single();
 
           if (result.error) throw result.error;
-
-          const localData: Player = {
-            ...result.data,
-            gender: formSexo,
-            category: formCategoria,
-            is_observed: formObservado,
-            photo_url: finalPhotoUrl,
-          };
-          setPlayers((prev) => [localData, ...prev]);
-          setShowCreate(false);
-          setNotification({
-            type: "success",
-            text: `Jugador ${localData.first_name} ${localData.last_name} (${formCategoria}) registrado exitosamente.`,
-          });
-          return;
         }
 
         if (result.error) throw result.error;
         if (result.data) {
-          setPlayers((prev) => [result.data, ...prev]);
+          const newPlayer: Player = {
+            ...result.data,
+            photo_url: finalPhotoUrl,
+          };
+          setPlayers((prev) => [newPlayer, ...prev]);
           setShowCreate(false);
           setNotification({
             type: "success",
-            text: `Jugador ${result.data.first_name} ${result.data.last_name} (${result.data.category || formCategoria}) registrado exitosamente.`,
+            text: `Jugador ${newPlayer.first_name} ${newPlayer.last_name} (${newPlayer.category || formCategoria}) registrado exitosamente.`,
           });
         }
       } catch (err: unknown) {
@@ -278,7 +269,7 @@ export default function AdminJugadoresPage() {
       try {
         const finalPhotoUrl = await uploadPhotoIfAvailable(editing.id);
 
-        const payloadWithAllFields = {
+        const dbPayload = {
           first_name: formNombre.trim(),
           last_name: formApellido.trim(),
           email: formEmail.trim() || null,
@@ -286,24 +277,26 @@ export default function AdminJugadoresPage() {
           gender: formSexo,
           category: formCategoria,
           is_observed: formObservado,
-          photo_url: finalPhotoUrl,
         };
 
         let result = await supabase
           .from("players")
-          .update(payloadWithAllFields)
+          .update(dbPayload)
           .eq("id", editing.id)
           .select()
           .single();
 
-        // Resiliencia: Si la base de datos remota aún no tiene las columnas extras
+        // Resiliencia: Reintentar preservando categoría y sexo
         if (result.error && (result.error.message.includes("column") || result.error.code === "PGRST204")) {
-          console.warn("Columnas no migradas aún en Supabase, reintentando actualización base:", result.error);
+          console.warn("Reintentando actualización con campos esenciales:", result.error);
           const fallbackPayload = {
             first_name: formNombre.trim(),
             last_name: formApellido.trim(),
             email: formEmail.trim() || null,
             phone: formTelefono.trim() || null,
+            gender: formSexo,
+            category: formCategoria,
+            is_observed: formObservado,
           };
           result = await supabase
             .from("players")
@@ -313,34 +306,21 @@ export default function AdminJugadoresPage() {
             .single();
 
           if (result.error) throw result.error;
-
-          const updatedLocal: Player = {
-            ...result.data,
-            gender: formSexo,
-            category: formCategoria,
-            is_observed: formObservado,
-            photo_url: finalPhotoUrl,
-          };
-          setPlayers((prev) =>
-            prev.map((p) => (p.id === editing.id ? updatedLocal : p))
-          );
-          setEditing(null);
-          setNotification({
-            type: "success",
-            text: `Jugador ${updatedLocal.first_name} ${updatedLocal.last_name} actualizado exitosamente.`,
-          });
-          return;
         }
 
         if (result.error) throw result.error;
         if (result.data) {
+          const updatedPlayer: Player = {
+            ...result.data,
+            photo_url: finalPhotoUrl || editing.photo_url || null,
+          };
           setPlayers((prev) =>
-            prev.map((p) => (p.id === editing.id ? result.data : p))
+            prev.map((p) => (p.id === editing.id ? updatedPlayer : p))
           );
           setEditing(null);
           setNotification({
             type: "success",
-            text: `Jugador ${result.data.first_name} ${result.data.last_name} actualizado exitosamente.`,
+            text: `Jugador ${updatedPlayer.first_name} ${updatedPlayer.last_name} (${updatedPlayer.category || formCategoria}) actualizado exitosamente.`,
           });
         }
       } catch (err: unknown) {

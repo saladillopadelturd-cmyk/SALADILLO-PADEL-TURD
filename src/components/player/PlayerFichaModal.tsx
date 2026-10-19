@@ -224,7 +224,7 @@ export default function PlayerFichaModal() {
         email: email.trim().toLowerCase(),
         phone: phone.trim() || null,
         gender,
-        category: isAdmin ? category : (player?.category || category),
+        category: category || player?.category || "5ta",
         photo_url: uploadedUrl,
         is_observed: isAdmin ? isObserved : !!player?.is_observed,
       });
@@ -1021,42 +1021,20 @@ export default function PlayerFichaModal() {
                     ) : null}
                   </div>
 
-                  {isAdmin || !isIdentified ? (
-                    <>
-                      <select
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        className={`w-full px-3.5 py-2.5 bg-dark-950/80 rounded-xl text-white text-sm focus:outline-none ${
-                          isAdmin
-                            ? "border border-emerald-500/40 focus:border-emerald-500"
-                            : "border border-dark-700/80 focus:border-emerald-500"
-                        }`}
-                      >
-                        {CATEGORIES.map((cat) => (
-                          <option key={cat} value={cat}>
-                            {cat} Categoría
-                          </option>
-                        ))}
-                      </select>
-                      {!isAdmin && !isIdentified && (
-                        <p className="text-[11px] text-dark-400 mt-1">
-                          Categoría inicial para tu debut. El poder de ascender un jugador únicamente lo tienen los administradores del sitio.
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <div>
-                      <div className="w-full px-3.5 py-2.5 bg-dark-900 border border-dark-700/60 rounded-xl text-white text-sm flex items-center justify-between select-none">
-                        <span className="font-bold text-emerald-400">{player?.category || category} Categoría</span>
-                        <span className="text-[11px] text-dark-400 font-semibold bg-dark-950 px-2 py-0.5 rounded-md border border-dark-800">
-                          Oficial Asignada
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-dark-400 mt-1 leading-relaxed">
-                        El poder de ascender un jugador únicamente lo tienen los administradores del sitio.
-                      </p>
-                    </div>
-                  )}
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-dark-950/80 rounded-xl text-white text-sm focus:outline-none border border-emerald-500/40 focus:border-emerald-500"
+                  >
+                    {CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat} Categoría
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-dark-400 mt-1">
+                    Categoría deportiva oficial para participar en los torneos habilitados del circuito SPT.
+                  </p>
                 </div>
               </div>
 
