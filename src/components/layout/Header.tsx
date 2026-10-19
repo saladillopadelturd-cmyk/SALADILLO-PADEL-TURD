@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { Activity, Trophy, Shield, Menu, X, Calendar, Users } from "lucide-react";
+import { Activity, Trophy, Shield, Menu, X, Calendar, Users, LogOut } from "lucide-react";
 import { usePlayerIdentity } from "@/context/PlayerIdentityContext";
 import PlayerAvatar from "@/components/player/PlayerAvatar";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,8 +12,23 @@ import { useAuth } from "@/hooks/useAuth";
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
-  const { player, isIdentified, openFicha } = usePlayerIdentity();
-  const { isAdmin } = useAuth();
+  const router = useRouter();
+  const { player, isIdentified, openFicha, clearIdentity, loggedEmail } = usePlayerIdentity();
+  const { user, isAdmin, signOut } = useAuth();
+
+  const isUserLoggedIn = Boolean(isIdentified || loggedEmail || user);
+
+  const handleLogout = async () => {
+    try {
+      await clearIdentity();
+      await signOut();
+    } catch (err) {
+      console.warn("Error al cerrar sesión:", err);
+    }
+    if (pathname.startsWith("/admin")) {
+      router.push("/");
+    }
+  };
 
   const isAdminMode = Boolean(isAdmin || pathname.startsWith("/admin"));
 
@@ -142,6 +157,19 @@ export default function Header() {
               )}
             </Link>
 
+            {/* Botón Cerrar Sesión en Desktop */}
+            {isUserLoggedIn && (
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 transition-all cursor-pointer min-h-[38px]"
+                title="Cerrar sesión en este dispositivo"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Cerrar Sesión</span>
+              </button>
+            )}
+
             {/* Mobile Menu Button (Touch Target >= 44px) */}
             <button
               type="button"
@@ -255,6 +283,28 @@ export default function Header() {
                 )}
               </Link>
             </div>
+
+            {/* Opción Cerrar Sesión en Menú Móvil */}
+            {isUserLoggedIn && (
+              <div className="pt-2 border-t border-dark-800">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setMobileMenuOpen(false);
+                    await handleLogout();
+                  }}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-bold min-h-[48px] text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 active:scale-98 transition-all cursor-pointer text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <LogOut className="w-4 h-4 text-rose-400" />
+                    <span>Cerrar Sesión</span>
+                  </div>
+                  <span className="text-[11px] text-rose-400/80 font-mono truncate max-w-[150px]">
+                    {player?.email || user?.email || loggedEmail}
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

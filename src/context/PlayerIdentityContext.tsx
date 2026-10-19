@@ -75,6 +75,7 @@ interface PlayerIdentityContextType {
   }>;
   saveFicha: (formData: FichaFormData) => Promise<{ success: boolean; player?: Player; message?: string }>;
   clearIdentity: () => Promise<void>;
+  logout: () => Promise<void>;
   refreshIdentity: () => Promise<void>;
 }
 
@@ -306,18 +307,26 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Limpiar identidad en este dispositivo
-  const clearIdentity = async () => {
+  // Limpiar identidad y cerrar sesión en este dispositivo
+  const clearIdentity = useCallback(async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn("Error cerrando sesión en Supabase:", err);
+    }
+
     if (typeof window !== "undefined") {
       localStorage.removeItem(LOCAL_STORAGE_KEY);
-      sessionStorage.removeItem("spt_auth_dismissed");
+      sessionStorage.setItem("spt_auth_dismissed", "true");
     }
+
     setPlayer(null);
     setStats(null);
     setIsIdentified(false);
     setIsNewUser(false);
     setLoggedEmail(null);
-  };
+    setIsFichaOpen(false);
+  }, [supabase]);
 
   const refreshIdentity = async () => {
     if (loggedEmail) {
@@ -342,6 +351,7 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
         identifyWithEmail,
         saveFicha,
         clearIdentity,
+        logout: clearIdentity,
         refreshIdentity,
       }}
     >

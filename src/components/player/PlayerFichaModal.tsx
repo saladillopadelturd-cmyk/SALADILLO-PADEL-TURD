@@ -52,7 +52,7 @@ export default function PlayerFichaModal() {
     clearIdentity,
   } = usePlayerIdentity();
 
-  const { isAdmin } = useAuth();
+  const { isAdmin, signOut } = useAuth();
 
   // Modo: "view" (ver ficha identificada), "edit" (editar datos), "lookup" (buscar ficha por correo existente)
   const [mode, setMode] = useState<"view" | "edit" | "lookup">("edit");
@@ -604,12 +604,13 @@ export default function PlayerFichaModal() {
                   type="button"
                   onClick={async () => {
                     await clearIdentity();
-                    setMode("edit");
+                    await signOut();
+                    closeFicha();
                   }}
                   className="text-xs text-rose-400 hover:text-rose-300 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <LogOut className="w-3.5 h-3.5" />
-                  <span>Desconectar / Cambiar de jugador en este dispositivo</span>
+                  <span>Cerrar Sesión</span>
                 </button>
 
                 <div className="flex items-center gap-2">
@@ -1013,23 +1014,40 @@ export default function PlayerFichaModal() {
 
               {/* Acciones */}
               <div className="flex items-center justify-between pt-4 border-t border-dark-800">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    if (!isIdentified && typeof window !== "undefined") {
-                      sessionStorage.setItem("spt_auth_dismissed", "true");
-                    }
-                    if (isIdentified) {
-                      setMode("view");
-                    } else {
-                      closeFicha();
-                    }
-                  }}
-                  className="text-xs"
-                >
-                  {isIdentified ? "Cancelar" : "Continuar como espectador"}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      if (!isIdentified && typeof window !== "undefined") {
+                        sessionStorage.setItem("spt_auth_dismissed", "true");
+                      }
+                      if (isIdentified) {
+                        setMode("view");
+                      } else {
+                        closeFicha();
+                      }
+                    }}
+                    className="text-xs"
+                  >
+                    {isIdentified ? "Cancelar" : "Continuar como espectador"}
+                  </Button>
+
+                  {!isIdentified && (email || loggedEmail) && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await clearIdentity();
+                        await signOut();
+                        closeFicha();
+                      }}
+                      className="text-xs text-rose-400 hover:text-rose-300 inline-flex items-center gap-1 transition-colors cursor-pointer px-2 py-1"
+                    >
+                      <LogOut className="w-3 h-3" />
+                      <span>Cerrar sesión</span>
+                    </button>
+                  )}
+                </div>
 
                 <Button
                   type="submit"

@@ -20,11 +20,12 @@ import {
   User,
   CheckCircle2,
   Eye,
+  LogOut,
 } from "lucide-react";
 
 export default function JugadoresPage() {
-  const { player, stats, isIdentified, isLoading, openFicha } = usePlayerIdentity();
-  const { isAdmin } = useAuth();
+  const { player, stats, isIdentified, isLoading, openFicha, clearIdentity } = usePlayerIdentity();
+  const { isAdmin, signOut } = useAuth();
 
   // Si no está identificado, abrir la ficha automáticamente al entrar a /jugadores
   useEffect(() => {
@@ -156,9 +157,21 @@ export default function JugadoresPage() {
                   )}
                 </div>
 
-                <div className="pt-2">
+                <div className="pt-2 flex flex-wrap items-center gap-3">
                   <Button onClick={openFicha} variant="secondary" className="text-xs font-bold">
                     Editar Datos y Foto
+                  </Button>
+                  <Button
+                    onClick={async () => {
+                      await clearIdentity();
+                      await signOut();
+                    }}
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs font-bold text-rose-400 hover:text-white hover:bg-rose-600/20 border border-rose-500/30"
+                  >
+                    <LogOut className="w-3.5 h-3.5 mr-1.5" />
+                    Cerrar Sesión
                   </Button>
                 </div>
               </div>

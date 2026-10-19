@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
-import { LayoutDashboard, Trophy, Users, UserCheck, Shield, ArrowLeft, Image as ImageIcon, Sparkles } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { LayoutDashboard, Trophy, Users, UserCheck, Shield, ArrowLeft, Image as ImageIcon, Sparkles, LogOut } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { usePlayerIdentity } from "@/context/PlayerIdentityContext";
 
 const adminLinks = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -17,6 +19,19 @@ const adminLinks = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { signOut } = useAuth();
+  const { clearIdentity } = usePlayerIdentity();
+
+  const handleLogout = async () => {
+    try {
+      await clearIdentity();
+      await signOut();
+    } catch (err) {
+      console.warn("Error al cerrar sesión desde sidebar:", err);
+    }
+    router.push("/");
+  };
 
   return (
     <aside className="hidden lg:flex lg:flex-col w-64 bg-dark-950/90 backdrop-blur-md border-r border-dark-800 min-h-[calc(100vh-4rem)]">
@@ -60,7 +75,7 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="p-4 border-t border-dark-800/80">
+      <div className="p-4 border-t border-dark-800/80 space-y-2">
         <Link
           href="/"
           className="flex items-center gap-2 text-dark-400 hover:text-white text-xs font-semibold px-3 py-2 rounded-xl hover:bg-dark-900 transition-all"
@@ -68,6 +83,15 @@ export default function Sidebar() {
           <ArrowLeft className="w-4 h-4" />
           <span>Volver al sitio público</span>
         </Link>
+
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="w-full flex items-center gap-2 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 text-xs font-semibold px-3 py-2 rounded-xl border border-rose-500/20 transition-all cursor-pointer"
+        >
+          <LogOut className="w-4 h-4 text-rose-400" />
+          <span>Cerrar Sesión</span>
+        </button>
       </div>
     </aside>
   );
