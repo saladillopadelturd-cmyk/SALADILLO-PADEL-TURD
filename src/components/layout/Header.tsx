@@ -110,11 +110,11 @@ export default function Header() {
             </Link>
           </nav>
 
-          {/* Desktop Actions */}
-          <div className="flex items-center gap-3">
+          {/* Header Actions (Visible en versión móvil y desktop) */}
+          <div className="flex items-center gap-2 sm:gap-3">
             {/* CASO 1: Administrador -> Botón ADMIN (apagado = ve como usuario normal, encendido = ve opciones de admin) */}
             {isAdministrator ? (
-              <div className="hidden md:flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <div
                   className={`inline-flex items-center rounded-2xl p-1 transition-all border ${
                     adminModeEnabled
@@ -124,7 +124,7 @@ export default function Header() {
                 >
                   <Link
                     href="/admin"
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-xl transition-all cursor-pointer ${
+                    className={`inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 text-xs rounded-xl transition-all cursor-pointer ${
                       adminModeEnabled
                         ? "bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-black shadow-[0_0_12px_rgba(16,185,129,0.35)]"
                         : "text-dark-400 hover:text-white font-bold hover:bg-dark-800"
@@ -152,7 +152,7 @@ export default function Header() {
                         router.push("/");
                       }
                     }}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-extrabold rounded-xl transition-all cursor-pointer ml-1 ${
+                    className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] font-extrabold rounded-xl transition-all cursor-pointer ml-0.5 sm:ml-1 ${
                       adminModeEnabled
                         ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/40"
                         : "bg-dark-800 text-dark-400 hover:text-dark-200 border border-dark-700"
@@ -178,7 +178,7 @@ export default function Header() {
                   <button
                     type="button"
                     onClick={() => openFicha("view")}
-                    className="p-1 rounded-xl hover:bg-dark-800 transition-colors cursor-pointer"
+                    className="hidden sm:inline-flex p-1 rounded-xl hover:bg-dark-800 transition-colors cursor-pointer"
                     title="Ver tu perfil de jugador"
                   >
                     <PlayerAvatar
@@ -195,7 +195,7 @@ export default function Header() {
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="p-2 text-rose-400 hover:text-white hover:bg-rose-500/20 rounded-xl border border-rose-500/20 transition-colors cursor-pointer"
+                  className="hidden md:inline-flex p-2 text-rose-400 hover:text-white hover:bg-rose-500/20 rounded-xl border border-rose-500/20 transition-colors cursor-pointer"
                   title="Cerrar Sesión"
                 >
                   <LogOut className="w-4 h-4" />
@@ -203,14 +203,14 @@ export default function Header() {
               </div>
             ) : isNormalUser ? (
               /* CASO 2: Usuario Normal Logueado -> La FOTOGRAFÍA del usuario (haciendo click ingresa a ver y editar su perfil) */
-              <div className="hidden md:flex items-center bg-dark-900/90 border border-emerald-500/30 rounded-2xl p-1 shadow-md">
+              <div className="flex items-center bg-dark-900/90 border border-emerald-500/30 rounded-2xl p-1 shadow-md">
                 <button
                   type="button"
                   onClick={() => openFicha("view")}
-                  className="flex items-center gap-2.5 pl-1.5 pr-2.5 py-1 text-xs font-bold text-emerald-300 hover:text-white transition-all cursor-pointer group"
+                  className="flex items-center gap-2 pl-1 pr-1.5 sm:pr-2.5 py-1 text-xs font-bold text-emerald-300 hover:text-white transition-all cursor-pointer group"
                   title="Hacer clic para ver y editar tu perfil"
                 >
-                  <div className="relative group-hover:scale-105 transition-transform">
+                  <div className="relative group-hover:scale-105 transition-transform flex-shrink-0">
                     <PlayerAvatar
                       photoUrl={headerPlayerPhoto}
                       firstName={player?.first_name || "Usuario"}
@@ -220,7 +220,7 @@ export default function Header() {
                       showCategoryBorder
                     />
                   </div>
-                  <div className="text-left hidden lg:block">
+                  <div className="text-left hidden md:block">
                     <span className="text-white block font-bold leading-tight truncate max-w-[120px] group-hover:text-emerald-300 transition-colors">
                       {player ? `${player.first_name} ${player.last_name}` : "Mi Perfil"}
                     </span>
@@ -230,24 +230,24 @@ export default function Header() {
                   </div>
                 </button>
 
-                <div className="h-5 w-px bg-dark-800 mx-1" />
+                <div className="hidden md:block h-5 w-px bg-dark-800 mx-1" />
 
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="p-1.5 text-rose-400 hover:text-white hover:bg-rose-500/20 rounded-xl transition-colors cursor-pointer"
+                  className="hidden md:inline-flex p-1.5 text-rose-400 hover:text-white hover:bg-rose-500/20 rounded-xl transition-colors cursor-pointer"
                   title="Cerrar Sesión"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
               </div>
             ) : (
-              /* CASO 3: Usuario DESCONOCIDO -> Botón INGRESAR */
-              <div className="hidden md:flex items-center gap-2">
+              /* CASO 3: Usuario DESCONOCIDO -> Botón INGRESAR en el header (visible en desktop y móvil) */
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={openCreateProfile}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl text-dark-300 hover:text-white bg-dark-900/80 hover:bg-dark-800 border border-dark-800 transition-all cursor-pointer min-h-[38px]"
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl text-dark-300 hover:text-white bg-dark-900/80 hover:bg-dark-800 border border-dark-800 transition-all cursor-pointer min-h-[36px]"
                   title="Crea tu perfil oficial de jugador"
                 >
                   <UserPlus className="w-3.5 h-3.5" />
@@ -257,10 +257,10 @@ export default function Header() {
                 <button
                   type="button"
                   onClick={openLogin}
-                  className="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-black rounded-xl text-dark-950 bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 shadow-lg shadow-emerald-500/25 active:scale-95 transition-all cursor-pointer min-h-[38px]"
+                  className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 text-xs font-black rounded-xl text-dark-950 bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 shadow-md shadow-emerald-500/25 active:scale-95 transition-all cursor-pointer min-h-[36px]"
                   title="Ingresar con tu correo electrónico"
                 >
-                  <LogIn className="w-4 h-4 text-dark-950" />
+                  <LogIn className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-dark-950" />
                   <span>INGRESAR</span>
                 </button>
               </div>
