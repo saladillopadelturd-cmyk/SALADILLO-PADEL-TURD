@@ -27,12 +27,6 @@ export default function JugadoresPage() {
   const { player, stats, isIdentified, isLoading, openFicha, clearIdentity } = usePlayerIdentity();
   const { isAdmin, signOut } = useAuth();
 
-  // Si no está identificado, abrir la ficha automáticamente al entrar a /jugadores
-  useEffect(() => {
-    if (!isLoading && !isIdentified) {
-      openFicha();
-    }
-  }, [isLoading, isIdentified, openFicha]);
 
   const resolvedPhoto =
     player?.photo_url ||

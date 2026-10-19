@@ -13,7 +13,7 @@ export default function PlayerRegistrationBanner({
   variant = "home",
   className = "",
 }: PlayerRegistrationBannerProps) {
-  const { isIdentified, isLoading } = usePlayerIdentity();
+  const { isIdentified, isLoading, openFicha } = usePlayerIdentity();
 
   // Si está verificando identidad o si ya hay un jugador logueado identificado en la base de datos, NO APARECE
   if (isLoading || isIdentified) {
@@ -32,16 +32,17 @@ export default function PlayerRegistrationBanner({
           <div>
             <h3 className="text-sm font-bold text-white">¿Querés que te anoten en los próximos torneos?</h3>
             <p className="text-xs text-dark-300">
-              Creá tu perfil en forma autónoma. Para cada torneo, el administrador solo podrá convocar a los jugadores que cumplan con las reglas de categoría del torneo.
+              Creá tu perfil en forma autónoma para participar en los torneos habilitados según tu categoría reglamentaria.
             </p>
           </div>
         </div>
-        <Link
-          href="/jugadores"
-          className="w-full sm:w-auto text-center px-4 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold text-xs transition-all whitespace-nowrap active:scale-95"
+        <button
+          type="button"
+          onClick={openFicha}
+          className="w-full sm:w-auto text-center px-4 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold text-xs transition-all whitespace-nowrap active:scale-95 cursor-pointer"
         >
-          Mi Perfil de Jugador
-        </Link>
+          Crear Mi Perfil
+        </button>
       </div>
     );
   }
@@ -60,17 +61,18 @@ export default function PlayerRegistrationBanner({
               ¿Querés participar en los torneos oficiales SPT?
             </h3>
             <p className="text-sm text-dark-300 max-w-2xl leading-relaxed">
-              Creá tu perfil en forma autónoma con tu foto de rostro (encuadre cuadrado 1:1), categoría y datos de contacto. Al registrarte con tu correo, el administrador podrá seleccionarte al conformar las parejas para los torneos habilitados según tu categoría reglamentaria.
+              Creá tu perfil en forma autónoma con tu foto de rostro (encuadre cuadrado 1:1), categoría y datos de contacto. Al registrarte con tu correo, el administrador podrá convocarte y asignarte a los torneos oficiales.
             </p>
           </div>
-          <Link
-            href="/jugadores"
+          <button
+            type="button"
+            onClick={openFicha}
             className="inline-flex items-center gap-2 px-6 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-dark-950 font-black text-sm rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer whitespace-nowrap"
           >
             <Users className="w-4 h-4" />
-            <span>CARGAR MI PERFIL</span>
+            <span>CREAR MI PERFIL</span>
             <ArrowRight className="w-4 h-4" />
-          </Link>
+          </button>
         </div>
       </div>
     </section>

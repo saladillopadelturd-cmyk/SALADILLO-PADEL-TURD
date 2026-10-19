@@ -171,9 +171,20 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
   const checkBrowserIdentity = useCallback(async () => {
     setIsLoading(true);
     try {
+      // 1. Si el usuario cerró sesión en este dispositivo, NO auto-loguear en el próximo inicio
+      if (typeof window !== "undefined" && localStorage.getItem("spt_logged_out") === "true") {
+        setIsIdentified(false);
+        setPlayer(null);
+        setStats(null);
+        setLoggedEmail(null);
+        setIsNewUser(false);
+        setIsLoading(false);
+        return;
+      }
+
       let candidateEmail: string | null = null;
 
-      // 1. Determinar si hay una sesión activa de Supabase Auth en el navegador
+      // 2. Determinar si hay una sesión activa de Supabase Auth en el navegador
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -182,7 +193,7 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
         candidateEmail = user.email;
       }
 
-      // 2. Si no hay auth user, determinar si hay un correo guardado en este navegador/dispositivo
+      // 3. Si no hay auth user, determinar si hay un correo guardado en este navegador/dispositivo
       if (!candidateEmail && typeof window !== "undefined") {
         const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
         if (stored && stored.trim()) {
@@ -190,29 +201,20 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // 3. Evaluar identidad y determinar si es usuario existente o nuevo usuario
+      // 4. Evaluar identidad y determinar si es usuario existente o nuevo usuario
       if (candidateEmail) {
         const res = await resolveIdentityByEmail(candidateEmail);
         if (res.isNew) {
-          // Es un nuevo usuario con cuenta de correo en el navegador:
-          // Inmediatamente abrimos la ficha para que complete su perfil
-          setIsFichaOpen(true);
+          setIsNewUser(true);
         }
       } else {
-        // NO hay cuenta de correo logueada en el navegador (primer ingreso en desktop o móvil)
+        // Usuario desconocido al ingresar a la app:
+        // Tendrá sus 2 opciones visibles (ADMIN para ingresar su email, o invitación a crear su perfil)
         setIsIdentified(false);
         setPlayer(null);
         setStats(null);
         setLoggedEmail(null);
         setIsNewUser(false);
-
-        // Si el usuario aún no determinó su cuenta en esta sesión, abrir el modal inicial de identificación
-        if (typeof window !== "undefined") {
-          const dismissed = sessionStorage.getItem("spt_auth_dismissed");
-          if (!dismissed) {
-            setIsFichaOpen(true);
-          }
-        }
       }
     } catch (err) {
       console.warn("Error comprobando identidad del navegador:", err);
@@ -227,9 +229,29 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
     // Escuchar cambios de sesión de autenticación en el navegador
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_OUT") {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("spt_logged_out", "true");
+        }
+        setIsIdentified(false);
+        setPlayer(null);
+        setStats(null);
+        setLoggedEmail(null);
+        setIsNewUser(false);
+        return;
+      }
+
+      // Si el usuario cerró sesión en este dispositivo, ignorar recuperaciones no explícitas
+      if (typeof window !== "undefined" && localStorage.getItem("spt_logged_out") === "true" && event !== "SIGNED_IN") {
+        return;
+      }
+
       const authEmail = session?.user?.email;
-      if (authEmail) {
+      if (authEmail && event === "SIGNED_IN") {
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("spt_logged_out");
+        }
         const res = await resolveIdentityByEmail(authEmail);
         if (res.isNew) {
           setIsNewUser(true);
@@ -245,6 +267,9 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
 
   // Identificar manualmente con email
   const identifyWithEmail = async (email: string) => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("spt_logged_out");
+    }
     setIsLoading(true);
     try {
       return await resolveIdentityByEmail(email);
@@ -255,6 +280,9 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
 
   // Guardar datos de la ficha
   const saveFicha = async (formData: FichaFormData): Promise<{ success: boolean; player?: Player; message?: string }> => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("spt_logged_out");
+    }
     setIsLoading(true);
     try {
       const cleanEmail = formData.email.trim().toLowerCase();
@@ -310,14 +338,26 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
   // Limpiar identidad y cerrar sesión en este dispositivo
   const clearIdentity = useCallback(async () => {
     try {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: "global" });
     } catch (err) {
       console.warn("Error cerrando sesión en Supabase:", err);
     }
 
     if (typeof window !== "undefined") {
       localStorage.removeItem(LOCAL_STORAGE_KEY);
-      sessionStorage.setItem("spt_auth_dismissed", "true");
+      localStorage.setItem("spt_logged_out", "true");
+      sessionStorage.clear();
+
+      try {
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const k = localStorage.key(i);
+          if (k && (k.startsWith("sb-") || k.includes("supabase"))) {
+            localStorage.removeItem(k);
+          }
+        }
+      } catch (e) {
+        console.warn("Error limpiando almacenamiento local:", e);
+      }
     }
 
     setPlayer(null);

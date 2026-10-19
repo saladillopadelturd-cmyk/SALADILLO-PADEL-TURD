@@ -33,6 +33,13 @@ export function useAuth() {
 
     const getUser = async () => {
       try {
+        if (typeof window !== "undefined" && localStorage.getItem("spt_logged_out") === "true") {
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+          return;
+        }
+
         const {
           data: { user },
         } = await supabase.auth.getUser();
@@ -52,7 +59,21 @@ export function useAuth() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_OUT") {
+        setUser(null);
+        setProfile(null);
+        return;
+      }
+
+      if (typeof window !== "undefined" && localStorage.getItem("spt_logged_out") === "true" && event !== "SIGNED_IN") {
+        return;
+      }
+
+      if (event === "SIGNED_IN" && typeof window !== "undefined") {
+        localStorage.removeItem("spt_logged_out");
+      }
+
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       if (currentUser) {
@@ -66,7 +87,22 @@ export function useAuth() {
   }, [supabase]);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut({ scope: "global" });
+    } catch (e) {
+      console.warn("Error in signOut:", e);
+    }
+    if (typeof window !== "undefined") {
+      localStorage.setItem("spt_logged_out", "true");
+      try {
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const k = localStorage.key(i);
+          if (k && (k.startsWith("sb-") || k.includes("supabase"))) {
+            localStorage.removeItem(k);
+          }
+        }
+      } catch (e) {}
+    }
     setUser(null);
     setProfile(null);
   };
