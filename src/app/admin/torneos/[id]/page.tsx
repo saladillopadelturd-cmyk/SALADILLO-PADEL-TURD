@@ -665,8 +665,14 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
   const handleDelete = () => {
     startTransition(async () => {
       try {
-        const { error } = await supabase.from("tournaments").delete().eq("id", tournamentId);
-        if (error) throw error;
+        const res = await fetch(`/api/torneos?id=${encodeURIComponent(tournamentId)}`, {
+          method: "DELETE",
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Error al eliminar el torneo");
+        }
+
         setShowDelete(false);
         router.push("/admin/torneos");
         router.refresh();

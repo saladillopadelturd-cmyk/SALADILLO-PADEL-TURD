@@ -2,10 +2,12 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/Tabs";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -38,6 +40,7 @@ import {
   RefreshCw,
   X,
   RotateCcw,
+  Trash2,
 } from "lucide-react";
 
 interface TournamentDetailProps {
@@ -74,6 +77,7 @@ const STATUS_VARIANTS: Record<string, "default" | "success" | "warning" | "dange
 };
 
 export default function TournamentDetailView({ id, initialTab }: TournamentDetailProps) {
+  const router = useRouter();
   const { isAdmin } = useAuth();
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
@@ -87,6 +91,30 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
   const [isGeneratingPlayoffs, setIsGeneratingPlayoffs] = useState(false);
   const [isEditingConformation, setIsEditingConformation] = useState(false);
   const [notification, setNotification] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteTournament = async () => {
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/torneos?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Error al eliminar el torneo");
+      }
+      setShowDeleteModal(false);
+      router.push("/torneos");
+      router.refresh();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error al eliminar el torneo";
+      setNotification({ type: "error", text: msg });
+      setShowDeleteModal(false);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Estados de Programación de Canchas y Horarios
   const [isAutoScheduleOpen, setIsAutoScheduleOpen] = useState(false);
@@ -858,7 +886,7 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
         >
           <ArrowLeft className="w-4 h-4" /> Volver a torneos
         </Link>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           <Link
             href={`/admin/parejas?torneo=${id}`}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold transition-all"
@@ -867,6 +895,16 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
             <Users className="w-3.5 h-3.5 text-emerald-400" />
             <span>Parejas ({couples.length})</span>
           </Link>
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={() => setShowDeleteModal(true)}
+            className="text-xs font-bold flex items-center gap-1.5 whitespace-nowrap"
+            title="Eliminar este torneo de forma definitiva"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Eliminar Torneo</span>
+          </Button>
           <Link
             href={`/admin/torneos/${id}`}
             className="text-xs text-primary-400 hover:underline"
@@ -2020,6 +2058,15 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
           </div>
         </div>
       </Modal>
+
+      <ConfirmModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDeleteTournament}
+        loading={isDeleting}
+        title="Eliminar Torneo"
+        message={`¿Estás seguro de que deseas eliminar el torneo "${tournament?.name}"? Esta acción borrará todas sus zonas, parejas y partidos de forma irreversible.`}
+      />
     </div>
   );
 }

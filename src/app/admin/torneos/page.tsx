@@ -328,12 +328,14 @@ export default function AdminTorneosPage() {
 
     startTransition(async () => {
       try {
-        const { error } = await supabase
-          .from("tournaments")
-          .delete()
-          .eq("id", target.id);
+        const res = await fetch(`/api/torneos?id=${encodeURIComponent(target.id)}`, {
+          method: "DELETE",
+        });
+        const data = await res.json();
 
-        if (error) throw error;
+        if (!res.ok) {
+          throw new Error(data.error || "Error al eliminar el torneo");
+        }
 
         setTournaments((prev) => prev.filter((t) => t.id !== target.id));
         setDeleting(null);
