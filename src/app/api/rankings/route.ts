@@ -101,6 +101,7 @@ export async function GET(request: Request) {
       const pName = p ? formatPlayerShortName(p) : "Jugador";
       return {
         ...r,
+        category: p?.category || r.category || "General",
         name: pName,
         player: p,
       };
@@ -120,7 +121,7 @@ export async function GET(request: Request) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (allPlayers || []).forEach((p: any) => {
       if (includedPlayerIds.has(p.id)) return;
-      if (category && category !== "all" && category !== "Todas" && p.category !== category) {
+      if (category && category !== "all" && category !== "Todas" && (p.category || "").toLowerCase().trim() !== category.toLowerCase().trim()) {
         return;
       }
 
@@ -148,10 +149,16 @@ export async function GET(request: Request) {
     });
   }
 
+  // Filtrado final estricto por categoría si fue provista
+  const finalRankings = (category && category !== "all" && category !== "Todas")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? enrichedRankings.filter((r: any) => (r.category || "").toLowerCase().trim() === category.toLowerCase().trim())
+    : enrichedRankings;
+
   return NextResponse.json({
     success: true,
-    rankings: enrichedRankings,
-    count: enrichedRankings.length,
+    rankings: finalRankings,
+    count: finalRankings.length,
   });
 }
 
