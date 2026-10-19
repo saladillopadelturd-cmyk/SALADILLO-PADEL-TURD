@@ -14,11 +14,17 @@ export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
   const { player, isIdentified, openFicha, openLogin, openCreateProfile, clearIdentity, loggedEmail } = usePlayerIdentity();
-  const { user, isAdmin, signOut } = useAuth();
+  const { user, isAdmin, isActualAdmin, adminModeEnabled, toggleAdminMode, signOut } = useAuth();
 
-  const isUserLoggedIn = Boolean(isIdentified || loggedEmail || user);
-  const isKnownNonAdmin = Boolean(isIdentified && player && !isAdmin);
-  const isUnknown = Boolean(!isIdentified && !user && !loggedEmail);
+  const isAdministrator = Boolean(
+    isActualAdmin ||
+    (isIdentified && player?.email?.toLowerCase() === "matiasvidal11972@gmail.com") ||
+    (loggedEmail?.toLowerCase() === "matiasvidal11972@gmail.com")
+  );
+
+  const isNormalUser = Boolean(!isAdministrator && (isIdentified || loggedEmail || user));
+  const isUnknown = Boolean(!isAdministrator && !isNormalUser);
+  const isUserLoggedIn = Boolean(isAdministrator || isNormalUser);
 
   const handleLogout = async () => {
     try {
@@ -32,7 +38,7 @@ export default function Header() {
     }
   };
 
-  const isAdminMode = Boolean(isAdmin || pathname.startsWith("/admin"));
+  const isAdminMode = Boolean(isAdmin);
 
   const headerPlayerPhoto =
     player?.photo_url ||
@@ -106,29 +112,120 @@ export default function Header() {
 
           {/* Desktop Actions */}
           <div className="flex items-center gap-3">
-            {/* CASO 1: Usuario conocido NO administrador -> Colocar su foto en lugar del botón ADMIN */}
-            {isKnownNonAdmin && player ? (
+            {/* CASO 1: Administrador -> Botón ADMIN (apagado = ve como usuario normal, encendido = ve opciones de admin) */}
+            {isAdministrator ? (
+              <div className="hidden md:flex items-center gap-2">
+                <div
+                  className={`inline-flex items-center rounded-2xl p-1 transition-all border ${
+                    adminModeEnabled
+                      ? "bg-emerald-950/70 border-emerald-500/50 shadow-md shadow-emerald-500/20"
+                      : "bg-dark-900/90 border-dark-700/80"
+                  }`}
+                >
+                  <Link
+                    href="/admin"
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-xl transition-all cursor-pointer ${
+                      adminModeEnabled
+                        ? "bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-black shadow-[0_0_12px_rgba(16,185,129,0.35)]"
+                        : "text-dark-400 hover:text-white font-bold hover:bg-dark-800"
+                    }`}
+                    title={
+                      adminModeEnabled
+                        ? "Modo Administrador Encendido - Clic para ir al Panel de Control"
+                        : "Modo Administrador Apagado (Viendo la app como usuario normal)"
+                    }
+                  >
+                    <Shield
+                      className={`w-3.5 h-3.5 transition-colors ${
+                        adminModeEnabled ? "text-dark-950 fill-dark-950/20" : "text-dark-400"
+                      }`}
+                    />
+                    <span>ADMIN</span>
+                  </Link>
+
+                  {/* Switch Encendido / Apagado interactivo */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = toggleAdminMode();
+                      if (!next && pathname.startsWith("/admin")) {
+                        router.push("/");
+                      }
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-extrabold rounded-xl transition-all cursor-pointer ml-1 ${
+                      adminModeEnabled
+                        ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/40"
+                        : "bg-dark-800 text-dark-400 hover:text-dark-200 border border-dark-700"
+                    }`}
+                    title={
+                      adminModeEnabled
+                        ? "Clic para APAGAR modo admin (ver app como usuario normal)"
+                        : "Clic para ENCENDER modo admin (ver opciones de administrador)"
+                    }
+                  >
+                    <span
+                      className={`w-2 h-2 rounded-full transition-all ${
+                        adminModeEnabled
+                          ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"
+                          : "bg-dark-500"
+                      }`}
+                    />
+                    <span>{adminModeEnabled ? "ENCENDIDO" : "APAGADO"}</span>
+                  </button>
+                </div>
+
+                {player && (
+                  <button
+                    type="button"
+                    onClick={() => openFicha("view")}
+                    className="p-1 rounded-xl hover:bg-dark-800 transition-colors cursor-pointer"
+                    title="Ver tu perfil de jugador"
+                  >
+                    <PlayerAvatar
+                      photoUrl={headerPlayerPhoto}
+                      firstName={player.first_name}
+                      lastName={player.last_name}
+                      category={player.category}
+                      size="xs"
+                      showCategoryBorder
+                    />
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="p-2 text-rose-400 hover:text-white hover:bg-rose-500/20 rounded-xl border border-rose-500/20 transition-colors cursor-pointer"
+                  title="Cerrar Sesión"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            ) : isNormalUser ? (
+              /* CASO 2: Usuario Normal Logueado -> La FOTOGRAFÍA del usuario (haciendo click ingresa a ver y editar su perfil) */
               <div className="hidden md:flex items-center bg-dark-900/90 border border-emerald-500/30 rounded-2xl p-1 shadow-md">
                 <button
                   type="button"
-                  onClick={openFicha}
+                  onClick={() => openFicha("view")}
                   className="flex items-center gap-2.5 pl-1.5 pr-2.5 py-1 text-xs font-bold text-emerald-300 hover:text-white transition-all cursor-pointer group"
-                  title="Abrir tu Perfil de Usuario"
+                  title="Hacer clic para ver y editar tu perfil"
                 >
-                  <PlayerAvatar
-                    photoUrl={headerPlayerPhoto}
-                    firstName={player.first_name}
-                    lastName={player.last_name}
-                    category={player.category}
-                    size="sm"
-                    showCategoryBorder
-                  />
+                  <div className="relative group-hover:scale-105 transition-transform">
+                    <PlayerAvatar
+                      photoUrl={headerPlayerPhoto}
+                      firstName={player?.first_name || "Usuario"}
+                      lastName={player?.last_name || ""}
+                      category={player?.category}
+                      size="sm"
+                      showCategoryBorder
+                    />
+                  </div>
                   <div className="text-left hidden lg:block">
                     <span className="text-white block font-bold leading-tight truncate max-w-[120px] group-hover:text-emerald-300 transition-colors">
-                      {player.first_name} {player.last_name}
+                      {player ? `${player.first_name} ${player.last_name}` : "Mi Perfil"}
                     </span>
                     <span className="text-[10px] text-emerald-400 font-semibold leading-none block mt-0.5">
-                      {player.category || "5ta"} • Mi Perfil
+                      {player?.category ? `${player.category} • ` : ""}Ver y Editar
                     </span>
                   </div>
                 </button>
@@ -139,76 +236,18 @@ export default function Header() {
                   type="button"
                   onClick={handleLogout}
                   className="p-1.5 text-rose-400 hover:text-white hover:bg-rose-500/20 rounded-xl transition-colors cursor-pointer"
-                  title="Cerrar Sesión de tu usuario"
+                  title="Cerrar Sesión"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
               </div>
-            ) : isAdmin ? (
-              /* CASO 2: Administrador -> Botón ADMIN */
-              <div className="hidden md:flex items-center gap-2">
-                <Link
-                  href="/admin"
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-xl transition-all cursor-pointer ${
-                    isAdminMode
-                      ? "bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-black border border-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.45)] ring-1 ring-emerald-400/50"
-                      : "font-semibold text-dark-400 hover:text-white bg-dark-900/80 hover:bg-dark-800 border border-dark-800"
-                  }`}
-                  title={isAdminMode ? "Modo Administrador Encendido" : "Acceso a Administración"}
-                >
-                  <Shield
-                    className={`w-3.5 h-3.5 transition-colors ${
-                      isAdminMode ? "text-dark-950 fill-dark-950/20" : "text-blue-400"
-                    }`}
-                  />
-                  <span>Admin</span>
-                  {isAdminMode && (
-                    <span
-                      className="w-1.5 h-1.5 rounded-full bg-dark-950 animate-pulse ml-0.5"
-                      title="Modo Administrador Activo"
-                    />
-                  )}
-                </Link>
-
-                {isIdentified && player && (
-                  <button
-                    type="button"
-                    onClick={openFicha}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-dark-900 border border-dark-800 hover:border-emerald-500/30 text-xs font-semibold text-dark-300 hover:text-white transition-all cursor-pointer"
-                    title="Mi Perfil"
-                  >
-                    <PlayerAvatar
-                      photoUrl={headerPlayerPhoto}
-                      firstName={player.first_name}
-                      lastName={player.last_name}
-                      category={player.category}
-                      size="xs"
-                      showCategoryBorder
-                    />
-                    <span className="truncate max-w-[80px]">{player.first_name}</span>
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 transition-all cursor-pointer min-h-[38px]"
-                  title="Cerrar sesión"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Salir</span>
-                </button>
-              </div>
             ) : (
-              /* CASO 3: Usuario DESCONOCIDO -> 2 opciones:
-                 1. Tocar el botón INGRESAR para ingresar su email y la app decidirá si es usuario normal o administrador
-                 2. Tocar la invitación a crear su perfil
-              */
+              /* CASO 3: Usuario DESCONOCIDO -> Botón INGRESAR */
               <div className="hidden md:flex items-center gap-2">
                 <button
                   type="button"
                   onClick={openCreateProfile}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-dark-950 shadow-md shadow-emerald-500/25 active:scale-95 transition-all cursor-pointer min-h-[38px]"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl text-dark-300 hover:text-white bg-dark-900/80 hover:bg-dark-800 border border-dark-800 transition-all cursor-pointer min-h-[38px]"
                   title="Crea tu perfil oficial de jugador"
                 >
                   <UserPlus className="w-3.5 h-3.5" />
@@ -218,10 +257,10 @@ export default function Header() {
                 <button
                   type="button"
                   onClick={openLogin}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl text-white bg-dark-900/90 hover:bg-dark-800 border border-emerald-500/40 hover:border-emerald-400 shadow-sm transition-all cursor-pointer min-h-[38px]"
+                  className="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-black rounded-xl text-dark-950 bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 shadow-lg shadow-emerald-500/25 active:scale-95 transition-all cursor-pointer min-h-[38px]"
                   title="Ingresar con tu correo electrónico"
                 >
-                  <LogIn className="w-3.5 h-3.5 text-emerald-400" />
+                  <LogIn className="w-4 h-4 text-dark-950" />
                   <span>INGRESAR</span>
                 </button>
               </div>
@@ -249,30 +288,90 @@ export default function Header() {
         <div className="md:hidden border-t border-dark-800 bg-dark-950/95 backdrop-blur-2xl animate-in">
           <div className="px-4 py-4 space-y-2">
             {/* Si es usuario conocido NO ADMIN -> Tarjeta con su foto y perfil (en lugar de admin) */}
-            {isKnownNonAdmin && player && (
+            {/* 1. Si es ADMINISTRADOR -> Tarjeta de control ADMIN (Encendido / Apagado) */}
+            {isAdministrator && (
+              <div className="p-3.5 mb-2 rounded-xl bg-dark-900 border border-emerald-500/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <Shield className={`w-5 h-5 ${adminModeEnabled ? "text-emerald-400" : "text-dark-400"}`} />
+                    <div>
+                      <div className="text-sm font-bold text-white flex items-center gap-2">
+                        <span>BOTÓN ADMIN</span>
+                        <span
+                          className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                            adminModeEnabled
+                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                              : "bg-dark-800 text-dark-400 border border-dark-700"
+                          }`}
+                        >
+                          {adminModeEnabled ? "ENCENDIDO" : "APAGADO"}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-dark-400">
+                        {adminModeEnabled
+                          ? "Viendo la app con opciones de administrador"
+                          : "Viendo la app como usuario normal"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Switch para alternar */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = toggleAdminMode();
+                      if (!next && pathname.startsWith("/admin")) {
+                        router.push("/");
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-extrabold cursor-pointer transition-all ${
+                      adminModeEnabled
+                        ? "bg-emerald-500 text-dark-950 shadow-md shadow-emerald-500/30"
+                        : "bg-dark-800 text-dark-300 border border-dark-700"
+                    }`}
+                  >
+                    {adminModeEnabled ? "Apagar" : "Encender"}
+                  </button>
+                </div>
+
+                {adminModeEnabled && (
+                  <Link
+                    href="/admin"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold hover:bg-emerald-500/30 transition-colors"
+                  >
+                    <Shield className="w-3.5 h-3.5" />
+                    <span>Ir al Panel Administrador</span>
+                  </Link>
+                )}
+              </div>
+            )}
+
+            {/* 2. Si es USUARIO NORMAL -> Tarjeta con su FOTOGRAFÍA (haciendo click ingresa a ver y editar su perfil) */}
+            {isNormalUser && (
               <div className="p-3 mb-2 rounded-xl bg-gradient-to-r from-emerald-950/70 to-dark-900 border border-emerald-500/30 flex items-center justify-between gap-2">
                 <div
                   onClick={() => {
                     setMobileMenuOpen(false);
-                    openFicha();
+                    openFicha("view");
                   }}
                   className="flex items-center gap-3 cursor-pointer flex-1 min-w-0"
                 >
                   <PlayerAvatar
                     photoUrl={headerPlayerPhoto}
-                    firstName={player.first_name}
-                    lastName={player.last_name}
-                    category={player.category}
+                    firstName={player?.first_name || "Usuario"}
+                    lastName={player?.last_name || ""}
+                    category={player?.category}
                     size="md"
                     showCategoryBorder
                   />
                   <div className="truncate">
                     <div className="text-sm font-bold text-white leading-tight truncate">
-                      {player.first_name} {player.last_name}
+                      {player ? `${player.first_name} ${player.last_name}` : "Mi Perfil"}
                     </div>
                     <div className="text-[11px] text-emerald-400 flex items-center gap-1 font-medium mt-0.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                      {player.category || "5ta"} • Mi Perfil
+                      {player?.category ? `${player.category} • ` : ""}Ver y Editar Perfil
                     </div>
                   </div>
                 </div>
@@ -282,11 +381,11 @@ export default function Header() {
                     type="button"
                     onClick={() => {
                       setMobileMenuOpen(false);
-                      openFicha();
+                      openFicha("view");
                     }}
                     className="text-xs px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold border border-emerald-500/30 active:scale-95 transition-all cursor-pointer"
                   >
-                    Ver Perfil
+                    Ver / Editar
                   </button>
                   <button
                     type="button"
@@ -295,7 +394,7 @@ export default function Header() {
                       await handleLogout();
                     }}
                     className="p-1.5 rounded-lg text-rose-400 bg-rose-500/10 hover:bg-rose-500/25 border border-rose-500/30 active:scale-95 transition-all cursor-pointer"
-                    title="Cerrar sesión de este usuario"
+                    title="Cerrar sesión"
                   >
                     <LogOut className="w-4 h-4" />
                   </button>
@@ -303,10 +402,7 @@ export default function Header() {
               </div>
             )}
 
-            {/* Si es usuario DESCONOCIDO -> 2 opciones:
-                1. Tocar el botón INGRESAR para ingresar su email
-                2. Tocar la invitación a crear su perfil
-            */}
+            {/* 3. Si es usuario DESCONOCIDO -> Botón INGRESAR e invitación a crear perfil */}
             {isUnknown && (
               <div className="space-y-2 mb-2">
                 <button
@@ -315,19 +411,19 @@ export default function Header() {
                     setMobileMenuOpen(false);
                     openLogin();
                   }}
-                  className="w-full p-3.5 rounded-xl bg-dark-900 border border-emerald-500/40 hover:border-emerald-400 flex items-center justify-between text-left active:scale-98 transition-all cursor-pointer"
+                  className="w-full p-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-dark-950 font-black flex items-center justify-between text-left active:scale-98 transition-all cursor-pointer shadow-lg shadow-emerald-500/20"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-                      <LogIn className="w-4 h-4" />
+                    <div className="w-9 h-9 rounded-xl bg-dark-950/20 flex items-center justify-center text-dark-950">
+                      <LogIn className="w-5 h-5 text-dark-950" />
                     </div>
                     <div>
-                      <div className="text-sm font-bold text-white">INGRESAR</div>
-                      <div className="text-[11px] text-dark-300">Ingresa tu email para acceder a tu perfil o admin</div>
+                      <div className="text-sm font-black">INGRESAR</div>
+                      <div className="text-[11px] font-semibold text-dark-900">Ingresa tu email para acceder</div>
                     </div>
                   </div>
-                  <span className="text-xs px-2.5 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
-                    Ingresar
+                  <span className="text-xs px-3 py-1 rounded-lg bg-dark-950 text-emerald-400 font-bold">
+                    Entrar
                   </span>
                 </button>
 
@@ -337,20 +433,13 @@ export default function Header() {
                     setMobileMenuOpen(false);
                     openCreateProfile();
                   }}
-                  className="w-full p-3.5 rounded-xl bg-gradient-to-r from-emerald-950/70 to-dark-900 border border-emerald-500/30 flex items-center justify-between text-left active:scale-98 transition-all cursor-pointer"
+                  className="w-full p-3 rounded-xl bg-dark-900 border border-dark-800 flex items-center justify-between text-left active:scale-98 transition-all cursor-pointer text-dark-300 hover:text-white"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-                      <UserPlus className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-white">¿Sos jugador de pádel?</div>
-                      <div className="text-[11px] text-emerald-400 font-medium">Toca aquí para crear tu perfil oficial</div>
-                    </div>
+                    <UserPlus className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-semibold">¿Nuevo jugador? Crear mi Perfil</span>
                   </div>
-                  <span className="text-xs px-2.5 py-1.5 rounded-lg bg-emerald-500 text-dark-950 font-bold">
-                    Crear Perfil
-                  </span>
+                  <span className="text-[11px] text-emerald-400 font-bold">Crear →</span>
                 </button>
               </div>
             )}

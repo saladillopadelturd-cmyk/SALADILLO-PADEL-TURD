@@ -107,8 +107,60 @@ export function useAuth() {
     setProfile(null);
   };
 
-  const isRootAdmin = user?.email?.toLowerCase() === "matiasvidal11972@gmail.com";
-  const isAdmin = isRootAdmin || profile?.role === "admin" || (profile as unknown as { role: string })?.role === "super_admin";
+  const [adminModeEnabled, setAdminModeEnabled] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("spt_admin_mode_enabled") !== "false";
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    const handleAdminModeChange = (e: Event) => {
+      const customEvent = e as CustomEvent<boolean>;
+      if (customEvent.detail !== undefined) {
+        setAdminModeEnabled(Boolean(customEvent.detail));
+      } else if (typeof window !== "undefined") {
+        setAdminModeEnabled(localStorage.getItem("spt_admin_mode_enabled") !== "false");
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("spt_admin_mode_change", handleAdminModeChange);
+      window.addEventListener("storage", handleAdminModeChange);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("spt_admin_mode_change", handleAdminModeChange);
+        window.removeEventListener("storage", handleAdminModeChange);
+      }
+    };
+  }, []);
+
+  const toggleAdminMode = () => {
+    const nextVal = !adminModeEnabled;
+    setAdminModeEnabled(nextVal);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("spt_admin_mode_enabled", nextVal ? "true" : "false");
+      window.dispatchEvent(new CustomEvent("spt_admin_mode_change", { detail: nextVal }));
+    }
+    return nextVal;
+  };
+
+  const setAdminMode = (enabled: boolean) => {
+    setAdminModeEnabled(enabled);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("spt_admin_mode_enabled", enabled ? "true" : "false");
+      window.dispatchEvent(new CustomEvent("spt_admin_mode_change", { detail: enabled }));
+    }
+  };
+
+  const storedEmail = typeof window !== "undefined" ? localStorage.getItem("spt_player_email") : null;
+  const effectiveEmail = user?.email || storedEmail || "";
+  const isRootAdmin = effectiveEmail.toLowerCase() === "matiasvidal11972@gmail.com";
+  const isActualAdmin = isRootAdmin || profile?.role === "admin" || (profile as unknown as { role: string })?.role === "super_admin";
+  
+  // Con el botón ADMIN apagado verá la app como un usuario normal; con el botón ADMIN encendido verá las opciones de administrador
+  const isAdmin = Boolean(isActualAdmin && adminModeEnabled);
 
   return {
     user,
@@ -116,6 +168,10 @@ export function useAuth() {
     loading,
     signOut,
     isAdmin,
+    isActualAdmin,
+    adminModeEnabled,
+    toggleAdminMode,
+    setAdminMode,
     isSuperAdmin: isRootAdmin || (profile as unknown as { role: string })?.role === "super_admin",
   };
 }
