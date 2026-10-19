@@ -11,6 +11,7 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 import PhotoCropModal from "@/components/player/PhotoCropModal";
 import PlayerAvatar from "@/components/player/PlayerAvatar";
 import PlayerProfileModal from "@/components/player/PlayerProfileModal";
+import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase/client";
 import type { Player } from "@/types/tournament";
 import { AlertCircle, CheckCircle2, Eye, Search, Filter, ShieldCheck, UserCheck, Camera, Upload, Trash2, Move, Sparkles, User } from "lucide-react";
@@ -32,6 +33,7 @@ const GENDER_OPTIONS = [
 ];
 
 export default function AdminJugadoresPage() {
+  const { isAdmin, user } = useAuth();
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -349,17 +351,27 @@ export default function AdminJugadoresPage() {
   };
 
   const handleDelete = async () => {
-    if (!deleting) return;
+    if (!deleting || !isAdmin) return;
     const target = deleting;
 
     startTransition(async () => {
       try {
-        const { error } = await supabase
-          .from("players")
-          .delete()
-          .eq("id", target.id);
+        const effectiveEmail =
+          user?.email ||
+          (typeof window !== "undefined" ? localStorage.getItem("spt_player_email") : "") ||
+          "";
 
-        if (error) throw error;
+        const res = await fetch(`/api/players?id=${encodeURIComponent(target.id)}`, {
+          method: "DELETE",
+          headers: {
+            "x-admin-email": effectiveEmail,
+          },
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Error al eliminar el jugador");
+        }
 
         setPlayers((prev) => prev.filter((p) => p.id !== target.id));
         setDeleting(null);
@@ -717,15 +729,18 @@ export default function AdminJugadoresPage() {
                           >
                             Editar
                           </Button>
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            onClick={() => setDeleting(player)}
-                            disabled={isPending}
-                            className="text-xs h-8 px-2.5"
-                          >
-                            Eliminar
-                          </Button>
+                          {isAdmin && (
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              onClick={() => setDeleting(player)}
+                              disabled={isPending}
+                              className="text-xs h-8 px-2.5"
+                              title="Eliminar jugador (solo administradores)"
+                            >
+                              Eliminar
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>

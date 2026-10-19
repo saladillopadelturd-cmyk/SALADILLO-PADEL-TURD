@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClient, verifyIsAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -15,9 +15,19 @@ async function getSupabaseClient() {
 /**
  * DELETE /api/torneos?id=xxx o DELETE /api/torneos con body { id: "xxx" }
  * Elimina un torneo y todos sus datos relacionados (zonas, parejas, partidos).
+ * REQUISITO DE SEGURIDAD: Solo un administrador puede eliminar torneos.
  */
 export async function DELETE(request: Request) {
   try {
+    // 1. Verificación de permisos de administrador
+    const { isAdmin } = await verifyIsAdmin(request);
+    if (!isAdmin) {
+      return NextResponse.json(
+        { error: "Acceso denegado: solo un administrador puede eliminar torneos." },
+        { status: 403 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     let id = searchParams.get("id");
 
@@ -39,14 +49,14 @@ export async function DELETE(request: Request) {
 
     const supabase = await getSupabaseClient();
 
-    // 1. Obtener datos del torneo para mensaje y verificación
+    // 2. Obtener datos del torneo para mensaje y verificación
     const { data: tour } = await supabase
       .from("tournaments")
       .select("id, name")
       .eq("id", id.trim())
       .maybeSingle();
 
-    // 2. Eliminar el torneo en Supabase (cascada elimina matches, zones, couples, zone_couples)
+    // 3. Eliminar el torneo en Supabase (cascada elimina matches, zones, couples, zone_couples)
     const { data: deletedRows, error: deleteError } = await supabase
       .from("tournaments")
       .delete()

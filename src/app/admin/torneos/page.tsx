@@ -9,6 +9,7 @@ import Select from "@/components/ui/Select";
 import Badge from "@/components/ui/Badge";
 import Modal from "@/components/ui/Modal";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase/client";
 import type { Tournament, TournamentStatus } from "@/types/tournament";
 import { AlertCircle, CheckCircle2, Users } from "lucide-react";
@@ -87,6 +88,7 @@ const CATEGORY_OPTIONS = [
 ];
 
 export default function AdminTorneosPage() {
+  const { isAdmin, user } = useAuth();
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -323,13 +325,21 @@ export default function AdminTorneosPage() {
   };
 
   const handleDelete = async () => {
-    if (!deleting) return;
+    if (!deleting || !isAdmin) return;
     const target = deleting;
 
     startTransition(async () => {
       try {
+        const effectiveEmail =
+          user?.email ||
+          (typeof window !== "undefined" ? localStorage.getItem("spt_player_email") : "") ||
+          "";
+
         const res = await fetch(`/api/torneos?id=${encodeURIComponent(target.id)}`, {
           method: "DELETE",
+          headers: {
+            "x-admin-email": effectiveEmail,
+          },
         });
         const data = await res.json();
 
@@ -490,15 +500,18 @@ export default function AdminTorneosPage() {
                     Parejas
                   </Button>
                 </Link>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => setDeleting(tournament)}
-                  disabled={isPending}
-                  className="whitespace-nowrap flex-shrink-0"
-                >
-                  Eliminar
-                </Button>
+                {isAdmin && (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => setDeleting(tournament)}
+                    disabled={isPending}
+                    className="whitespace-nowrap flex-shrink-0"
+                    title="Eliminar torneo (solo administradores)"
+                  >
+                    Eliminar
+                  </Button>
+                )}
               </div>
             </Card>
           ))}

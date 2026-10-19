@@ -78,7 +78,7 @@ const STATUS_VARIANTS: Record<string, "default" | "success" | "warning" | "dange
 
 export default function TournamentDetailView({ id, initialTab }: TournamentDetailProps) {
   const router = useRouter();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
   const [couples, setCouples] = useState<Couple[]>([]);
@@ -95,10 +95,19 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDeleteTournament = async () => {
+    if (!isAdmin) return;
     setIsDeleting(true);
     try {
+      const effectiveEmail =
+        user?.email ||
+        (typeof window !== "undefined" ? localStorage.getItem("spt_player_email") : "") ||
+        "";
+
       const res = await fetch(`/api/torneos?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
+        headers: {
+          "x-admin-email": effectiveEmail,
+        },
       });
       const data = await res.json();
       if (!res.ok) {
@@ -895,16 +904,18 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
             <Users className="w-3.5 h-3.5 text-emerald-400" />
             <span>Parejas ({couples.length})</span>
           </Link>
-          <Button
-            variant="danger"
-            size="sm"
-            onClick={() => setShowDeleteModal(true)}
-            className="text-xs font-bold flex items-center gap-1.5 whitespace-nowrap"
-            title="Eliminar este torneo de forma definitiva"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Eliminar Torneo</span>
-          </Button>
+          {isAdmin && (
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => setShowDeleteModal(true)}
+              className="text-xs font-bold flex items-center gap-1.5 whitespace-nowrap"
+              title="Eliminar este torneo de forma definitiva (solo administradores)"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Eliminar Torneo</span>
+            </Button>
+          )}
           <Link
             href={`/admin/torneos/${id}`}
             className="text-xs text-primary-400 hover:underline"

@@ -9,6 +9,7 @@ import Badge from "@/components/ui/Badge";
 import Modal from "@/components/ui/Modal";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/Tabs";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase/client";
 import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
 import { calculateRoundRobinStandings } from "@/lib/tournament/standings";
@@ -59,6 +60,7 @@ const STAGE_LABELS: Record<string, string> = {
 
 function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
   const router = useRouter();
+  const { isAdmin, user } = useAuth();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab") || "config";
 
@@ -663,10 +665,19 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
 
   // 7. Action: Eliminar Torneo
   const handleDelete = () => {
+    if (!isAdmin) return;
     startTransition(async () => {
       try {
+        const effectiveEmail =
+          user?.email ||
+          (typeof window !== "undefined" ? localStorage.getItem("spt_player_email") : "") ||
+          "";
+
         const res = await fetch(`/api/torneos?id=${encodeURIComponent(tournamentId)}`, {
           method: "DELETE",
+          headers: {
+            "x-admin-email": effectiveEmail,
+          },
         });
         const data = await res.json();
         if (!res.ok) {
@@ -881,18 +892,20 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                   </div>
                 </div>
 
-                <div className="mt-8 pt-6 border-t border-dark-700 flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-bold text-rose-400">Zona de Peligro</h4>
-                    <p className="text-dark-500 text-xs">
-                      Eliminar este torneo borrará todas sus zonas, partidos y estadísticas asociadas.
-                    </p>
+                {isAdmin && (
+                  <div className="mt-8 pt-6 border-t border-dark-700 flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-rose-400">Zona de Peligro</h4>
+                      <p className="text-dark-500 text-xs">
+                        Eliminar este torneo borrará todas sus zonas, partidos y estadísticas asociadas.
+                      </p>
+                    </div>
+                    <Button variant="danger" size="sm" onClick={() => setShowDelete(true)} disabled={isPending}>
+                      <Trash2 className="w-4 h-4 mr-1.5" />
+                      Eliminar Torneo
+                    </Button>
                   </div>
-                  <Button variant="danger" size="sm" onClick={() => setShowDelete(true)} disabled={isPending}>
-                    <Trash2 className="w-4 h-4 mr-1.5" />
-                    Eliminar Torneo
-                  </Button>
-                </div>
+                )}
               </Card>
             </TabsContent>
 

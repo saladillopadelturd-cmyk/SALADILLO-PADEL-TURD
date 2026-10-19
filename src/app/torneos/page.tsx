@@ -6,6 +6,7 @@ import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase/client";
 import type { Tournament } from "@/types/tournament";
 import { isSumaCategory } from "@/lib/tournament/couples";
@@ -47,6 +48,7 @@ const STATUS_VARIANTS: Record<string, "default" | "success" | "warning" | "dange
 };
 
 export default function TorneosPage() {
+  const { isAdmin, user } = useAuth();
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingTournament, setDeletingTournament] = useState<Tournament | null>(null);
@@ -98,13 +100,21 @@ export default function TorneosPage() {
   }, [loadTournaments, supabase]);
 
   const handleDeleteTournament = async () => {
-    if (!deletingTournament) return;
+    if (!deletingTournament || !isAdmin) return;
     const target = deletingTournament;
     setIsDeleting(true);
 
     try {
+      const effectiveEmail =
+        user?.email ||
+        (typeof window !== "undefined" ? localStorage.getItem("spt_player_email") : "") ||
+        "";
+
       const res = await fetch(`/api/torneos?id=${encodeURIComponent(target.id)}`, {
         method: "DELETE",
+        headers: {
+          "x-admin-email": effectiveEmail,
+        },
       });
       const data = await res.json();
 
@@ -155,14 +165,16 @@ export default function TorneosPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          <Link href="/admin/torneos">
-            <Button className="bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-black text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-emerald-500/20">
-              <Plus className="w-4 h-4" />
-              <span>Nuevo Torneo</span>
-            </Button>
-          </Link>
-        </div>
+        {isAdmin && (
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <Link href="/admin/torneos">
+              <Button className="bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-black text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-emerald-500/20">
+                <Plus className="w-4 h-4" />
+                <span>Nuevo Torneo</span>
+              </Button>
+            </Link>
+          </div>
+        )}
       </div>
 
       {notification && (
@@ -304,15 +316,17 @@ export default function TorneosPage() {
                       <Users className="w-3.5 h-3.5 text-emerald-400" />
                       <span>Parejas</span>
                     </Link>
-                    <button
-                      type="button"
-                      onClick={() => setDeletingTournament(tour)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold transition-all whitespace-nowrap cursor-pointer"
-                      title={`Eliminar el torneo ${tour.name}`}
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                      <span>Eliminar</span>
-                    </button>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => setDeletingTournament(tour)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold transition-all whitespace-nowrap cursor-pointer"
+                        title={`Eliminar el torneo ${tour.name} (solo administradores)`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                        <span>Eliminar</span>
+                      </button>
+                    )}
                   </div>
 
                   <Link
