@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { User } from "lucide-react";
 
-export type AvatarSize = "xs" | "sm" | "md" | "lg" | "xl" | "2xl";
+export type AvatarSize = "xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "ranking";
 
 interface PlayerAvatarProps {
   id?: string;
@@ -26,6 +26,7 @@ const SIZE_MAP: Record<AvatarSize, { container: string; text: string; icon: stri
   lg: { container: "w-14 h-14 rounded-xl", text: "text-base", icon: "w-6 h-6" },
   xl: { container: "w-20 h-20 rounded-2xl", text: "text-xl", icon: "w-8 h-8" },
   "2xl": { container: "w-32 h-32 sm:w-36 sm:h-36 rounded-2xl", text: "text-3xl", icon: "w-12 h-12" },
+  ranking: { container: "w-[52px] h-[52px] sm:w-[54px] sm:h-[54px] rounded-xl shadow-md", text: "text-base font-black", icon: "w-6 h-6" },
 };
 
 export default function PlayerAvatar({

@@ -414,7 +414,7 @@ export default async function RankingsPage({
                 {individualRankings.map((p, i) => (
                   <tr
                     key={p.id}
-                    className={`transition-colors ${
+                    className={`transition-colors h-16 ${
                       i === 0
                         ? "bg-amber-400/[0.06] hover:bg-amber-400/[0.10]"
                         : i === 1
@@ -424,7 +424,7 @@ export default async function RankingsPage({
                         : "bg-dark-900/60 hover:bg-dark-850"
                     }`}
                   >
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-2">
                       <div className="flex items-center gap-2">
                         <span
                           className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-black ${
@@ -442,7 +442,7 @@ export default async function RankingsPage({
                         {i === 0 && <Medal className="w-4 h-4 text-amber-400 hidden sm:inline" />}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-white font-bold text-sm sm:text-base">
+                    <td className="px-6 py-1 text-white font-bold text-sm sm:text-base">
                       <div className="flex items-center gap-3">
                         <PlayerAvatar
                           id={p.playerId}
@@ -451,15 +451,15 @@ export default async function RankingsPage({
                           firstName={p.firstName}
                           lastName={p.lastName}
                           category={p.category}
-                          size="sm"
+                          size="ranking"
                           showCategoryBorder
                         />
-                        <div className="flex items-center gap-2">
-                          <span>{p.name}</span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="truncate">{p.name}</span>
                           {isAdmin && p.isObserved && (
                             <span
                               title="Jugador/a en observación para ascenso de categoría"
-                              className="text-amber-400 text-[11px] inline-flex items-center gap-1 font-semibold bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30"
+                              className="text-amber-400 text-[11px] inline-flex items-center gap-1 font-semibold bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30 flex-shrink-0"
                             >
                               👁️ Observado/a
                             </span>
@@ -467,7 +467,7 @@ export default async function RankingsPage({
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-4 text-center text-xs font-semibold">
+                    <td className="px-4 py-2 text-center text-xs font-semibold">
                       <Badge
                         variant={isDamas ? "gold" : "success"}
                         className="font-bold uppercase text-[11px]"
@@ -475,13 +475,13 @@ export default async function RankingsPage({
                         {p.category}
                       </Badge>
                     </td>
-                    <td className="px-4 py-4 text-center text-slate-300 scoreboard-digit">{p.tournaments}</td>
-                    <td className="px-4 py-4 text-center text-xs scoreboard-digit">
+                    <td className="px-4 py-2 text-center text-slate-300 scoreboard-digit">{p.tournaments}</td>
+                    <td className="px-4 py-2 text-center text-xs scoreboard-digit">
                       <span className="text-emerald-400 font-bold">{p.matchesWon}</span>{" "}
                       <span className="text-dark-500">/</span>{" "}
                       <span className="text-rose-400 font-medium">{p.matchesLost}</span>
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-6 py-2 text-center">
                       <span
                         className={`scoreboard-digit font-mono font-black text-lg ${
                           isDamas ? "text-pink-400" : "text-emerald-400"
