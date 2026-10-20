@@ -12,6 +12,7 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase/client";
 import type { Tournament, TournamentStatus } from "@/types/tournament";
+import { formatDate } from "@/lib/dateUtils";
 import { AlertCircle, CheckCircle2, Users } from "lucide-react";
 
 const INITIAL_TOURNAMENTS: Tournament[] = [
@@ -159,17 +160,7 @@ export default function AdminTorneosPage() {
     setEditing(t);
   };
 
-  const formatDate = (dateStr: string) => {
-    try {
-      return new Date(dateStr).toLocaleDateString("es-AR", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      });
-    } catch {
-      return dateStr;
-    }
-  };
+
 
   const handleCreate = async () => {
     if (!formNombre.trim()) {

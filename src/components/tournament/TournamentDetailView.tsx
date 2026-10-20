@@ -22,6 +22,7 @@ import {
   type QualifiedPair,
 } from "@/lib/tournament/elimination";
 import { normalizeScheduledTime } from "@/lib/tournament/scheduler";
+import { formatDate } from "@/lib/dateUtils";
 import Bracket from "@/components/tournament/Bracket";
 import ZoneConformationEditor from "@/components/tournament/ZoneConformationEditor";
 import AutoScheduleModal from "@/components/tournament/AutoScheduleModal";
@@ -996,11 +997,7 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
             <div className="flex items-center gap-4 mt-3.5 text-slate-300 text-xs sm:text-sm flex-wrap font-medium">
               <span className="flex items-center gap-1.5">
                 <Calendar className="w-4 h-4 text-emerald-400" />
-                {new Date(tournament.date).toLocaleDateString("es-AR", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                })}
+                {formatDate(tournament.date)}
               </span>
               {tournament.location && (
                 <span className="flex items-center gap-1.5">

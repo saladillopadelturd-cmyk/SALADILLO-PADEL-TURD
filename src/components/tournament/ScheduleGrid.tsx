@@ -3,6 +3,7 @@
 import Card from "@/components/ui/Card";
 import type { Match } from "@/types/tournament";
 import { formatPlayerShortName } from "@/lib/tournament/couples";
+import { formatDate } from "@/lib/dateUtils";
 
 interface ScheduleGridProps {
   matches: Match[];
@@ -20,7 +21,7 @@ export default function ScheduleGrid({
 
   const groupedByDate = scheduledMatches.reduce(
     (acc, match) => {
-      const date = new Date(match.scheduled_at!).toLocaleDateString("es-AR");
+      const date = formatDate(match.scheduled_at!);
       if (!acc[date]) acc[date] = [];
       acc[date].push(match);
       return acc;

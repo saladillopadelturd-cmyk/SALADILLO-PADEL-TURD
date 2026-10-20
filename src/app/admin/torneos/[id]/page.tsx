@@ -21,6 +21,7 @@ import ZoneConformationEditor from "@/components/tournament/ZoneConformationEdit
 import AutoScheduleModal from "@/components/tournament/AutoScheduleModal";
 import Bracket from "@/components/tournament/Bracket";
 import { normalizeScheduledTime } from "@/lib/tournament/scheduler";
+import { formatDate } from "@/lib/dateUtils";
 import {
   AlertCircle,
   AlertTriangle,
@@ -778,7 +779,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                 <div className="flex items-center gap-4 mt-3 text-dark-300 text-xs sm:text-sm flex-wrap">
                   <span className="flex items-center gap-1.5">
                     <Calendar className="w-4 h-4 text-emerald-400" />
-                    {tournament.date}
+                    {formatDate(tournament.date)}
                   </span>
                   {tournament.location && (
                     <span className="flex items-center gap-1.5">
@@ -834,7 +835,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                   </div>
                   <div>
                     <label className="block text-dark-400 mb-1">Fecha</label>
-                    <p className="text-white font-medium text-base">{tournament.date}</p>
+                    <p className="text-white font-medium text-base">{formatDate(tournament.date)}</p>
                   </div>
                   <div>
                     <label className="block text-dark-400 mb-1">Modalidad de Juego</label>

@@ -7,6 +7,7 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { createClient } from "@/lib/supabase/client";
 import type { Tournament } from "@/types/tournament";
+import { formatDate } from "@/lib/dateUtils";
 import {
   renderFlyerOnCanvas,
   ALL_THEMES,
@@ -263,11 +264,7 @@ export default function AdminFlyersPage() {
           setTitle((t.name || "").toUpperCase());
           setCategory((t.category || "").toUpperCase());
           if (t.date) {
-            const parsedDate = new Date(t.date).toLocaleDateString("es-AR", {
-              day: "numeric",
-              month: "long",
-            });
-            setDate(parsedDate.toUpperCase());
+            setDate(formatDate(t.date));
           }
           setSelectedTournamentId(t.id);
         }
@@ -297,11 +294,7 @@ export default function AdminFlyersPage() {
     setTitle(tour.name?.toUpperCase() || "");
     setCategory(tour.category?.toUpperCase() || "5TA LIBRES");
     if (tour.date) {
-      const parsedDate = new Date(tour.date).toLocaleDateString("es-AR", {
-        day: "numeric",
-        month: "long",
-      });
-      setDate(parsedDate.toUpperCase());
+      setDate(formatDate(tour.date));
     }
     if (tour.location) setLocation(tour.location.toUpperCase());
   };
@@ -939,7 +932,7 @@ export default function AdminFlyersPage() {
                 <option value="">-- Seleccionar torneo para cargar sus datos automáticamente --</option>
                 {tournaments.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.name} ({t.category}) - {new Date(t.date).toLocaleDateString("es-AR")}
+                    {t.name} ({t.category}) - {formatDate(t.date)}
                   </option>
                 ))}
               </select>
@@ -1369,7 +1362,7 @@ export default function AdminFlyersPage() {
                         <option value="">-- Seleccionar torneo para vincular destino --</option>
                         {tournaments.map((t) => (
                           <option key={t.id} value={t.id}>
-                            {t.name} ({t.category}) - {new Date(t.date).toLocaleDateString("es-AR")}
+                            {t.name} ({t.category}) - {formatDate(t.date)}
                           </option>
                         ))}
                       </select>

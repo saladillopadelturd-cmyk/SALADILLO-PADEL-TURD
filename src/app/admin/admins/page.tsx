@@ -6,6 +6,7 @@ import Button from "@/components/ui/Button";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/types/user";
+import { formatDate } from "@/lib/dateUtils";
 import {
   ShieldCheck,
   Shield,
@@ -434,9 +435,7 @@ export default function AdminAdminsPage() {
                           )}
                         </td>
                         <td className="px-6 py-4 text-center text-dark-400 text-xs">
-                          {new Date(profile.created_at).toLocaleDateString(
-                            "es-AR"
-                          )}
+                          {formatDate(profile.created_at)}
                         </td>
                         <td className="px-6 py-4 text-center">
                           {isRoot ? (

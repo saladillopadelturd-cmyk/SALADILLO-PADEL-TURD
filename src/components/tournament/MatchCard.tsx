@@ -5,6 +5,7 @@ import Badge from "@/components/ui/Badge";
 import type { Match, Pair } from "@/types/tournament";
 import { Trophy, Clock, MapPin, Edit3 } from "lucide-react";
 import { formatPlayerShortName } from "@/lib/tournament/couples";
+import { formatDateTime } from "@/lib/dateUtils";
 
 interface MatchCardProps {
   match: Match;
@@ -223,12 +224,7 @@ export default function MatchCard({
         {matchTime ? (
           <span className="flex items-center gap-1 text-dark-400 font-medium">
             <Clock className="w-3.5 h-3.5 text-dark-500" />
-            {new Date(matchTime).toLocaleDateString("es-AR", {
-              day: "numeric",
-              month: "short",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+            {formatDateTime(matchTime)}
           </span>
         ) : (
           <span className="text-dark-500">Horario por confirmar</span>

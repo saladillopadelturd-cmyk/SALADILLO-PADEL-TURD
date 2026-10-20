@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase/client";
 import type { Tournament } from "@/types/tournament";
 import { isSumaCategory } from "@/lib/tournament/couples";
+import { formatDate } from "@/lib/dateUtils";
 import {
   Calendar,
   MapPin,
@@ -137,17 +138,7 @@ export default function TorneosPage() {
     }
   };
 
-  const formatDate = (dateStr: string) => {
-    try {
-      return new Date(dateStr).toLocaleDateString("es-AR", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      });
-    } catch {
-      return dateStr;
-    }
-  };
+
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 min-h-screen">

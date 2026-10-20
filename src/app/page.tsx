@@ -8,6 +8,7 @@ import RulesSection from "@/components/home/RulesSection";
 import NewsCarousel from "@/components/home/NewsCarousel";
 import PlayerRegistrationBanner from "@/components/player/PlayerRegistrationBanner";
 import type { Flyer } from "@/types/flyer";
+import { formatDate } from "@/lib/dateUtils";
 
 export const revalidate = 0; // Fresh tournament data on each load
 
@@ -228,13 +229,7 @@ export default async function HomePage() {
                       <div className="space-y-2 text-xs text-slate-300 mb-5">
                         <div className="flex items-center gap-2 font-medium">
                           <Calendar className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                          <span>
-                            {new Date(tour.date).toLocaleDateString("es-AR", {
-                              day: "numeric",
-                              month: "long",
-                              year: "numeric",
-                            })}
-                          </span>
+                          <span>{formatDate(tour.date)}</span>
                         </div>
                         {tour.location && (
                           <div className="flex items-center gap-2 font-medium">
@@ -294,11 +289,7 @@ export default async function HomePage() {
                         {tour.name}
                       </h3>
                       <p className="text-xs text-dark-400 mt-1">
-                        {new Date(tour.date).toLocaleDateString("es-AR", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
+                        {formatDate(tour.date)}
                       </p>
                     </div>
                     <div className="mt-4 pt-3 border-t border-dark-800/60 text-xs font-semibold text-dark-400 group-hover:text-white flex items-center justify-between transition-colors">
