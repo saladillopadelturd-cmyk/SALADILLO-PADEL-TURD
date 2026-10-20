@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import ConfirmModal from "@/components/ui/ConfirmModal";
@@ -27,52 +27,81 @@ export default function AdminAdminsPage() {
   const [admins, setAdmins] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  
+
   // Formulario para nuevo administrador
   const [emailInput, setEmailInput] = useState("");
-  const [searchingUser, setSearchingUser] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Modal de confirmación de acción
+  // Modal para revocar administrador
   const [targetUser, setTargetUser] = useState<Profile | null>(null);
-  const [actionType, setActionType] = useState<"promote" | "demote" | null>(null);
-  const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [isDemoting, startDemoteTransition] = useTransition();
+
+  // Mensaje de estado global
+  const [statusMsg, setStatusMsg] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   const supabase = createClient();
 
-  useEffect(() => {
-    let isMounted = true;
-    async function loadAdmins() {
-      try {
-        const { data, error } = await supabase
+  // Función para obtener el email del admin en sesión
+  const getAdminHeaderEmail = async (): Promise<string> => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user?.email) return user.email;
+    } catch {
+      // Ignorar error de sesión
+    }
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("spt_player_email");
+      if (stored) return stored;
+    }
+    return "saladillopadelturd@gmail.com";
+  };
+
+  const loadAdmins = async () => {
+    setLoading(true);
+    try {
+      const headerEmail = await getAdminHeaderEmail();
+      const res = await fetch("/api/admin/admins", {
+        headers: { "x-admin-email": headerEmail },
+        cache: "no-store",
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setAdmins(data.admins || []);
+      } else {
+        // Fallback directo a Supabase client
+        const { data: profiles, error } = await supabase
           .from("profiles")
           .select("*")
           .order("created_at", { ascending: false });
 
         if (error) throw error;
-        if (isMounted && data) {
-          // Filtrar estrictamente solo usuarios administradores
-          const onlyAdmins = data.filter(
-            (p) =>
-              p.role === "admin" ||
-              ROOT_ADMIN_EMAILS.includes(p.email.toLowerCase())
-          );
-          setAdmins(onlyAdmins);
-        }
-      } catch (err: unknown) {
-        console.error("Error al obtener administradores:", err);
-      } finally {
-        if (isMounted) setLoading(false);
+        const onlyAdmins = (profiles || []).filter(
+          (p) =>
+            p.role === "admin" ||
+            ROOT_ADMIN_EMAILS.includes(p.email.toLowerCase())
+        );
+        setAdmins(onlyAdmins);
       }
+    } catch (err: unknown) {
+      console.error("Error al obtener administradores:", err);
+    } finally {
+      setLoading(false);
     }
+  };
 
+  useEffect(() => {
     loadAdmins();
-    return () => {
-      isMounted = false;
-    };
-  }, [supabase]);
+  }, []);
 
-  const handleSearchAndPromote = async (e: React.FormEvent) => {
+  // Agregar nuevo administrador vía API
+  const handleAddAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
     setStatusMsg(null);
@@ -90,7 +119,6 @@ export default function AdminAdminsPage() {
       return;
     }
 
-    // Comprobar si ya está en la lista de administradores
     const alreadyAdmin = admins.some(
       (a) => a.email.toLowerCase() === cleanEmail
     );
@@ -99,78 +127,88 @@ export default function AdminAdminsPage() {
       return;
     }
 
-    setSearchingUser(true);
+    setSubmitting(true);
 
     try {
-      const { data: foundProfile, error: searchError } = await supabase
-        .from("profiles")
-        .select("*")
-        .ilike("email", cleanEmail)
-        .maybeSingle();
+      const headerEmail = await getAdminHeaderEmail();
+      const res = await fetch("/api/admin/admins", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-email": headerEmail,
+        },
+        body: JSON.stringify({ email: cleanEmail }),
+      });
 
-      if (searchError) throw searchError;
+      const data = await res.json();
 
-      if (!foundProfile) {
-        setFormError(
-          `No se encontró ningún usuario registrado con el correo "${cleanEmail}". El usuario debe crear una cuenta en la aplicación antes de poder ser designado administrador.`
-        );
-        return;
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo designar como administrador.");
       }
 
-      if (foundProfile.role === "admin") {
-        setFormError("Este usuario ya cuenta con rol de Administrador.");
-        // Si no estaba en la lista local por alguna razón, sincronizarlo
-        setAdmins((prev) => [foundProfile, ...prev.filter((p) => p.id !== foundProfile.id)]);
-        return;
-      }
+      setStatusMsg({
+        type: "success",
+        text: data.message || `Se designó como administrador a ${cleanEmail}.`,
+      });
+      setEmailInput("");
+      setFormError(null);
 
-      // Proceder a confirmar la promoción
-      setTargetUser(foundProfile);
-      setActionType("promote");
+      if (data.profile) {
+        setAdmins((prev) => [
+          data.profile,
+          ...prev.filter((p) => p.id !== data.profile.id),
+        ]);
+      } else {
+        await loadAdmins();
+      }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Error al buscar usuario";
+      const msg =
+        err instanceof Error ? err.message : "Error al agregar administrador";
       setFormError(msg);
     } finally {
-      setSearchingUser(false);
+      setSubmitting(false);
     }
   };
 
-  const handleRoleChange = async () => {
-    if (!targetUser || !actionType) return;
+  // Revocar permisos de administrador
+  const handleDemoteAdmin = async () => {
+    if (!targetUser) return;
 
-    const newRole: "admin" | "user" = actionType === "promote" ? "admin" : "user";
-
-    try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ role: newRole })
-        .eq("id", targetUser.id);
-
-      if (error) throw error;
-
-      if (actionType === "promote") {
-        setStatusMsg({
-          type: "success",
-          text: `Se otorgaron permisos de Administrador a ${targetUser.email}.`,
+    startDemoteTransition(async () => {
+      try {
+        const headerEmail = await getAdminHeaderEmail();
+        const res = await fetch("/api/admin/admins", {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-email": headerEmail,
+          },
+          body: JSON.stringify({
+            id: targetUser.id,
+            email: targetUser.email,
+          }),
         });
-        setEmailInput("");
-        setFormError(null);
-        const updatedAdmin: Profile = { ...targetUser, role: "admin" };
-        setAdmins((prev) => [updatedAdmin, ...prev.filter((p) => p.id !== targetUser.id)]);
-      } else {
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Error al revocar permisos");
+        }
+
         setStatusMsg({
           type: "success",
-          text: `Se revocaron los permisos de Administrador a ${targetUser.email}.`,
+          text:
+            data.message ||
+            `Se revocaron los permisos de administrador a ${targetUser.email}.`,
         });
         setAdmins((prev) => prev.filter((p) => p.id !== targetUser.id));
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error ? err.message : "Error al revocar rol";
+        setStatusMsg({ type: "error", text: msg });
+      } finally {
+        setTargetUser(null);
       }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Error al actualizar rol";
-      setStatusMsg({ type: "error", text: msg });
-    } finally {
-      setTargetUser(null);
-      setActionType(null);
-    }
+    });
   };
 
   const filteredAdmins = admins.filter(
@@ -188,7 +226,8 @@ export default function AdminAdminsPage() {
           Gestión de Administradores
         </h1>
         <p className="text-dark-400 mt-1 text-sm">
-          Designa administradores ingresando su correo electrónico o revoca permisos a miembros actuales.
+          Designa administradores ingresando su correo electrónico o revoca
+          permisos a miembros actuales.
         </p>
       </div>
 
@@ -229,12 +268,13 @@ export default function AdminAdminsPage() {
               Designar Nuevo Administrador
             </h2>
             <p className="text-dark-400 text-xs sm:text-sm">
-              Ingresa el correo electrónico del usuario registrado que deseas convertir en administrador.
+              Ingresa el correo electrónico del usuario o jugador registrado que
+              deseas convertir en administrador.
             </p>
           </div>
         </div>
 
-        <form onSubmit={handleSearchAndPromote} className="space-y-3">
+        <form onSubmit={handleAddAdmin} className="space-y-3">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Mail className="w-4 h-4 text-dark-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -251,19 +291,19 @@ export default function AdminAdminsPage() {
                     ? "border-red-500/60 focus:border-red-500 ring-1 ring-red-500/20"
                     : "border-dark-700 focus:border-primary-500"
                 }`}
-                disabled={searchingUser}
+                disabled={submitting}
               />
             </div>
             <Button
               type="submit"
               variant="primary"
-              disabled={searchingUser || !emailInput.trim()}
+              disabled={submitting || !emailInput.trim()}
               className="flex items-center justify-center gap-2 px-6 py-2.5 whitespace-nowrap bg-primary-600 hover:bg-primary-500 text-white font-medium text-sm transition-all disabled:opacity-50"
             >
-              {searchingUser ? (
+              {submitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Verificando...</span>
+                  <span>Procesando...</span>
                 </>
               ) : (
                 <>
@@ -294,7 +334,8 @@ export default function AdminAdminsPage() {
               </span>
             </h2>
             <p className="text-xs text-dark-400 mt-0.5">
-              Usuarios con acceso total a torneos, fixtures, resultados y ajustes del sistema.
+              Usuarios con acceso total a torneos, fixtures, resultados y
+              ajustes del sistema.
             </p>
           </div>
 
@@ -328,7 +369,10 @@ export default function AdminAdminsPage() {
               <tbody className="divide-y divide-dark-700/60">
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-10 text-center text-dark-400">
+                    <td
+                      colSpan={5}
+                      className="px-6 py-10 text-center text-dark-400"
+                    >
                       <div className="flex items-center justify-center gap-2">
                         <Loader2 className="w-4 h-4 animate-spin text-primary-400" />
                         <span>Cargando lista de administradores...</span>
@@ -337,17 +381,27 @@ export default function AdminAdminsPage() {
                   </tr>
                 ) : filteredAdmins.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-10 text-center text-dark-400">
+                    <td
+                      colSpan={5}
+                      className="px-6 py-10 text-center text-dark-400"
+                    >
                       {search ? (
-                        <span>No se encontraron administradores que coincidan con &quot;{search}&quot;.</span>
+                        <span>
+                          No se encontraron administradores que coincidan con &quot;
+                          {search}&quot;.
+                        </span>
                       ) : (
-                        <span>No hay administradores registrados actualmente.</span>
+                        <span>
+                          No hay administradores registrados actualmente.
+                        </span>
                       )}
                     </td>
                   </tr>
                 ) : (
                   filteredAdmins.map((profile) => {
-                    const isRoot = ROOT_ADMIN_EMAILS.includes(profile.email.toLowerCase());
+                    const isRoot = ROOT_ADMIN_EMAILS.includes(
+                      profile.email.toLowerCase()
+                    );
 
                     return (
                       <tr
@@ -359,7 +413,9 @@ export default function AdminAdminsPage() {
                             <div className="w-8 h-8 rounded-full bg-dark-700 flex items-center justify-center text-dark-300">
                               <User className="w-4 h-4" />
                             </div>
-                            <span>{profile.full_name || "Sin nombre registrado"}</span>
+                            <span>
+                              {profile.full_name || "Sin nombre registrado"}
+                            </span>
                           </div>
                         </td>
                         <td className="px-6 py-4 text-dark-300 font-mono text-xs">
@@ -368,7 +424,8 @@ export default function AdminAdminsPage() {
                         <td className="px-6 py-4 text-center">
                           {isRoot ? (
                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 text-amber-400 text-xs rounded-full border border-amber-500/30 font-semibold">
-                              <ShieldCheck className="w-3.5 h-3.5" /> Administrador Raíz
+                              <ShieldCheck className="w-3.5 h-3.5" /> Administrador
+                              Raíz
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-primary-500/10 text-primary-400 text-xs rounded-full border border-primary-500/30 font-semibold">
@@ -377,7 +434,9 @@ export default function AdminAdminsPage() {
                           )}
                         </td>
                         <td className="px-6 py-4 text-center text-dark-400 text-xs">
-                          {new Date(profile.created_at).toLocaleDateString("es-AR")}
+                          {new Date(profile.created_at).toLocaleDateString(
+                            "es-AR"
+                          )}
                         </td>
                         <td className="px-6 py-4 text-center">
                           {isRoot ? (
@@ -388,10 +447,7 @@ export default function AdminAdminsPage() {
                             <Button
                               variant="secondary"
                               size="sm"
-                              onClick={() => {
-                                setTargetUser(profile);
-                                setActionType("demote");
-                              }}
+                              onClick={() => setTargetUser(profile)}
                               className="text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 border-red-500/30"
                             >
                               Quitar Admin
@@ -408,28 +464,15 @@ export default function AdminAdminsPage() {
         </Card>
       </div>
 
-      {/* Modal de Confirmación */}
+      {/* Modal de Confirmación para Quitar Admin */}
       <ConfirmModal
-        isOpen={!!targetUser && !!actionType}
-        onClose={() => {
-          setTargetUser(null);
-          setActionType(null);
-        }}
-        onConfirm={handleRoleChange}
-        title={
-          actionType === "promote"
-            ? "Otorgar Permisos de Administrador"
-            : "Revocar Permisos de Administrador"
-        }
-        message={
-          actionType === "promote"
-            ? `¿Deseas otorgar permisos de Administrador a ${targetUser?.email}${
-                targetUser?.full_name ? ` (${targetUser.full_name})` : ""
-              }? Tendrá acceso total a gestionar torneos, modificar fixtures y cargar resultados.`
-            : `¿Deseas quitar los permisos de Administrador a ${targetUser?.email}? Pasará a tener rol de usuario general.`
-        }
-        confirmLabel={actionType === "promote" ? "Hacer Administrador" : "Revocar Permisos"}
-        variant={actionType === "promote" ? "primary" : "danger"}
+        isOpen={!!targetUser}
+        onClose={() => setTargetUser(null)}
+        onConfirm={handleDemoteAdmin}
+        title="Revocar Permisos de Administrador"
+        message={`¿Deseas quitar los permisos de Administrador a ${targetUser?.email}? Pasará a tener rol de usuario general.`}
+        confirmLabel={isDemoting ? "Revocando..." : "Revocar Permisos"}
+        variant="danger"
       />
     </div>
   );
