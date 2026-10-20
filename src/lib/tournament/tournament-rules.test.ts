@@ -54,6 +54,7 @@ import {
   getCoupleNumberMap,
   getCoupleLabelWithNumber,
   formatPlayerShortName,
+  formatPlayerFullName,
   generateRandomCouples,
   isPlayerEligibleForTournament,
   parseCategoryLevel,
@@ -751,6 +752,11 @@ export function runTournamentBusinessLogicTests(): TestResult {
   assert(formatPlayerShortName({ first_name: "Carlos", last_name: "Gómez" }) === "C. Gómez", "Carlos Gómez abrevia a C. Gómez");
   assert(formatPlayerShortName({ first_name: "Agustín", last_name: "Ruiz" }) === "A. Ruiz", "Agustín Ruiz abrevia a A. Ruiz");
   assert(formatPlayerShortName({ first_name: "Lucas", last_name: "" }) === "Lucas", "Jugador sin apellido conserva su nombre");
+
+  // Formateo de nombres completos para rankings ("Nombre Apellido")
+  assert(formatPlayerFullName({ first_name: "Matias", last_name: "Ferrin" }) === "Matias Ferrin", "Matias Ferrin sin abreviar");
+  assert(formatPlayerFullName({ first_name: "Carlos", last_name: "Modica" }) === "Carlos Modica", "Carlos Modica sin abreviar");
+  assert(formatPlayerFullName({ first_name: "Lucas", last_name: "" }) === "Lucas", "Jugador sin apellido conserva su nombre completo");
 
   const label1 = getCoupleLabelWithNumber(numberingCouples[0], 1);
   assert(label1 === "Pareja 1: J. Pérez / C. Gómez", "Formato Pareja 1 abreviado correcto");

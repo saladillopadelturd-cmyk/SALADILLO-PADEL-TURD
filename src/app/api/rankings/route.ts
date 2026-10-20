@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { SPT_POINTS_SCALE, getCoupleKey, syncAllTournamentsRankings } from "@/lib/tournament/rankings";
-import { formatPlayerShortName } from "@/lib/tournament/couples";
+import { formatPlayerFullName } from "@/lib/tournament/couples";
 import { getPlayerPhotosMap, enrichPlayerPhoto } from "@/lib/tournament/player-photos";
 
 /**
@@ -103,8 +103,8 @@ export async function GET(request: Request) {
     if (r.ranking_type === "couple") {
       const p1 = r.player1_id ? playersMap.get(r.player1_id) : null;
       const p2 = r.player2_id ? playersMap.get(r.player2_id) : null;
-      const p1Name = p1 ? formatPlayerShortName(p1) : "Jugador 1";
-      const p2Name = p2 ? formatPlayerShortName(p2) : "Jugador 2";
+      const p1Name = p1 ? formatPlayerFullName(p1) : "Jugador 1";
+      const p2Name = p2 ? formatPlayerFullName(p2) : "Jugador 2";
       const p1Gender = p1?.gender || "Masculino";
       const p2Gender = p2?.gender || "Masculino";
       const coupleGender = (p1Gender === "Femenino" && p2Gender === "Femenino") ? "Femenino" : "Masculino";
@@ -117,7 +117,7 @@ export async function GET(request: Request) {
       };
     } else {
       const p = r.player_id ? playersMap.get(r.player_id) : null;
-      const pName = p ? formatPlayerShortName(p) : "Jugador";
+      const pName = p ? formatPlayerFullName(p) : "Jugador";
       const pGender = p?.gender || "Masculino";
       const pPhoto = p?.photo_url || p?.avatar_url || (r.player_id ? photosMap.get(r.player_id) : null) || null;
       return {
@@ -166,7 +166,7 @@ export async function GET(request: Request) {
         tournaments_played: 0,
         matches_won: 0,
         matches_lost: 0,
-        name: formatPlayerShortName(p),
+        name: formatPlayerFullName(p),
         player: enrichedP,
       });
     });

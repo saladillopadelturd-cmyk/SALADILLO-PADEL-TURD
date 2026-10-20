@@ -424,6 +424,22 @@ export function formatPlayerShortName(player?: { first_name?: string | null; las
 }
 
 /**
+ * Nombre y apellido completo del jugador para SPT (sin abreviaturas, ej: "Matías Ferrin"):
+ * Si no tiene apellido, retorna el nombre; si no tiene nombre, el apellido.
+ */
+export function formatPlayerFullName(player?: { first_name?: string | null; last_name?: string | null } | null): string {
+  if (!player) return "Jugador";
+  const firstName = player.first_name?.trim() || "";
+  const lastName = player.last_name?.trim() || "";
+
+  if (!firstName && !lastName) return "Jugador";
+  if (!lastName) return firstName;
+  if (!firstName) return lastName;
+
+  return `${firstName} ${lastName}`;
+}
+
+/**
  * Devuelve el nombre formateado de la pareja con su número correspondiente y nombres abreviados.
  * Ejemplo: "Pareja 1: M. Vidal / C. Gómez" o sin número "M. Vidal / C. Gómez".
  * 

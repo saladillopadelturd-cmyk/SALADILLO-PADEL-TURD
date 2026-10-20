@@ -2,7 +2,7 @@ import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import PlayerAvatar from "@/components/player/PlayerAvatar";
 import { createClient } from "@/lib/supabase/server";
-import { formatPlayerShortName } from "@/lib/tournament/couples";
+import { formatPlayerFullName } from "@/lib/tournament/couples";
 import { syncAllTournamentsRankings } from "@/lib/tournament/rankings";
 import { getPlayerPhotosMap } from "@/lib/tournament/player-photos";
 import { Trophy, Medal, User, Sparkles } from "lucide-react";
@@ -96,7 +96,7 @@ export default async function RankingsPage({
       .filter((r) => r.player_id)
       .forEach((r) => {
         const p = playersMap.get(r.player_id);
-        const pName = p ? formatPlayerShortName(p) : "Jugador";
+        const pName = p ? formatPlayerFullName(p) : "Jugador";
         const playerCategory = p?.category || r.category || "General";
         const playerGender: "Masculino" | "Femenino" = p?.gender === "Femenino" ? "Femenino" : "Masculino";
 
@@ -147,7 +147,7 @@ export default async function RankingsPage({
       indivAggMap.set(p.id, {
         id: `p-${p.id}`,
         playerId: p.id,
-        name: formatPlayerShortName(p),
+        name: formatPlayerFullName(p),
         firstName: p.first_name || "J",
         lastName: p.last_name || "",
         gender: pGender,
