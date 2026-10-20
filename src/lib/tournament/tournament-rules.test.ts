@@ -64,7 +64,7 @@ import {
   validateCoupleCategorySuma,
 } from "./couples";
 
-import { calculateOptimalZones } from "./zones";
+import { calculateOptimalZones, getZoneSuggestions } from "./zones";
 
 import type { Match, Couple, Player } from "@/types/tournament";
 
@@ -852,6 +852,21 @@ export function runTournamentBusinessLogicTests(): TestResult {
   const customZones19 = calculateOptimalZones(19, 4, 5);
   assert(customZones19.isEqual === false, "19 parejas en 5 zonas no es igual");
   assert(customZones19.missingCouples === 1 && customZones19.missingPlayers === 2, "19 parejas en 5 zonas le faltan 2 jugadores");
+
+  // Tests para getZoneSuggestions (Sugerencias de Zonas de 4 y Zonas de 3 con parejas sobrantes)
+  const sugs14 = getZoneSuggestions(14);
+  assert(sugs14.suggestion4.numZones === 4, "14 parejas con zonas de 4 genera 4 zonas (3 de 4 + 1 de 2)");
+  assert(sugs14.suggestion4.fullZonesCount === 3, "14 parejas tiene 3 zonas completas de 4");
+  assert(sugs14.suggestion4.remainderSize === 2, "14 parejas tiene 1 zona sobrante de 2");
+  assert(sugs14.suggestion4.hasRemainder === true, "14 parejas con zonas de 4 tiene sobrantes");
+
+  assert(sugs14.suggestion3.numZones === 5, "14 parejas con zonas de 3 genera 5 zonas (4 de 3 + 1 de 2)");
+  assert(sugs14.suggestion3.fullZonesCount === 4, "14 parejas tiene 4 zonas completas de 3");
+  assert(sugs14.suggestion3.remainderSize === 2, "14 parejas tiene 1 zona sobrante de 2 para zonas de 3");
+
+  const sugs12 = getZoneSuggestions(12);
+  assert(sugs12.suggestion4.numZones === 3 && sugs12.suggestion4.hasRemainder === false, "12 parejas da 3 zonas exactas de 4");
+  assert(sugs12.suggestion3.numZones === 4 && sugs12.suggestion3.hasRemainder === false, "12 parejas da 4 zonas exactas de 3");
 
   // ==========================================================================
   // 8. AVANCE AUTOMÁTICO DE GANADORES EN CUADRO DE PLAYOFFS

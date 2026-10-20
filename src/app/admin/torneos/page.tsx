@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useTransition } from "react";
+import { useEffect, useState, useCallback, useTransition, useMemo } from "react";
 import Link from "next/link";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -13,7 +13,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase/client";
 import type { Tournament, TournamentStatus } from "@/types/tournament";
 import { formatDate } from "@/lib/dateUtils";
-import { AlertCircle, CheckCircle2, Users } from "lucide-react";
+import { getZoneSuggestions } from "@/lib/tournament/zones";
+import { AlertCircle, CheckCircle2, Users, Sparkles, Trophy } from "lucide-react";
 
 const INITIAL_TOURNAMENTS: Tournament[] = [
   {
@@ -110,6 +111,12 @@ export default function AdminTorneosPage() {
   const [formModalidad, setFormModalidad] = useState("american_9games");
   const [formParejasZona, setFormParejasZona] = useState("4");
   const [formNumZonas, setFormNumZonas] = useState("2");
+  const [simulatedCouplesCount, setSimulatedCouplesCount] = useState<number>(12);
+  const [customZonesEnabled, setCustomZonesEnabled] = useState<boolean>(false);
+
+  const newTournamentSuggestions = useMemo(() => {
+    return getZoneSuggestions(simulatedCouplesCount);
+  }, [simulatedCouplesCount]);
 
   const supabase = createClient();
 
@@ -145,6 +152,8 @@ export default function AdminTorneosPage() {
     setFormModalidad("american_9games");
     setFormParejasZona("4");
     setFormNumZonas("2");
+    setCustomZonesEnabled(false);
+    setSimulatedCouplesCount(12);
     setShowCreate(true);
   };
 
@@ -581,24 +590,126 @@ export default function AdminTorneosPage() {
               { value: "american_2sets", label: "2 sets a 3 games + super tie-break" },
             ]}
           />
-          <div className="grid grid-cols-2 gap-4">
-            <Select
-              label="Parejas por zona"
-              value={formParejasZona}
-              onChange={(e) => setFormParejasZona(e.target.value)}
-              options={[
-                { value: "3", label: "3 parejas" },
-                { value: "4", label: "4 parejas" },
-              ]}
-            />
-            <Input
-              label="Número de zonas"
-              type="number"
-              min={1}
-              max={16}
-              value={formNumZonas}
-              onChange={(e) => setFormNumZonas(e.target.value)}
-            />
+          {/* Sección de Zonas y Sugerencias de Formato */}
+          <div className="p-4 bg-dark-900/90 rounded-2xl border border-dark-700/80 space-y-3.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <label className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-emerald-400" />
+                Estructura de Zonas y Parejas
+              </label>
+              <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold self-start sm:self-auto">
+                Confirmación manual al cerrar inscripción
+              </span>
+            </div>
+
+            <p className="text-xs text-dark-300 leading-relaxed">
+              El torneo puede crearse aún sin determinar la cantidad de zonas ni parejas por zona. Una vez cerrada la inscripción, determinarás la cantidad total de parejas y confirmarás manualmente cuántas parejas por zona tendrá el torneo.
+            </p>
+
+            {/* Sugerencias Interactivas: Zonas de 4 vs Zonas de 3 */}
+            <div className="p-3 bg-dark-950/80 rounded-xl border border-dark-800 space-y-2.5">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-xs font-bold text-slate-200 flex items-center gap-1">
+                  <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                  Sugerencias de Formación según Parejas Inscriptas:
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-dark-400">Simular con:</span>
+                  <select
+                    value={simulatedCouplesCount}
+                    onChange={(e) => setSimulatedCouplesCount(Number(e.target.value))}
+                    className="bg-dark-900 border border-dark-700 rounded-lg px-2 py-1 text-xs text-white font-bold focus:outline-none focus:border-emerald-500"
+                  >
+                    {[6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 24].map((num) => (
+                      <option key={num} value={num}>
+                        {num} parejas
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* Sugerencia 4 */}
+                <div className="p-3 bg-dark-900/90 border border-emerald-500/25 rounded-xl space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-emerald-400">
+                      Sugerencia: Zonas de 4 parejas
+                    </span>
+                    <span className="text-[10px] text-dark-400 font-mono">
+                      {newTournamentSuggestions.suggestion4.numZones} zonas
+                    </span>
+                  </div>
+                  <p className="text-xs text-white font-bold">
+                    {newTournamentSuggestions.suggestion4.summary}
+                  </p>
+                  <p className="text-[11px] text-dark-400 font-medium">
+                    {newTournamentSuggestions.suggestion4.distribution
+                      .map((d: { zoneName: string; count: number }) => `${d.zoneName} (${d.count})`)
+                      .join(" · ")}
+                  </p>
+                </div>
+
+                {/* Sugerencia 3 */}
+                <div className="p-3 bg-dark-900/90 border border-sky-500/25 rounded-xl space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-sky-400">
+                      Sugerencia: Zonas de 3 parejas
+                    </span>
+                    <span className="text-[10px] text-dark-400 font-mono">
+                      {newTournamentSuggestions.suggestion3.numZones} zonas
+                    </span>
+                  </div>
+                  <p className="text-xs text-white font-bold">
+                    {newTournamentSuggestions.suggestion3.summary}
+                  </p>
+                  <p className="text-[11px] text-dark-400 font-medium">
+                    {newTournamentSuggestions.suggestion3.distribution
+                      .map((d: { zoneName: string; count: number }) => `${d.zoneName} (${d.count})`)
+                      .join(" · ")}
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-400 leading-snug">
+                En caso de haber parejas sobrantes, puede haber una zona con menos parejas. Al cerrar la inscripción, el administrador confirmará manualmente cuántas parejas por zona tendrá el torneo.
+              </p>
+            </div>
+
+            {/* Opción para predefinir zonas ahora si el admin lo desea */}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => setCustomZonesEnabled(!customZonesEnabled)}
+                className="text-xs text-emerald-400 hover:text-emerald-300 font-medium flex items-center gap-1 underline cursor-pointer"
+              >
+                {customZonesEnabled
+                  ? "✓ Ocultar configuración fija (Determinar al cerrar inscripción)"
+                  : "+ Predefinir cantidad de zonas ahora (Opcional)"}
+              </button>
+
+              {customZonesEnabled && (
+                <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-dark-800">
+                  <Select
+                    label="Parejas por zona"
+                    value={formParejasZona}
+                    onChange={(e) => setFormParejasZona(e.target.value)}
+                    options={[
+                      { value: "3", label: "3 parejas" },
+                      { value: "4", label: "4 parejas" },
+                    ]}
+                  />
+                  <Input
+                    label="Número de zonas inicial"
+                    type="number"
+                    min={1}
+                    max={16}
+                    value={formNumZonas}
+                    onChange={(e) => setFormNumZonas(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="ghost" onClick={() => setShowCreate(false)} disabled={isPending}>
@@ -674,24 +785,126 @@ export default function AdminTorneosPage() {
               { value: "american_2sets", label: "2 sets a 3 games + super tie-break" },
             ]}
           />
-          <div className="grid grid-cols-2 gap-4">
-            <Select
-              label="Parejas por zona"
-              value={formParejasZona}
-              onChange={(e) => setFormParejasZona(e.target.value)}
-              options={[
-                { value: "3", label: "3 parejas" },
-                { value: "4", label: "4 parejas" },
-              ]}
-            />
-            <Input
-              label="Número de zonas"
-              type="number"
-              min={1}
-              max={16}
-              value={formNumZonas}
-              onChange={(e) => setFormNumZonas(e.target.value)}
-            />
+          {/* Sección de Zonas y Sugerencias de Formato */}
+          <div className="p-4 bg-dark-900/90 rounded-2xl border border-dark-700/80 space-y-3.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <label className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-emerald-400" />
+                Estructura de Zonas y Parejas
+              </label>
+              <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold self-start sm:self-auto">
+                Confirmación manual al cerrar inscripción
+              </span>
+            </div>
+
+            <p className="text-xs text-dark-300 leading-relaxed">
+              El torneo puede crearse aún sin determinar la cantidad de zonas ni parejas por zona. Una vez cerrada la inscripción, determinarás la cantidad total de parejas y confirmarás manualmente cuántas parejas por zona tendrá el torneo.
+            </p>
+
+            {/* Sugerencias Interactivas: Zonas de 4 vs Zonas de 3 */}
+            <div className="p-3 bg-dark-950/80 rounded-xl border border-dark-800 space-y-2.5">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-xs font-bold text-slate-200 flex items-center gap-1">
+                  <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                  Sugerencias de Formación según Parejas Inscriptas:
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-dark-400">Simular con:</span>
+                  <select
+                    value={simulatedCouplesCount}
+                    onChange={(e) => setSimulatedCouplesCount(Number(e.target.value))}
+                    className="bg-dark-900 border border-dark-700 rounded-lg px-2 py-1 text-xs text-white font-bold focus:outline-none focus:border-emerald-500"
+                  >
+                    {[6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 24].map((num) => (
+                      <option key={num} value={num}>
+                        {num} parejas
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* Sugerencia 4 */}
+                <div className="p-3 bg-dark-900/90 border border-emerald-500/25 rounded-xl space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-emerald-400">
+                      Sugerencia: Zonas de 4 parejas
+                    </span>
+                    <span className="text-[10px] text-dark-400 font-mono">
+                      {newTournamentSuggestions.suggestion4.numZones} zonas
+                    </span>
+                  </div>
+                  <p className="text-xs text-white font-bold">
+                    {newTournamentSuggestions.suggestion4.summary}
+                  </p>
+                  <p className="text-[11px] text-dark-400 font-medium">
+                    {newTournamentSuggestions.suggestion4.distribution
+                      .map((d: { zoneName: string; count: number }) => `${d.zoneName} (${d.count})`)
+                      .join(" · ")}
+                  </p>
+                </div>
+
+                {/* Sugerencia 3 */}
+                <div className="p-3 bg-dark-900/90 border border-sky-500/25 rounded-xl space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-sky-400">
+                      Sugerencia: Zonas de 3 parejas
+                    </span>
+                    <span className="text-[10px] text-dark-400 font-mono">
+                      {newTournamentSuggestions.suggestion3.numZones} zonas
+                    </span>
+                  </div>
+                  <p className="text-xs text-white font-bold">
+                    {newTournamentSuggestions.suggestion3.summary}
+                  </p>
+                  <p className="text-[11px] text-dark-400 font-medium">
+                    {newTournamentSuggestions.suggestion3.distribution
+                      .map((d: { zoneName: string; count: number }) => `${d.zoneName} (${d.count})`)
+                      .join(" · ")}
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-400 leading-snug">
+                En caso de haber parejas sobrantes, puede haber una zona con menos parejas. Al cerrar la inscripción, el administrador confirmará manualmente cuántas parejas por zona tendrá el torneo.
+              </p>
+            </div>
+
+            {/* Opción para predefinir zonas ahora si el admin lo desea */}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => setCustomZonesEnabled(!customZonesEnabled)}
+                className="text-xs text-emerald-400 hover:text-emerald-300 font-medium flex items-center gap-1 underline cursor-pointer"
+              >
+                {customZonesEnabled
+                  ? "✓ Ocultar configuración fija (Determinar al cerrar inscripción)"
+                  : "+ Predefinir cantidad de zonas ahora (Opcional)"}
+              </button>
+
+              {customZonesEnabled && (
+                <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-dark-800">
+                  <Select
+                    label="Parejas por zona"
+                    value={formParejasZona}
+                    onChange={(e) => setFormParejasZona(e.target.value)}
+                    options={[
+                      { value: "3", label: "3 parejas" },
+                      { value: "4", label: "4 parejas" },
+                    ]}
+                  />
+                  <Input
+                    label="Número de zonas inicial"
+                    type="number"
+                    min={1}
+                    max={16}
+                    value={formNumZonas}
+                    onChange={(e) => setFormNumZonas(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex items-center justify-between pt-4 border-t border-dark-800">
             {editing ? (

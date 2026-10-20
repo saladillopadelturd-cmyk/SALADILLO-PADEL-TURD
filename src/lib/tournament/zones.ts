@@ -2,9 +2,11 @@
  * Utilidades para el cálculo y distribución óptima de zonas en torneos SPT.
  * 
  * Reglas de pádel SPT:
- * - Las zonas se conforman de 3 o 4 parejas (definido por el Admin).
- * - Para N parejas inscritas, se busca la distribución más equitativa posible.
- *   Ej: 20 parejas con zonas de 4 -> 5 zonas de 4 parejas (Zonas A, B, C, D, E).
+ * - Cada torneo se puede crear sin determinar cantidad de zonas ni parejas por zona.
+ * - Una vez cerrada la inscripción, se determina la cantidad definitiva de parejas.
+ * - El sistema ofrece sugerencias para zonas de 4 y zonas de 3 parejas.
+ * - En caso de haber parejas sobrantes, puede haber una zona con menos parejas.
+ * - El administrador confirma manualmente cuántas parejas por zona tendrá el torneo.
  */
 
 export interface ZoneDistribution {
@@ -20,6 +22,178 @@ export interface ZoneDistribution {
   missingCouples: number;
   missingPlayers: number;
   warningMessage: string | null;
+}
+
+export interface ZoneSuggestion {
+  targetZoneSize: 3 | 4;
+  numZones: number;
+  fullZonesCount: number;
+  remainderZonesCount: number;
+  remainderSize: number;
+  summary: string;
+  title: string;
+  hasRemainder: boolean;
+  distribution: { zoneName: string; count: number }[];
+}
+
+/**
+ * Calcula sugerencias de conformación de zonas para un total de parejas dado.
+ * Genera dos alternativas:
+ * 1. Con zonas objetivo de 4 parejas por zona (con zona de parejas sobrantes si aplica).
+ * 2. Con zonas objetivo de 3 parejas por zona (con zona de parejas sobrantes si aplica).
+ */
+export function getZoneSuggestions(couplesCount: number): {
+  suggestion4: ZoneSuggestion;
+  suggestion3: ZoneSuggestion;
+} {
+  const safeCount = Math.max(0, couplesCount);
+
+  // 1. Sugerencia Zonas de 4
+  const buildSug4 = (): ZoneSuggestion => {
+    if (safeCount < 2) {
+      return {
+        targetZoneSize: 4,
+        numZones: 1,
+        fullZonesCount: 0,
+        remainderZonesCount: 1,
+        remainderSize: safeCount,
+        title: "Zonas de 4 parejas",
+        summary: "1 zona (a definir al cerrar inscripción)",
+        hasRemainder: false,
+        distribution: [{ zoneName: "Zona A", count: safeCount }],
+      };
+    }
+
+    const fullZones = Math.floor(safeCount / 4);
+    const remainder = safeCount % 4;
+
+    let numZones = fullZones;
+    let remainderZonesCount = 0;
+    let remainderSize = 0;
+
+    if (remainder > 0) {
+      numZones += 1;
+      remainderZonesCount = 1;
+      remainderSize = remainder;
+    }
+
+    if (numZones === 0) {
+      numZones = 1;
+      remainderZonesCount = 1;
+      remainderSize = safeCount;
+    }
+
+    const distribution: { zoneName: string; count: number }[] = [];
+    for (let i = 0; i < fullZones; i++) {
+      distribution.push({
+        zoneName: `Zona ${String.fromCharCode(65 + i)}`,
+        count: 4,
+      });
+    }
+    if (remainder > 0) {
+      distribution.push({
+        zoneName: `Zona ${String.fromCharCode(65 + fullZones)}`,
+        count: remainder,
+      });
+    }
+
+    let summary = "";
+    if (remainder === 0) {
+      summary = `${fullZones} ${fullZones === 1 ? "zona exacta" : "zonas exactas"} de 4 parejas`;
+    } else if (fullZones === 0) {
+      summary = `1 zona de ${remainder} parejas`;
+    } else {
+      summary = `${fullZones} ${fullZones === 1 ? "zona" : "zonas"} de 4 parejas + 1 zona de ${remainder} parejas sobrantes`;
+    }
+
+    return {
+      targetZoneSize: 4,
+      numZones,
+      fullZonesCount: fullZones,
+      remainderZonesCount,
+      remainderSize,
+      summary,
+      title: "Opción: Zonas de 4 parejas",
+      hasRemainder: remainder > 0,
+      distribution,
+    };
+  };
+
+  // 2. Sugerencia Zonas de 3
+  const buildSug3 = (): ZoneSuggestion => {
+    if (safeCount < 2) {
+      return {
+        targetZoneSize: 3,
+        numZones: 1,
+        fullZonesCount: 0,
+        remainderZonesCount: 1,
+        remainderSize: safeCount,
+        title: "Zonas de 3 parejas",
+        summary: "1 zona (a definir al cerrar inscripción)",
+        hasRemainder: false,
+        distribution: [{ zoneName: "Zona A", count: safeCount }],
+      };
+    }
+
+    const fullZones = Math.floor(safeCount / 3);
+    const remainder = safeCount % 3;
+
+    let numZones = fullZones;
+    let remainderZonesCount = 0;
+    let remainderSize = 0;
+
+    if (remainder > 0) {
+      numZones += 1;
+      remainderZonesCount = 1;
+      remainderSize = remainder;
+    }
+
+    if (numZones === 0) {
+      numZones = 1;
+      remainderZonesCount = 1;
+      remainderSize = safeCount;
+    }
+
+    const distribution: { zoneName: string; count: number }[] = [];
+    for (let i = 0; i < fullZones; i++) {
+      distribution.push({
+        zoneName: `Zona ${String.fromCharCode(65 + i)}`,
+        count: 3,
+      });
+    }
+    if (remainder > 0) {
+      distribution.push({
+        zoneName: `Zona ${String.fromCharCode(65 + fullZones)}`,
+        count: remainder,
+      });
+    }
+
+    let summary = "";
+    if (remainder === 0) {
+      summary = `${fullZones} ${fullZones === 1 ? "zona exacta" : "zonas exactas"} de 3 parejas`;
+    } else if (fullZones === 0) {
+      summary = `1 zona de ${remainder} parejas`;
+    } else {
+      summary = `${fullZones} ${fullZones === 1 ? "zona" : "zonas"} de 3 parejas + 1 zona de ${remainder} parejas sobrantes`;
+    }
+
+    return {
+      targetZoneSize: 3,
+      numZones,
+      fullZonesCount: fullZones,
+      remainderZonesCount,
+      remainderSize,
+      summary,
+      title: "Opción: Zonas de 3 parejas",
+      hasRemainder: remainder > 0,
+      distribution,
+    };
+  };
+
+  return {
+    suggestion4: buildSug4(),
+    suggestion3: buildSug3(),
+  };
 }
 
 /**

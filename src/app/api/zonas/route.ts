@@ -349,9 +349,9 @@ export async function POST(request: Request) {
   const numZones = targetNumZones > 0 ? targetNumZones : optimal.numZones;
   const zoneSize = targetZoneSize > 0 ? targetZoneSize : optimal.zoneSize;
 
-  // Si no se cumple la igualdad de zonas y no se forzó explícitamente ni es generate_zones,
-  // advertir cuántos jugadores faltan
-  if (action !== "generate_zones" && !optimal.isEqual && body.force !== true) {
+  // Si no se cumple la igualdad de zonas y no se forzó explícitamente ni es generate_zones / confirm_structure,
+  // se permite la conformación directa si el admin confirmó manualmente la estructura.
+  if (action !== "generate_zones" && action !== "confirm_structure" && !optimal.isEqual && body.force !== true && !body.confirmedByAdmin) {
     return NextResponse.json(
       {
         error: optimal.warningMessage,
@@ -411,30 +411,50 @@ export async function POST(request: Request) {
   // 2. Mezclar aleatoriamente las parejas (Sorteo)
   const shuffledPairs = shuffleArray(couples);
 
-  // 3. Distribuir parejas equitativamente entre las zonas
+  // 3. Distribuir parejas según la estructura confirmada por el administrador:
+  // Llenar las zonas con targetZoneSize (ej: 4 o 3) y la última zona con las parejas sobrantes si las hay
+  const zoneCapacities: number[] = [];
+  let remainingCouples = shuffledPairs.length;
+
+  for (let i = 0; i < numZones; i++) {
+    if (i === numZones - 1) {
+      // Última zona recibe el remanente/sobrante
+      zoneCapacities.push(remainingCouples);
+    } else {
+      const cap = Math.min(zoneSize, Math.max(1, remainingCouples - (numZones - 1 - i)));
+      zoneCapacities.push(cap);
+      remainingCouples -= cap;
+    }
+  }
+
   const zoneCouplesToInsert = [];
-  for (let i = 0; i < shuffledPairs.length; i++) {
-    const targetZoneIndex = i % numZones;
-    const assignedZone = createdZones[targetZoneIndex];
+  let currentPairIdx = 0;
 
-    zoneCouplesToInsert.push({
-      zone_id: assignedZone.id,
-      couple_id: shuffledPairs[i].id,
-    });
+  for (let zIdx = 0; zIdx < createdZones.length; zIdx++) {
+    const assignedZone = createdZones[zIdx];
+    const capacity = zoneCapacities[zIdx] || 0;
 
-    // Sincronizar zone_id en la entidad de pareja
-    await supabase
-      .from("couples")
-      .update({ zone_id: assignedZone.id })
-      .eq("id", shuffledPairs[i].id);
+    for (let c = 0; c < capacity && currentPairIdx < shuffledPairs.length; c++) {
+      const pair = shuffledPairs[currentPairIdx++];
+      zoneCouplesToInsert.push({
+        zone_id: assignedZone.id,
+        couple_id: pair.id,
+      });
 
-    try {
+      // Sincronizar zone_id en la entidad de pareja
       await supabase
-        .from("pairs")
+        .from("couples")
         .update({ zone_id: assignedZone.id })
-        .eq("id", shuffledPairs[i].id);
-    } catch {
-      // Ignorar si tabla opcional no existe
+        .eq("id", pair.id);
+
+      try {
+        await supabase
+          .from("pairs")
+          .update({ zone_id: assignedZone.id })
+          .eq("id", pair.id);
+      } catch {
+        // Ignorar si tabla opcional no existe
+      }
     }
   }
 
