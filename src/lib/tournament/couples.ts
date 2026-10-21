@@ -288,6 +288,10 @@ export function getAvailablePlayersForTournament(
       }
     }
     return true;
+  }).sort((a, b) => {
+    const cmp = (a.last_name || "").localeCompare(b.last_name || "", "es", { sensitivity: "base" });
+    if (cmp !== 0) return cmp;
+    return (a.first_name || "").localeCompare(b.first_name || "", "es", { sensitivity: "base" });
   });
 }
 

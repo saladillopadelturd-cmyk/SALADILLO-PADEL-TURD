@@ -72,6 +72,7 @@ function AdminParejasContent() {
         supabase
           .from("players")
           .select("id, first_name, last_name, gender, category, is_observed")
+          .order("last_name", { ascending: true })
           .order("first_name", { ascending: true }),
       ]);
 
@@ -95,7 +96,12 @@ function AdminParejasContent() {
       if (playersRes.error) {
         console.error("Error cargando jugadores:", playersRes.error);
       } else if (playersRes.data) {
-        setPlayers(playersRes.data as unknown as Player[]);
+        const sorted = (playersRes.data as unknown as Player[]).sort((a, b) => {
+          const c = (a.last_name || "").localeCompare(b.last_name || "", "es", { sensitivity: "base" });
+          if (c !== 0) return c;
+          return (a.first_name || "").localeCompare(b.first_name || "", "es", { sensitivity: "base" });
+        });
+        setPlayers(sorted);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error al cargar parejas";
@@ -161,7 +167,11 @@ function AdminParejasContent() {
 
   const getPlayerLabel = (p: Player | undefined | null) => {
     if (!p) return "Desconocido";
-    return `${p.first_name} ${p.last_name}`.trim();
+    const lastName = (p.last_name || "").trim().toUpperCase();
+    const firstName = (p.first_name || "").trim();
+    if (!lastName) return firstName || "Desconocido";
+    if (!firstName) return lastName;
+    return `${lastName}, ${firstName}`;
   };
 
   const tournamentOptions = tournaments.map((t) => ({
@@ -237,7 +247,16 @@ function AdminParejasContent() {
     );
     const isSuma = isSumaCategory(selectedTournament.category);
 
-    return available.map((p) => {
+    const sorted = [...available].sort((a, b) => {
+      const cmp = (a.last_name || "").localeCompare(b.last_name || "", "es", { sensitivity: "base" });
+      if (cmp !== 0) return cmp;
+      return (a.first_name || "").localeCompare(b.first_name || "", "es", { sensitivity: "base" });
+    });
+
+    return sorted.map((p) => {
+      const lastName = (p.last_name || "").trim().toUpperCase();
+      const firstName = (p.first_name || "").trim();
+      const nameFormatted = lastName && firstName ? `${lastName}, ${firstName}` : lastName || firstName || "Sin nombre";
       const cat = p.category ? ` (${p.category})` : "";
       const sex = p.gender ? ` [${p.gender}]` : "";
       const obs = p.is_observed ? " 👁️ [Observado]" : "";
@@ -250,7 +269,7 @@ function AdminParejasContent() {
 
       return {
         value: p.id,
-        label: `${p.first_name} ${p.last_name}${sex}${cat}${obs}${sumaNote}`,
+        label: `${nameFormatted}${sex}${cat}${obs}${sumaNote}`,
       };
     });
   }, [players, couples, formTorneo, editing, formJugador2, selectedTournament, partner2]);
@@ -270,7 +289,16 @@ function AdminParejasContent() {
     );
     const isSuma = isSumaCategory(selectedTournament.category);
 
-    return available.map((p) => {
+    const sorted = [...available].sort((a, b) => {
+      const cmp = (a.last_name || "").localeCompare(b.last_name || "", "es", { sensitivity: "base" });
+      if (cmp !== 0) return cmp;
+      return (a.first_name || "").localeCompare(b.first_name || "", "es", { sensitivity: "base" });
+    });
+
+    return sorted.map((p) => {
+      const lastName = (p.last_name || "").trim().toUpperCase();
+      const firstName = (p.first_name || "").trim();
+      const nameFormatted = lastName && firstName ? `${lastName}, ${firstName}` : lastName || firstName || "Sin nombre";
       const cat = p.category ? ` (${p.category})` : "";
       const sex = p.gender ? ` [${p.gender}]` : "";
       const obs = p.is_observed ? " 👁️ [Observado]" : "";
@@ -283,7 +311,7 @@ function AdminParejasContent() {
 
       return {
         value: p.id,
-        label: `${p.first_name} ${p.last_name}${sex}${cat}${obs}${sumaNote}`,
+        label: `${nameFormatted}${sex}${cat}${obs}${sumaNote}`,
       };
     });
   }, [players, couples, formTorneo, editing, formJugador1, selectedTournament, partner1]);

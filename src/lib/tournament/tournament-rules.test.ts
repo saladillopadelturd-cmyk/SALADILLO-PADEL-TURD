@@ -759,6 +759,19 @@ export function runTournamentBusinessLogicTests(): TestResult {
   assert(!availableForPartner.some((p) => p.id === "p3"), "Jugador p3 ya seleccionado se excluye para Jugador 2");
   assert(availableForPartner.length === 2, "Quedan 2 jugadores disponibles para ser compañero de p3");
 
+  // Orden alfabético por APELLIDO, nombre en jugadores disponibles
+  const unsortedPlayers: Player[] = [
+    { id: "u3", first_name: "Carlos", last_name: "Zapata", created_at: "" },
+    { id: "u1", first_name: "Juan", last_name: "Álvarez", created_at: "" },
+    { id: "u2", first_name: "Andrés", last_name: "Benítez", created_at: "" },
+    { id: "u4", first_name: "Bernardo", last_name: "Álvarez", created_at: "" },
+  ];
+  const sortedAvail = getAvailablePlayersForTournament(unsortedPlayers, [], "tour_any");
+  assert(sortedAvail[0].id === "u4", "Álvarez Bernardo primero");
+  assert(sortedAvail[1].id === "u1", "Álvarez Juan segundo");
+  assert(sortedAvail[2].id === "u2", "Benítez Andrés tercero");
+  assert(sortedAvail[3].id === "u3", "Zapata Carlos cuarto");
+
   // c) validateCoupleFormation
   // Caso válido: dos jugadores libres
   const validFormation = validateCoupleFormation("tour_1", "p3", "p4", sampleCouples);
