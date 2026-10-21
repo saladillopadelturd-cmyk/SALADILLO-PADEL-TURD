@@ -213,14 +213,14 @@ async function cmdPlayers(query) {
 }
 
 async function cmdTournaments(status) {
-  let endpoint = '/tournaments?select=id,name,category,gender,status,date,game_mode&order=date.desc';
+  let endpoint = '/tournaments?select=id,name,category,status,date,game_mode&order=date.desc';
   if (status) {
     endpoint += `&status=eq.${encodeURIComponent(status)}`;
   }
 
   console.log(`\n🏆 Torneos${status ? ` (Estado: ${status})` : ''}:`);
   const tournaments = await api(endpoint);
-  printTable(tournaments, ['id', 'name', 'category', 'gender', 'status', 'date', 'game_mode']);
+  printTable(tournaments, ['id', 'name', 'category', 'status', 'date', 'game_mode']);
 }
 
 async function cmdRankings(gender, category) {

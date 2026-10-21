@@ -147,15 +147,14 @@ export default function RootLayout({
   return (
     <html
       lang="es"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <head>
+      <body className="min-h-full flex flex-col bg-dark-950 text-dark-200">
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdData) }}
         />
-      </head>
-      <body className="min-h-full flex flex-col bg-dark-950 text-dark-200">
         <ServiceWorkerRegister />
         <PlayerIdentityProvider>
           <Header />

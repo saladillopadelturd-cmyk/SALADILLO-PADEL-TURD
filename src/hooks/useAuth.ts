@@ -20,14 +20,28 @@ export function useAuth() {
 
   useEffect(() => {
     const fetchProfile = async (currentUser: User) => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", currentUser.id)
-        .maybeSingle();
+      try {
+        const { data, error, status } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", currentUser.id)
+          .maybeSingle();
 
-      if (data && !error) {
-        setProfile(data);
+        if (error) {
+          if (status === 401) {
+            setProfile(null);
+            return;
+          }
+          console.warn("Aviso al consultar perfil:", error.message);
+          setProfile(null);
+          return;
+        }
+
+        if (data) {
+          setProfile(data);
+        }
+      } catch {
+        setProfile(null);
       }
     };
 

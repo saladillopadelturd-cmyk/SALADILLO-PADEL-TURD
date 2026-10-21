@@ -193,25 +193,43 @@ export default function AdminTorneosPage() {
           status: "draft",
         };
 
+        let currentPayload: Record<string, any> = { ...payload };
         let result = await supabase
           .from("tournaments")
-          .insert(payload)
+          .insert(currentPayload)
           .select()
           .single();
 
-        // Resiliencia: si la columna 'gender' no fue migrada aún en Supabase remoto
+        // Resiliencia 1: si la columna 'gender' no fue migrada aún en Supabase remoto
         if (result.error && (result.error.message.includes("gender") || result.error.code === "PGRST204")) {
-          console.warn("Columna gender aún no migrada en Supabase, guardando campos base:", result.error);
-          const fallbackPayload = { ...payload };
-          delete (fallbackPayload as any).gender;
+          console.warn("Columna gender aún no migrada en Supabase, reintentando sin gender:", result.error);
+          delete currentPayload.gender;
           result = await supabase
             .from("tournaments")
-            .insert(fallbackPayload)
+            .insert(currentPayload)
             .select()
             .single();
+        }
 
-          if (result.error) throw result.error;
-          const localData = { ...result.data, gender: formSexo, category: formCategoria };
+        // Resiliencia 2: si game_mode no está habilitado en check constraint de Supabase remoto
+        if (result.error && (result.error.message.includes("tournaments_game_mode_check") || result.error.message.includes("game_mode") || result.error.code === "23514")) {
+          console.warn("Check constraint game_mode aún no migrado en Supabase, guardando con fallback:", result.error);
+          currentPayload.game_mode = "american_2sets";
+          result = await supabase
+            .from("tournaments")
+            .insert(currentPayload)
+            .select()
+            .single();
+        }
+
+        if (result.error) throw result.error;
+        if (result.data) {
+          const localData = {
+            ...result.data,
+            gender: formSexo,
+            category: formCategoria,
+            game_mode: formModalidad as Tournament["game_mode"],
+          };
           setTournaments((prev) => [localData, ...prev]);
           setShowCreate(false);
           setNotification({
@@ -222,29 +240,14 @@ export default function AdminTorneosPage() {
               href: `/admin/parejas?torneo=${localData.id}`,
             },
           });
-          return;
-        }
-
-        if (result.error) throw result.error;
-        if (result.data) {
-          setTournaments((prev) => [result.data, ...prev]);
-          setShowCreate(false);
-          setNotification({
-            type: "success",
-            text: `Torneo "${result.data.name}" (${formSexo} - ${formCategoria}) creado con éxito.`,
-            action: {
-              label: "Cargar Parejas",
-              href: `/admin/parejas?torneo=${result.data.id}`,
-            },
-          });
 
           // Notificar al generador de flyers con los datos del nuevo torneo
           const flyerData = {
-            title: result.data.name.toUpperCase(),
-            category: result.data.category.toUpperCase(),
-            location: result.data.location ? result.data.location.toUpperCase() : "",
-            date: result.data.date || "",
-            tournamentId: result.data.id,
+            title: localData.name.toUpperCase(),
+            category: localData.category.toUpperCase(),
+            location: localData.location ? localData.location.toUpperCase() : "",
+            date: localData.date || "",
+            tournamentId: localData.id,
           };
           localStorage.setItem("spt_pending_flyer_data", JSON.stringify(flyerData));
           window.dispatchEvent(new CustomEvent("spt-pending-flyer-data", { detail: flyerData }));
@@ -272,48 +275,59 @@ export default function AdminTorneosPage() {
           num_zones: Number(formNumZonas),
         };
 
+        let currentPayload: Record<string, any> = { ...payload };
         let result = await supabase
           .from("tournaments")
-          .update(payload)
+          .update(currentPayload)
           .eq("id", editing.id)
           .select()
           .single();
 
-        // Resiliencia si la columna 'gender' no existe aún en Supabase remoto
+        // Resiliencia 1: si la columna 'gender' no existe aún en Supabase remoto
         if (result.error && (result.error.message.includes("gender") || result.error.code === "PGRST204")) {
-          console.warn("Columna gender no migrada aún en Supabase, actualizando campos base:", result.error);
-          const fallbackPayload = { ...payload };
-          delete (fallbackPayload as any).gender;
+          console.warn("Columna gender no migrada aún en Supabase, reintentando sin gender:", result.error);
+          delete currentPayload.gender;
           result = await supabase
             .from("tournaments")
-            .update(fallbackPayload)
+            .update(currentPayload)
             .eq("id", editing.id)
             .select()
             .single();
+        }
 
-          if (result.error) throw result.error;
-          const localData = { ...result.data, gender: formSexo, category: formCategoria };
-          setTournaments((prev) => prev.map((t) => (t.id === editing.id ? localData : t)));
-          setEditing(null);
-          setNotification({ type: "success", text: `Torneo "${localData.name}" actualizado con éxito.` });
-          return;
+        // Resiliencia 2: si game_mode no está en check constraint de Supabase remoto
+        if (result.error && (result.error.message.includes("tournaments_game_mode_check") || result.error.message.includes("game_mode") || result.error.code === "23514")) {
+          console.warn("Check constraint game_mode aún no migrado en Supabase, guardando con fallback:", result.error);
+          currentPayload.game_mode = "american_2sets";
+          result = await supabase
+            .from("tournaments")
+            .update(currentPayload)
+            .eq("id", editing.id)
+            .select()
+            .single();
         }
 
         if (result.error) throw result.error;
         if (result.data) {
+          const localData = {
+            ...result.data,
+            gender: formSexo,
+            category: formCategoria,
+            game_mode: formModalidad as Tournament["game_mode"],
+          };
           setTournaments((prev) =>
-            prev.map((t) => (t.id === editing.id ? result.data : t))
+            prev.map((t) => (t.id === editing.id ? localData : t))
           );
           setEditing(null);
-          setNotification({ type: "success", text: `Torneo "${result.data.name}" actualizado con éxito.` });
+          setNotification({ type: "success", text: `Torneo "${localData.name}" actualizado con éxito.` });
 
           // Notificar al generador de flyers con los datos del torneo editado
           const flyerData = {
-            title: result.data.name.toUpperCase(),
-            category: result.data.category.toUpperCase(),
-            location: result.data.location ? result.data.location.toUpperCase() : "",
-            date: result.data.date || "",
-            tournamentId: result.data.id,
+            title: localData.name.toUpperCase(),
+            category: localData.category.toUpperCase(),
+            location: localData.location ? localData.location.toUpperCase() : "",
+            date: localData.date || "",
+            tournamentId: localData.id,
           };
           localStorage.setItem("spt_pending_flyer_data", JSON.stringify(flyerData));
           window.dispatchEvent(new CustomEvent("spt-pending-flyer-data", { detail: flyerData }));

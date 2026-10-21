@@ -13,12 +13,12 @@ export async function generateMetadata({
     const supabase = await createClient();
     const { data: tour } = await supabase
       .from("tournaments")
-      .select("name, category, gender")
+      .select("name, category")
       .eq("id", id)
       .maybeSingle();
 
     if (tour) {
-      const title = `${tour.name} (${tour.category}${tour.gender ? ` - ${tour.gender}` : ""})`;
+      const title = `${tour.name} (${tour.category})`;
       return {
         title,
         alternates: {
