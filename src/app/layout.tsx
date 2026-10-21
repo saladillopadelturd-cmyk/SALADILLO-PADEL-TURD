@@ -7,6 +7,7 @@ import ServiceWorkerRegister from "@/components/pwa/ServiceWorkerRegister";
 import InstallButton from "@/components/pwa/InstallButton";
 import { PlayerIdentityProvider } from "@/context/PlayerIdentityContext";
 import PlayerFichaModal from "@/components/player/PlayerFichaModal";
+import { getSiteUrl } from "@/lib/siteUrl";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,10 +19,71 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const siteUrl = getSiteUrl();
+
 export const metadata: Metadata = {
-  title: "SPT - Saladillo Padel Tour",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "Saladillo Padel Tour (SPT) | Circuito Oficial de Pádel",
+    template: "%s | Saladillo Padel Tour (SPT)",
+  },
   description:
-    "Gestión de torneos de pádel - Saladillo Padel Tour. Consulta torneos, rankings, zonas y cuadros de eliminación en tiempo real.",
+    "Circuito oficial Saladillo Padel Tour (SPT). Fixtures en vivo, zonas, llaves de playoffs, resultados en tiempo real y rankings oficiales de pádel en Saladillo.",
+  keywords: [
+    "Saladillo Padel Tour",
+    "SPT",
+    "Padel Saladillo",
+    "torneos de padel",
+    "ranking padel saladillo",
+    "fixture padel",
+    "resultados padel en vivo",
+    "circuito oficial de padel",
+    "padel buenos aires",
+    "torneo americano padel",
+    "super tie break",
+  ],
+  authors: [{ name: "Saladillo Padel Tour", url: siteUrl }],
+  creator: "Saladillo Padel Tour",
+  publisher: "Saladillo Padel Tour",
+  applicationName: "Saladillo Padel Tour",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    locale: "es_AR",
+    url: siteUrl,
+    siteName: "Saladillo Padel Tour",
+    title: "Saladillo Padel Tour (SPT) | Circuito Oficial de Pádel",
+    description:
+      "Consulta los torneos oficiales, tablas de zonas, cruces de playoffs y rankings individuales y por parejas en tiempo real.",
+    images: [
+      {
+        url: "/assets/fondos/flyer_oficial_spt.png",
+        width: 1200,
+        height: 630,
+        alt: "Saladillo Padel Tour - Circuito Oficial",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Saladillo Padel Tour (SPT) | Circuito Oficial de Pádel",
+    description:
+      "Torneos, zonas, cruces de playoffs y rankings actualizados del circuito oficial de pádel en Saladillo.",
+    images: ["/assets/fondos/flyer_oficial_spt.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
   icons: {
     icon: "/favicon.png",
     shortcut: "/favicon.png",
@@ -43,6 +105,40 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
+const jsonLdData = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SportsOrganization",
+      "@id": `${siteUrl}/#organization`,
+      name: "Saladillo Padel Tour",
+      alternateName: "SPT",
+      url: siteUrl,
+      logo: `${siteUrl}/LOGOSPT.png`,
+      image: `${siteUrl}/assets/fondos/flyer_oficial_spt.png`,
+      sport: "Pádel",
+      description: "Circuito y torneos oficiales de pádel en Saladillo, Provincia de Buenos Aires.",
+      address: {
+        "@type": "PostalAddress",
+        addressLocality: "Saladillo",
+        addressRegion: "Buenos Aires",
+        addressCountry: "AR",
+      },
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${siteUrl}/#website`,
+      url: siteUrl,
+      name: "Saladillo Padel Tour",
+      description: "Gestión oficial de torneos, rankings y resultados de pádel en vivo",
+      publisher: {
+        "@id": `${siteUrl}/#organization`,
+      },
+      inLanguage: "es-AR",
+    },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -53,6 +149,12 @@ export default function RootLayout({
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdData) }}
+        />
+      </head>
       <body className="min-h-full flex flex-col bg-dark-950 text-dark-200">
         <ServiceWorkerRegister />
         <PlayerIdentityProvider>

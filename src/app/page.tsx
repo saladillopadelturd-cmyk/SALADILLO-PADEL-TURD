@@ -9,6 +9,7 @@ import NewsCarousel from "@/components/home/NewsCarousel";
 import PlayerRegistrationBanner from "@/components/player/PlayerRegistrationBanner";
 import type { Flyer } from "@/types/flyer";
 import { formatDate } from "@/lib/dateUtils";
+import { getSiteUrl } from "@/lib/siteUrl";
 
 export const revalidate = 0; // Fresh tournament data on each load
 
@@ -118,8 +119,46 @@ export default async function HomePage() {
     (t) => t.status === "finished" || t.status === "completed"
   );
 
+  const siteUrl = getSiteUrl();
+  const eventsJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    itemListElement: activeTournaments.slice(0, 5).map((t, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      item: {
+        "@type": "SportsEvent",
+        name: `${t.name} (${t.category})`,
+        startDate: t.date,
+        sport: "Pádel",
+        url: `${siteUrl}/torneos/${t.id}`,
+        location: {
+          "@type": "Place",
+          name: t.location || "Saladillo Padel Club",
+          address: {
+            "@type": "PostalAddress",
+            addressLocality: "Saladillo",
+            addressRegion: "Buenos Aires",
+            addressCountry: "AR",
+          },
+        },
+        organizer: {
+          "@type": "SportsOrganization",
+          name: "Saladillo Padel Tour",
+          url: siteUrl,
+        },
+      },
+    })),
+  };
+
   return (
     <div className="min-h-screen bg-dark-950">
+      {activeTournaments.length > 0 && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(eventsJsonLd) }}
+        />
+      )}
       {/* Hero Section - Premier Padel Aesthetic */}
       <section className="relative overflow-hidden pt-2 pb-6 sm:py-20 border-b border-dark-800/80">
         {/* Subtle Sports Mesh Glow */}

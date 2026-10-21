@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import PlayerAvatar from "@/components/player/PlayerAvatar";
@@ -8,6 +9,21 @@ import { getPlayerPhotosMap } from "@/lib/tournament/player-photos";
 import { Trophy, Medal, User, Sparkles } from "lucide-react";
 
 export const revalidate = 0;
+
+export const metadata: Metadata = {
+  title: "Rankings Oficiales de Pádel",
+  description:
+    "Tabla de posiciones oficial del Saladillo Padel Tour (SPT). Ranking individual por categoría y ranking de parejas en ramas Caballeros y Damas.",
+  openGraph: {
+    title: "Rankings Oficiales de Pádel | SPT Saladillo",
+    description:
+      "Consulta los rankings actualizados de pádel en Saladillo: puntajes individuales y duplas por categoría.",
+    url: "/rankings",
+  },
+  alternates: {
+    canonical: "/rankings",
+  },
+};
 
 interface IndividualRankingItem {
   id: string;
