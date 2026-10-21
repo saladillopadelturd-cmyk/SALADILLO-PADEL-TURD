@@ -53,7 +53,17 @@ export default function PlayerFichaModal() {
     clearIdentity,
   } = usePlayerIdentity();
 
-  const { isAdmin, signOut } = useAuth();
+  const { user, isAdmin, isActualAdmin, signOut } = useAuth();
+
+  const isAdministrator = Boolean(
+    isAdmin ||
+    isActualAdmin ||
+    loggedEmail?.toLowerCase() === "matiasvidal11972@gmail.com" ||
+    user?.email?.toLowerCase() === "matiasvidal11972@gmail.com" ||
+    player?.email?.toLowerCase() === "matiasvidal11972@gmail.com"
+  );
+
+  const isKnownUser = Boolean(isIdentified || player !== null || isAdministrator);
 
   // Modo: "view" (ver ficha identificada), "edit" (editar datos), "lookup" (buscar ficha por correo existente)
   const [mode, setMode] = useState<"view" | "edit" | "lookup">("edit");
@@ -101,6 +111,19 @@ export default function PlayerFichaModal() {
           : null;
 
       setPhotoUrl(player.photo_url || player.avatar_url || localCachedPhoto || null);
+    } else if (isAdministrator) {
+      // Administrador logueado: nunca poner en modo invitación a torneos
+      setMode("lookup");
+      setLookupEmail("");
+      setFirstName("");
+      setLastName("");
+      setEmail(loggedEmail || "");
+      setPhone("");
+      setGender("Masculino");
+      setCategory("5ta");
+      setIsObserved(false);
+      setPhotoUrl(null);
+      setPhotoBlob(null);
     } else if (fichaInitialMode === "lookup") {
       // Forzado explícitamente a modo INGRESAR / Lookup
       setMode("lookup");
@@ -115,8 +138,12 @@ export default function PlayerFichaModal() {
       setPhotoUrl(null);
       setPhotoBlob(null);
     } else if (fichaInitialMode === "edit" || loggedEmail || isNewUser) {
-      // Invitación a Crear Perfil o Nuevo Usuario sin perfil
-      setMode("edit");
+      // Si ya es un usuario conocido o administrador, nunca poner en modo invitación a torneos
+      if (isAdministrator || isKnownUser) {
+        setMode("view");
+      } else {
+        setMode("edit");
+      }
       setFirstName("");
       setLastName("");
       setEmail(loggedEmail || "");
@@ -141,7 +168,14 @@ export default function PlayerFichaModal() {
       setPhotoBlob(null);
     }
     setFeedback(null);
-  }, [isIdentified, player, loggedEmail, isNewUser, isFichaOpen, fichaInitialMode]);
+  }, [isIdentified, player, loggedEmail, isNewUser, isFichaOpen, fichaInitialMode, isAdministrator, isKnownUser]);
+
+  // Salvaguarda: cuando esté logueado un administrador o un usuario conocido, cerrar inmediatamente si se abrió en modo invitación de torneos
+  useEffect(() => {
+    if (isFichaOpen && !isIdentified && mode === "edit" && (isAdministrator || isKnownUser)) {
+      closeFicha();
+    }
+  }, [isFichaOpen, isIdentified, mode, isAdministrator, isKnownUser, closeFicha]);
 
   // Selección de foto
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -338,6 +372,11 @@ export default function PlayerFichaModal() {
   const indRank = stats?.individualRanking;
   const coupleRankings = stats?.coupleRankings || [];
 
+  // Cuando en la app esté logueado un administrador o un usuario conocido, no mostrar ni desplegar el modal "¿Querés participar en los torneos oficiales SPT?"
+  if (isFichaOpen && !isIdentified && mode === "edit" && (isAdministrator || isKnownUser)) {
+    return null;
+  }
+
   return (
     <>
       <Modal
@@ -350,6 +389,8 @@ export default function PlayerFichaModal() {
             ? "Acceso a Saladillo Padel Tour"
             : isIdentified
             ? "Editar mi Perfil de Usuario"
+            : isAdministrator || isKnownUser
+            ? "Perfil de Usuario • Saladillo Padel Tour"
             : "¿Querés participar en los torneos oficiales SPT?"
         }
         size="lg"
@@ -807,7 +848,7 @@ export default function PlayerFichaModal() {
           {mode === "edit" && (
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Información explicativa para el jugador */}
-              {!isIdentified ? (
+              {!isIdentified && !isAdministrator && !isKnownUser ? (
                 <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/70 via-dark-900 to-dark-950 border border-emerald-500/30 text-xs text-dark-200 flex items-start gap-3 shadow-md">
                   <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 flex-shrink-0 mt-0.5">
                     <UserPlus className="w-5 h-5" />
@@ -825,7 +866,7 @@ export default function PlayerFichaModal() {
                     </p>
                   </div>
                 </div>
-              ) : (
+              ) : isIdentified ? (
                 <div className="p-3.5 rounded-xl bg-dark-950/70 border border-emerald-500/20 text-xs text-dark-300 flex items-start gap-2.5">
                   <Sparkles className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                   <div>
@@ -835,7 +876,7 @@ export default function PlayerFichaModal() {
                     </span>
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {/* Subida y Recorte Cuadrado de Foto */}
               <div className="p-4 rounded-2xl bg-dark-950/80 border border-dark-800 space-y-4">

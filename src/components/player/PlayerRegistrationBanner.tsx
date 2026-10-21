@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Users, ArrowRight } from "lucide-react";
 import { usePlayerIdentity } from "@/context/PlayerIdentityContext";
+import { useAuth } from "@/hooks/useAuth";
 
 interface PlayerRegistrationBannerProps {
   variant?: "home" | "compact";
@@ -13,10 +14,21 @@ export default function PlayerRegistrationBanner({
   variant = "home",
   className = "",
 }: PlayerRegistrationBannerProps) {
-  const { isIdentified, isLoading, openCreateProfile } = usePlayerIdentity();
+  const { isIdentified, isLoading, player, loggedEmail, openCreateProfile } = usePlayerIdentity();
+  const { user, isAdmin, isActualAdmin } = useAuth();
 
-  // Si está verificando identidad o si ya hay un jugador logueado identificado en la base de datos, NO APARECE
-  if (isLoading || isIdentified) {
+  const isAdministrator = Boolean(
+    isAdmin ||
+    isActualAdmin ||
+    loggedEmail?.toLowerCase() === "matiasvidal11972@gmail.com" ||
+    user?.email?.toLowerCase() === "matiasvidal11972@gmail.com" ||
+    player?.email?.toLowerCase() === "matiasvidal11972@gmail.com"
+  );
+
+  const isKnownUser = Boolean(isIdentified || player !== null || isAdministrator);
+
+  // Si está verificando identidad o si ya hay un administrador o usuario conocido logueado, NO MOSTRAR
+  if (isLoading || isKnownUser || isAdministrator) {
     return null;
   }
 

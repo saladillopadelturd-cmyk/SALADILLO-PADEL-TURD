@@ -168,11 +168,12 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
 
           return { success: true, identified: true, isAdmin, isNew: false, player: resolvedPlayer };
         } else {
-          // Correo determinado pero NO tiene perfil creado
+          // Correo determinado pero NO tiene perfil creado de jugador
           setIsIdentified(false);
           setPlayer(null);
           setStats(null);
-          setIsNewUser(true);
+          // Si es cuenta de administrador, NO marcar como nuevo jugador a registrar
+          setIsNewUser(!isAdmin);
           setLoggedEmail(cleanEmail);
 
           if (typeof window !== "undefined") {
@@ -183,7 +184,7 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
             success: true,
             identified: false,
             isAdmin,
-            isNew: true,
+            isNew: !isAdmin,
             message: isAdmin
               ? "Cuenta de Administrador detectada."
               : "Nuevo usuario detectado. Te invitamos a crear tu perfil oficial de jugador.",
@@ -284,9 +285,12 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
           localStorage.removeItem("spt_logged_out");
         }
         const res = await resolveIdentityByEmail(authEmail);
-        if (res.isNew) {
+        // Cuando esté logueado un administrador o un usuario conocido (identified), NUNCA desplegar automáticamente el modal
+        if (res.isNew && !res.isAdmin && !res.identified) {
           setIsNewUser(true);
-          setIsFichaOpen(true);
+        } else {
+          setIsNewUser(false);
+          setIsFichaOpen(false);
         }
       }
     });
