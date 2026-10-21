@@ -59,6 +59,7 @@ const GAME_MODE_LABELS: Record<string, string> = {
   round_robin_diff: "Todos contra todos (diferencia)",
   american_9games: "Americano 9 games",
   american_2sets: "2 sets a 3 games + super tie-break",
+  two_sets_super_tb: "2 set + super tie break",
 };
 
 import { parseCategoryLevel, isSumaCategory } from "@/lib/tournament/couples";
@@ -588,6 +589,7 @@ export default function AdminTorneosPage() {
               { value: "round_robin_diff", label: "Todos contra todos (diferencia)" },
               { value: "american_9games", label: "Americano 9 games" },
               { value: "american_2sets", label: "2 sets a 3 games + super tie-break" },
+              { value: "two_sets_super_tb", label: "2 set + super tie break" },
             ]}
           />
           {/* Sección de Zonas y Sugerencias de Formato */}
@@ -783,6 +785,7 @@ export default function AdminTorneosPage() {
               { value: "round_robin_diff", label: "Todos contra todos (diferencia)" },
               { value: "american_9games", label: "Americano 9 games" },
               { value: "american_2sets", label: "2 sets a 3 games + super tie-break" },
+              { value: "two_sets_super_tb", label: "2 set + super tie break" },
             ]}
           />
           {/* Sección de Zonas y Sugerencias de Formato */}

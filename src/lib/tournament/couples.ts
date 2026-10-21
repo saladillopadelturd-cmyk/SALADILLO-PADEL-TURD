@@ -623,7 +623,28 @@ export function formatScoreInput(val: string, prevVal?: string): string {
 
   const trimmed = val.trim();
 
-  // Detección específica para 9/8 u 8/9 con tie-break
+  // Si ya tiene formato con paréntesis de Tie-Break completo o parcial (ej: "7/6 (7-5)", "6/7 (5-7)", "7/6 ( - )")
+  const tbRegexMatch = trimmed.match(/^(\d+[\/-]\d+)\s*\(([^)]*)\)?$/);
+  if (tbRegexMatch) {
+    const base = tbRegexMatch[1].replace("-", "/");
+    const inside = tbRegexMatch[2].trim();
+    if (inside.includes("-")) {
+      const parts = inside.split("-");
+      let left = parts[0].trim();
+      let right = parts[1] ? parts[1].trim() : "";
+      if (!left && right) {
+        left = right;
+        right = "";
+      }
+      if (!left && !right) return `${base} ( - )`;
+      if (left && !right) return `${base} (${left}- )`;
+      return `${base} (${left}-${right})`;
+    }
+    if (!inside) return `${base} ( - )`;
+    return `${base} (${inside}- )`;
+  }
+
+  // Detección para marcadores con tie-break: 9/8 u 8/9, o 7/6 u 6/7 con tiebreak
   const isNineEight =
     trimmed.startsWith("9/8") ||
     trimmed.startsWith("8/9") ||
@@ -632,23 +653,37 @@ export function formatScoreInput(val: string, prevVal?: string): string {
     trimmed.startsWith("98") ||
     trimmed.startsWith("89");
 
-  if (isNineEight) {
-    const isP1Leading = trimmed.startsWith("9/8") || trimmed.startsWith("9-8") || trimmed.startsWith("98");
-    const basePrefix = isP1Leading ? "9/8" : "8/9";
+  const isSevenSixWithTb =
+    (trimmed.startsWith("7/6") ||
+      trimmed.startsWith("6/7") ||
+      trimmed.startsWith("7-6") ||
+      trimmed.startsWith("6-7")) &&
+    (trimmed.includes("(") || trimmed.includes(" - ") || trimmed.length > 3);
+
+  if (isNineEight || isSevenSixWithTb) {
+    let basePrefix = "9/8";
+    let isLeading = true;
+    if (isNineEight) {
+      isLeading = trimmed.startsWith("9/8") || trimmed.startsWith("9-8") || trimmed.startsWith("98");
+      basePrefix = isLeading ? "9/8" : "8/9";
+    } else {
+      isLeading = trimmed.startsWith("7/6") || trimmed.startsWith("7-6") || trimmed.startsWith("76");
+      basePrefix = isLeading ? "7/6" : "6/7";
+    }
 
     // Si el usuario estaba en "9/8 ( - )" o similar y borró con Backspace hacia atrás
     if (prevVal && (prevVal.includes("(") || prevVal.includes("-")) && !val.includes("(") && !val.includes("-")) {
       // El usuario borró explícitamente el paréntesis del tiebreak
-      if (trimmed === "98" || trimmed === "89" || trimmed === "9/8" || trimmed === "8/9") {
+      if (trimmed === "98" || trimmed === "89" || trimmed === "9/8" || trimmed === "8/9" || trimmed === "76" || trimmed === "67" || trimmed === "7/6" || trimmed === "6/7") {
         return basePrefix;
       }
     }
 
-    // Extraer la porción posterior al 9/8 o 8/9
+    // Extraer la porción posterior
     let afterBase = "";
     if (trimmed.includes("/")) {
       const slashIndex = trimmed.indexOf("/");
-      afterBase = trimmed.slice(slashIndex + 2); // saltar el '8' o '9'
+      afterBase = trimmed.slice(slashIndex + 2);
     } else if (trimmed.includes("-") && !trimmed.includes("(")) {
       const dashIndex = trimmed.indexOf("-");
       afterBase = trimmed.slice(dashIndex + 2);
@@ -658,7 +693,7 @@ export function formatScoreInput(val: string, prevVal?: string): string {
 
     afterBase = afterBase.trim();
 
-    // Si no hay nada después de 9/8 o si es solo paréntesis vacío o " - "
+    // Si no hay nada después de la base o si es solo paréntesis vacío o " - "
     if (!afterBase || afterBase === "(" || afterBase === "(-)" || afterBase === "( - )" || afterBase === "-") {
       return `${basePrefix} ( - )`;
     }
@@ -673,8 +708,6 @@ export function formatScoreInput(val: string, prevVal?: string): string {
         return `${basePrefix} ( - )`;
       }
 
-      // El primer número ingresado siempre va del lado izquierdo del separador '-'
-      // Si el usuario tipeó con el cursor al final o a la derecha de '-', el dígito se ubica a la izquierda
       if (!leftDigits && rightDigits) {
         if (rightDigits.length === 1) {
           leftDigits = rightDigits;
@@ -697,7 +730,7 @@ export function formatScoreInput(val: string, prevVal?: string): string {
       return `${basePrefix} (${leftDigits}-${rightDigits})`;
     }
 
-    // Si solo hay dígitos después de la base (ej: '987' -> '7', '9876' -> '76', '98108' -> '108')
+    // Si solo hay dígitos después de la base
     const tbDigits = afterBase.replace(/\D/g, "");
     if (!tbDigits) {
       return `${basePrefix} ( - )`;

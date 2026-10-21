@@ -15,6 +15,11 @@ import {
   validateAmericano9Games,
   validateAmericano2Sets,
   validateShortSet,
+  validateStandardSet,
+  evaluateTieBreak7PointsStandard,
+  evaluateSuperTieBreak11Points,
+  validateTwoSetsSuperTieBreak,
+  calculateTwoSetsSuperTieBreakScore,
   isGoldenPoint,
   calculateAmericano9Games,
   calculateTwoSetsScore,
@@ -213,6 +218,74 @@ export function runTournamentBusinessLogicTests(): TestResult {
     { sets: [1, 3], games_won: 4, games_lost: 4, tiebreak: [10] }
   );
   assert(calc2Sets.winner === "pair1" && calc2Sets.superTbWon === true, "calculateTwoSetsScore computa ganador del STB");
+
+  // ==========================================================================
+  // 3.B. SISTEMA 2 SETS + SUPER TIE-BREAK (2 sets a 6 games, TB a 7 en 6-6, Super TB a 11)
+  // ==========================================================================
+  // a) Sets regulares a 6 games (6-0 a 6-4, 7-5 válidos)
+  assert(validateStandardSet(6, 4).isValid && validateStandardSet(6, 4).winner === "pair1", "Set a 6 games 6-4 válido para Pareja 1");
+  assert(validateStandardSet(2, 6).isValid && validateStandardSet(2, 6).winner === "pair2", "Set a 6 games 2-6 válido para Pareja 2");
+  assert(validateStandardSet(6, 0).isValid, "Set a 6 games 6-0 válido");
+  assert(validateStandardSet(7, 5).isValid && validateStandardSet(7, 5).winner === "pair1", "Set a 6 games 7-5 válido");
+  assert(validateStandardSet(5, 7).isValid && validateStandardSet(5, 7).winner === "pair2", "Set a 6 games 5-7 válido");
+  assert(!validateStandardSet(6, 5).isValid, "Set 6-5 es inválido (debe continuar a 7-5 o 6-6)");
+  assert(!validateStandardSet(5, 4).isValid, "Set 5-4 inconcluso es inválido");
+  assert(!validateStandardSet(8, 6).isValid, "Set 8-6 es inválido (en 6-6 debe jugarse Tie-Break)");
+
+  // b) En 6-6 definen con Tie-Break a 7 puntos
+  assert(validateStandardSet(7, 6).isValid && validateStandardSet(7, 6).winner === "pair1", "Set 7-6 válido para Pareja 1");
+  assert(validateStandardSet(6, 7).isValid && validateStandardSet(6, 7).winner === "pair2", "Set 6-7 válido para Pareja 2");
+  
+  // Tie-Break a 7 puntos con evaluación
+  const tb7Std = evaluateTieBreak7PointsStandard(7, 5);
+  assert(tb7Std !== null && tb7Std.winner === "pair1", "Tie-Break 7-5 válido para Pareja 1");
+  const tb7Sudden = evaluateTieBreak7PointsStandard(7, 6);
+  assert(tb7Sudden !== null && tb7Sudden.winner === "pair1" && tb7Sudden.isSuddenDeath === true, "Tie-Break 7-6 válido en muerte súbita");
+  const tb7Diff2 = evaluateTieBreak7PointsStandard(8, 6);
+  assert(tb7Diff2 !== null && tb7Diff2.winner === "pair1", "Tie-Break 8-6 válido por diferencia de 2");
+
+  const matchSetTb = validateStandardSet(7, 6, 7, 5);
+  assert(matchSetTb.isValid && matchSetTb.winner === "pair1", "Set 7-6 con TB (7-5) válido");
+
+  // c) Super Tie-Break a 11 puntos
+  const stb11_9 = evaluateSuperTieBreak11Points(11, 9);
+  assert(stb11_9 !== null && stb11_9.winner === "pair1", "Super TB 11-9 válido para Pareja 1");
+  const stb11_8 = evaluateSuperTieBreak11Points(8, 11);
+  assert(stb11_8 !== null && stb11_8.winner === "pair2", "Super TB 8-11 válido para Pareja 2");
+  const stb11_10 = evaluateSuperTieBreak11Points(11, 10);
+  assert(stb11_10 !== null && stb11_10.winner === "pair1" && stb11_10.isSuddenDeath === true, "Super TB 11-10 muerte súbita válido");
+  const stb12_10 = evaluateSuperTieBreak11Points(12, 10);
+  assert(stb12_10 !== null && stb12_10.winner === "pair1", "Super TB 12-10 con diferencia de 2 válido");
+
+  // d) Partido completo en modalidad "2 set + super tie break"
+  // Victoria directa 2-0
+  const match2SetsDirect6Games = validateTwoSetsSuperTieBreak([6, 3], [6, 4]);
+  assert(match2SetsDirect6Games.isValid && match2SetsDirect6Games.winner === "pair1", "Victoria 2-0 directa (6-3, 6-4) válida");
+
+  // Empate 1-1 en sets exige Super Tie-Break a 11
+  const match11NoStb6Games = validateTwoSetsSuperTieBreak([6, 4], [3, 6]);
+  assert(!match11NoStb6Games.isValid, "Empate 1-1 en sets sin Super TB a 11 es inválido");
+
+  // Empate 1-1 con Super Tie-Break a 11 puntos
+  const matchFull2SetsStb11 = validateTwoSetsSuperTieBreak([6, 4], [4, 6], [11, 9]);
+  assert(matchFull2SetsStb11.isValid && matchFull2SetsStb11.winner === "pair1", "Partido 1-1 con Super TB 11-9 válido para Pareja 1");
+
+  // Empate 1-1 con tie-breaks a 7 y super tie-break a 11
+  const matchFullTbAndStb = validateTwoSetsSuperTieBreak(
+    [7, 6],
+    [6, 7],
+    [11, 10],
+    [7, 5],
+    [5, 7]
+  );
+  assert(matchFullTbAndStb.isValid && matchFullTbAndStb.winner === "pair1", "Partido completo con sets 7-6, 6-7 y Super TB 11-10 válido");
+
+  // e) Cálculo estructurado calculateTwoSetsSuperTieBreakScore
+  const calcTwoSetsSuperTb = calculateTwoSetsSuperTieBreakScore(
+    { sets: [6, 4], games_won: 10, games_lost: 10, tiebreak: [11] },
+    { sets: [4, 6], games_won: 10, games_lost: 10, tiebreak: [8] }
+  );
+  assert(calcTwoSetsSuperTb.winner === "pair1" && calcTwoSetsSuperTb.superTbWon === true && calcTwoSetsSuperTb.setsWon === 2, "calculateTwoSetsSuperTieBreakScore asigna 2 sets al ganador tras Super TB");
 
   // ==========================================================================
   // 4. FASE DE ZONAS, REGLA DE ELIMINACIÓN Y CRITERIOS DE DESEMPATE

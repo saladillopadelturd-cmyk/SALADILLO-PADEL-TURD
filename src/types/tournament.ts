@@ -1,7 +1,8 @@
 export type GameMode =
   | "round_robin_diff"
   | "american_9games"
-  | "american_2sets";
+  | "american_2sets"
+  | "two_sets_super_tb";
 
 export type TournamentStatus =
   | "draft"

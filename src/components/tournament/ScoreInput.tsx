@@ -4,12 +4,12 @@ import { useState } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { isGoldenPoint, isDeathSudden } from "@/lib/tournament/american-system";
-import type { ScoreData } from "@/types/tournament";
+import type { ScoreData, GameMode } from "@/types/tournament";
 import { Plus, Minus, Trophy, Sparkles, AlertCircle } from "lucide-react";
 
 interface ScoreInputProps {
   matchId: string;
-  gameMode: "round_robin_diff" | "american_9games" | "american_2sets";
+  gameMode: GameMode;
   pair1Name: string;
   pair2Name: string;
   onSave: (score1: ScoreData, score2: ScoreData) => void;

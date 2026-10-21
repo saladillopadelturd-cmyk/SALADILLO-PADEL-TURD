@@ -56,9 +56,9 @@ export default function RulesSection() {
           <div className="w-10 h-10 bg-blue-500/10 border border-blue-500/30 rounded-xl flex items-center justify-center mb-3">
             <Clock className="w-5 h-5 text-blue-400" />
           </div>
-          <h3 className="text-white font-bold text-sm mb-1">Sistema Americano</h3>
+          <h3 className="text-white font-bold text-sm mb-1">Modalidades de Juego</h3>
           <p className="text-dark-400 text-xs leading-relaxed">
-            A 9 games (empate 8-8 con TB a 7 muere en 7) o a 2 sets de 3 games con super TB a 10 (muere en 11).
+            Americano a 9 games, 2 sets de 3 games, o 2 sets a 6 games (con Tie-Break a 7 en 6-6 y Super TB a 11).
           </p>
         </Card>
       </div>

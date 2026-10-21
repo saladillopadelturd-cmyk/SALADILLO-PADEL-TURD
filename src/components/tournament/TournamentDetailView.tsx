@@ -64,6 +64,8 @@ const STATUS_LABELS: Record<string, string> = {
 const GAME_MODE_LABELS: Record<string, string> = {
   american_9games: "Americano a 9 games",
   american_2sets: "Americano 2 sets a 3 games",
+  two_sets_super_tb: "2 set + super tie break",
+  round_robin_diff: "Todos contra todos por diferencia de games",
   traditional: "Tradicional al mejor de 3",
 };
 
@@ -223,6 +225,44 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
           text: "Para un resultado de 9/8, debes anotar los puntos del tie-break, por ejemplo: 9/8 (7-6)",
         });
         return;
+      }
+    }
+
+    // Validaciones específicas para "2 set + super tie break"
+    if (tournament?.game_mode === "two_sets_super_tb") {
+      if (!formScoreSet1.trim()) {
+        setNotification({ type: "error", text: "Debes ingresar el resultado del Set 1." });
+        return;
+      }
+      if (!formScoreSet2.trim()) {
+        setNotification({
+          type: "error",
+          text: "En modalidad '2 set + super tie break' debes ingresar el resultado del Set 1 y Set 2.",
+        });
+        return;
+      }
+      if (formScoreSet1.includes("( - )") || formScoreSet2.includes("( - )")) {
+        setNotification({
+          type: "error",
+          text: "Completa los puntos del tie-break o retira los paréntesis vacíos (ej: 7/6 (7-5)).",
+        });
+        return;
+      }
+
+      const p1Match = formScoreSet1.match(/(\d+)\s*[-/]\s*(\d+)/);
+      const p2Match = formScoreSet2.match(/(\d+)\s*[-/]\s*(\d+)/);
+      if (p1Match && p2Match) {
+        const s1_p1Won = parseInt(p1Match[1], 10) > parseInt(p1Match[2], 10);
+        const s2_p1Won = parseInt(p2Match[1], 10) > parseInt(p2Match[2], 10);
+
+        // Si están 1-1 en sets, se exige el Super Tie-Break a 11 puntos
+        if (s1_p1Won !== s2_p1Won && !formScoreSuperTb.trim()) {
+          setNotification({
+            type: "error",
+            text: "Los sets están empatados 1-1. Es obligatorio registrar el resultado del Super Tie-Break a 11 puntos.",
+          });
+          return;
+        }
       }
     }
 
@@ -1925,7 +1965,11 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
           {/* 2. Marcador del Partido */}
           <div>
             <label className="block text-xs font-bold text-slate-300 mb-1 uppercase tracking-wider">
-              Resultado del Partido {tournament?.game_mode === "american_2sets" ? "(Set 1)" : ""}
+              {tournament?.game_mode === "two_sets_super_tb"
+                ? "Resultado Set 1 (a 6 games)"
+                : tournament?.game_mode === "american_2sets"
+                ? "Resultado Set 1 (a 3 games)"
+                : "Resultado del Partido"}
             </label>
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
@@ -1933,7 +1977,13 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                   type="text"
                   inputMode="numeric"
                   autoFocus
-                  placeholder="Ej: 9/4 o 9/8 (7-6)"
+                  placeholder={
+                    tournament?.game_mode === "two_sets_super_tb"
+                      ? "Ej: 6/4 o 7/6 (7-5)"
+                      : tournament?.game_mode === "american_2sets"
+                      ? "Ej: 3/1"
+                      : "Ej: 9/4 o 9/8 (7-6)"
+                  }
                   value={formScoreSet1}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -1962,22 +2012,29 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
             
             {/* Chips de marcadores rápidos */}
             <div className="flex items-center justify-center gap-1.5 mt-2 flex-wrap">
-              {(tournament?.game_mode === "american_9games" || !tournament?.game_mode
-                ? ["9/4", "9/5", "9/6", "9/7", "9/3", "9/8"]
-                : ["6/3", "6/4", "6/2", "7/5", "7/6"]
+              {(tournament?.game_mode === "two_sets_super_tb"
+                ? (formWinnerCoupleId === scoringMatch?.couple2_id
+                    ? ["4/6", "3/6", "2/6", "1/6", "0/6", "5/7", "6/7"]
+                    : ["6/4", "6/3", "6/2", "6/1", "6/0", "7/5", "7/6"])
+                : tournament?.game_mode === "american_2sets"
+                ? (formWinnerCoupleId === scoringMatch?.couple2_id
+                    ? ["1/3", "2/3", "0/3"]
+                    : ["3/1", "3/2", "3/0"])
+                : (formWinnerCoupleId === scoringMatch?.couple2_id
+                    ? ["4/9", "5/9", "6/9", "7/9", "3/9", "8/9"]
+                    : ["9/4", "9/5", "9/6", "9/7", "9/3", "9/8"])
               ).map((chip) => {
-                const is98 = chip === "9/8";
-                const isSelected = is98
-                  ? formScoreSet1.startsWith("9/8") || formScoreSet1.startsWith("8/9")
+                const isTbBase = chip === "9/8" || chip === "8/9" || chip === "7/6" || chip === "6/7";
+                const isSelected = isTbBase
+                  ? formScoreSet1.startsWith(chip)
                   : formScoreSet1 === chip;
                 return (
                   <button
                     key={chip}
                     type="button"
                     onClick={() => {
-                      if (is98) {
-                        const prefix = formWinnerCoupleId === scoringMatch?.couple2_id ? "8/9" : "9/8";
-                        setFormScoreSet1(`${prefix} ( - )`);
+                      if (isTbBase) {
+                        setFormScoreSet1(`${chip} ( - )`);
                       } else {
                         setFormScoreSet1(chip);
                       }
@@ -1994,16 +2051,28 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
               })}
             </div>
 
-            {/* Opciones de Tie-Break al 8-8 */}
-            {(formScoreSet1.startsWith("9/8") || formScoreSet1.startsWith("8/9")) && (
+            {/* Opciones de Tie-Break al 8-8 o 6-6 */}
+            {(formScoreSet1.startsWith("9/8") ||
+              formScoreSet1.startsWith("8/9") ||
+              formScoreSet1.startsWith("7/6") ||
+              formScoreSet1.startsWith("6/7")) && (
               <div className="mt-2.5 p-2.5 bg-dark-950/90 rounded-xl border border-amber-500/30">
+                <p className="text-[11px] font-bold text-amber-300 text-center mb-1.5 uppercase tracking-wider">
+                  Desempate en Tie-Break (a 7 puntos)
+                </p>
                 <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                  {(formWinnerCoupleId === scoringMatch?.couple2_id
-                    ? ["6-7", "5-7", "4-7", "3-7", "2-7", "1-7", "0-7", "6-8", "8-10"]
-                    : ["7-6", "7-5", "7-4", "7-3", "7-2", "7-1", "7-0", "8-6", "10-8"]
+                  {(formScoreSet1.startsWith("8/9") || formScoreSet1.startsWith("6/7")
+                    ? ["5-7", "4-7", "3-7", "2-7", "1-7", "0-7", "6-7", "6-8", "8-10"]
+                    : ["7-5", "7-4", "7-3", "7-2", "7-1", "7-0", "7-6", "8-6", "10-8"]
                   ).map((tbChip) => {
-                    const prefix = formWinnerCoupleId === scoringMatch?.couple2_id ? "8/9" : "9/8";
-                    const candidate = `${prefix} (${tbChip})`;
+                    const base = formScoreSet1.startsWith("8/9")
+                      ? "8/9"
+                      : formScoreSet1.startsWith("9/8")
+                      ? "9/8"
+                      : formScoreSet1.startsWith("6/7")
+                      ? "6/7"
+                      : "7/6";
+                    const candidate = `${base} (${tbChip})`;
                     const isSelected = formScoreSet1 === candidate;
                     return (
                       <button
@@ -2025,9 +2094,132 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
             )}
 
             <p className="text-[11px] text-dark-400 mt-1.5 text-center">
-              Tipeá solo los números (ej: 9 y 4) y la barra <span className="font-bold text-emerald-400">/</span> se colocará automáticamente. Presioná <kbd className="px-1.5 py-0.5 rounded bg-dark-800 border border-dark-700 text-[10px] text-white">Enter</kbd> para confirmar.
+              Tipeá solo los números (ej: 6 y 4) y la barra <span className="font-bold text-emerald-400">/</span> se colocará automáticamente. Presioná <kbd className="px-1.5 py-0.5 rounded bg-dark-800 border border-dark-700 text-[10px] text-white">Enter</kbd> para confirmar.
             </p>
           </div>
+
+          {/* Set 2 y Super Tie-Break para "2 set + super tie break" */}
+          {tournament?.game_mode === "two_sets_super_tb" && (
+            <>
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1 uppercase tracking-wider">
+                  Resultado Set 2 (a 6 games)
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Ej: 6/3 o 7/6 (7-5)"
+                  value={formScoreSet2}
+                  onChange={(e) => setFormScoreSet2(formatScoreInput(e.target.value, formScoreSet2))}
+                  className="w-full px-4 py-2.5 bg-dark-900 border border-dark-600 rounded-lg text-white text-base font-bold font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500 text-center tracking-widest"
+                />
+
+                {/* Chips de marcadores rápidos Set 2 */}
+                <div className="flex items-center justify-center gap-1.5 mt-2 flex-wrap">
+                  {(formWinnerCoupleId === scoringMatch?.couple2_id
+                    ? ["4/6", "3/6", "2/6", "1/6", "0/6", "5/7", "6/7"]
+                    : ["6/4", "6/3", "6/2", "6/1", "6/0", "7/5", "7/6"]
+                  ).map((chip) => {
+                    const isTbBase = chip === "7/6" || chip === "6/7";
+                    const isSelected = isTbBase
+                      ? formScoreSet2.startsWith(chip)
+                      : formScoreSet2 === chip;
+                    return (
+                      <button
+                        key={chip}
+                        type="button"
+                        onClick={() => {
+                          if (isTbBase) {
+                            setFormScoreSet2(`${chip} ( - )`);
+                          } else {
+                            setFormScoreSet2(chip);
+                          }
+                        }}
+                        className={`px-2.5 py-1 text-xs font-mono font-bold rounded-lg border transition-colors cursor-pointer ${
+                          isSelected
+                            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                            : "bg-dark-800 hover:bg-dark-700 text-dark-300 hover:text-white border-dark-700"
+                        }`}
+                      >
+                        {chip}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Opciones de Tie-Break al 6-6 en Set 2 */}
+                {(formScoreSet2.startsWith("7/6") || formScoreSet2.startsWith("6/7")) && (
+                  <div className="mt-2.5 p-2.5 bg-dark-950/90 rounded-xl border border-amber-500/30">
+                    <p className="text-[11px] font-bold text-amber-300 text-center mb-1.5 uppercase tracking-wider">
+                      Desempate Set 2 en Tie-Break (a 7 puntos)
+                    </p>
+                    <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                      {(formScoreSet2.startsWith("6/7")
+                        ? ["5-7", "4-7", "3-7", "2-7", "1-7", "0-7", "6-7", "6-8"]
+                        : ["7-5", "7-4", "7-3", "7-2", "7-1", "7-0", "7-6", "8-6"]
+                      ).map((tbChip) => {
+                        const base = formScoreSet2.startsWith("6/7") ? "6/7" : "7/6";
+                        const candidate = `${base} (${tbChip})`;
+                        const isSelected = formScoreSet2 === candidate;
+                        return (
+                          <button
+                            key={tbChip}
+                            type="button"
+                            onClick={() => setFormScoreSet2(candidate)}
+                            className={`px-2 py-0.5 text-xs font-mono font-bold rounded-md border transition-all cursor-pointer ${
+                              isSelected
+                                ? "bg-amber-400 text-dark-950 border-amber-300 shadow-sm font-black"
+                                : "bg-dark-900 hover:bg-dark-800 text-amber-300/90 border-amber-500/30 hover:border-amber-400"
+                            }`}
+                          >
+                            ({tbChip})
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1 uppercase tracking-wider flex items-center justify-between">
+                  <span>Super Tie-Break a 11 puntos (en empate 1-1 en sets)</span>
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Ej: 11/9 o 11/10"
+                  value={formScoreSuperTb}
+                  onChange={(e) => setFormScoreSuperTb(formatScoreInput(e.target.value, formScoreSuperTb))}
+                  className="w-full px-4 py-2.5 bg-dark-900 border border-dark-600 rounded-lg text-white text-base font-bold font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500 text-center tracking-widest"
+                />
+
+                {/* Chips rápidos Super Tie-Break a 11 */}
+                <div className="flex items-center justify-center gap-1.5 mt-2 flex-wrap">
+                  {(formWinnerCoupleId === scoringMatch?.couple2_id
+                    ? ["9/11", "8/11", "7/11", "6/11", "5/11", "10/11", "10/12"]
+                    : ["11/9", "11/8", "11/7", "11/6", "11/5", "11/10", "12/10"]
+                  ).map((stbChip) => {
+                    const isSelected = formScoreSuperTb === stbChip;
+                    return (
+                      <button
+                        key={stbChip}
+                        type="button"
+                        onClick={() => setFormScoreSuperTb(stbChip)}
+                        className={`px-2.5 py-1 text-xs font-mono font-bold rounded-lg border transition-colors cursor-pointer ${
+                          isSelected
+                            ? "bg-amber-400 text-dark-950 border-amber-300 font-black shadow-sm"
+                            : "bg-dark-800 hover:bg-dark-700 text-amber-300 hover:text-white border-dark-700"
+                        }`}
+                      >
+                        {stbChip}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
 
           {tournament?.game_mode === "american_2sets" && (
             <>
@@ -2060,7 +2252,9 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
             </>
           )}
 
-          {tournament?.game_mode !== "american_9games" && tournament?.game_mode !== "american_2sets" && (
+          {tournament?.game_mode !== "american_9games" &&
+            tournament?.game_mode !== "american_2sets" &&
+            tournament?.game_mode !== "two_sets_super_tb" && (
             <div>
               <label className="block text-xs font-bold text-slate-300 mb-1 uppercase tracking-wider">
                 Resultado Set 2 (opcional)

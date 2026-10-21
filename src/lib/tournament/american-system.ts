@@ -404,7 +404,333 @@ export function calculateTwoSetsScore(
 }
 
 // ============================================================================
-// 4. ROUND ROBIN POR DIFERENCIA DE GAMES (Sistema Tradicional)
+// 4. SISTEMA 2 SETS + SUPER TIE-BREAK (2 sets a 6 games, TB a 7 en 6-6, Super TB a 11)
+// ============================================================================
+
+/**
+ * Tie-Break estándar a 7 puntos para set a 6 games (cuando van 6-6):
+ * - El objetivo es llegar a 7 puntos.
+ * - Si un equipo llega a 7 y el otro tiene 5 o menos (7-0 a 7-5), gana el tie-break.
+ * - Si empatan 6-6, se resuelve por muerte súbita en 7 (7-6) o con diferencia de 2 (8-6, 9-7, etc.).
+ */
+export function evaluateTieBreak7PointsStandard(points1: number, points2: number): TieBreakResult | null {
+  if (points1 < 0 || points2 < 0) return null;
+
+  // Ganador directo con 7 puntos y rival con 5 o menos
+  if (points1 === 7 && points2 <= 5) {
+    return {
+      winner: "pair1",
+      points1,
+      points2,
+      isSuddenDeath: false,
+      scoreText: `7-${points2}`,
+    };
+  }
+
+  if (points2 === 7 && points1 <= 5) {
+    return {
+      winner: "pair2",
+      points1,
+      points2,
+      isSuddenDeath: false,
+      scoreText: `${points1}-7`,
+    };
+  }
+
+  // Muerte súbita en 7 o definición en 7-6
+  if (points1 === 7 && points2 === 6) {
+    return {
+      winner: "pair1",
+      points1,
+      points2,
+      isSuddenDeath: true,
+      scoreText: "7-6",
+    };
+  }
+
+  if (points2 === 7 && points1 === 6) {
+    return {
+      winner: "pair2",
+      points1,
+      points2,
+      isSuddenDeath: true,
+      scoreText: "6-7",
+    };
+  }
+
+  // Si se jugó con diferencia de 2 más allá de 6-6 (ej: 8-6, 9-7, 10-8)
+  if (points1 >= 7 && points1 - points2 === 2) {
+    return {
+      winner: "pair1",
+      points1,
+      points2,
+      isSuddenDeath: false,
+      scoreText: `${points1}-${points2}`,
+    };
+  }
+
+  if (points2 >= 7 && points2 - points1 === 2) {
+    return {
+      winner: "pair2",
+      points1,
+      points2,
+      isSuddenDeath: false,
+      scoreText: `${points1}-${points2}`,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Super Tie-Break a 11 puntos:
+ * - Se disputa en caso de empate 1-1 en sets.
+ * - Es a 11 puntos.
+ * - Si un equipo llega a 11 y el rival tiene 9 o menos (11-0 a 11-9), gana el super tie-break.
+ * - Si van 10-10, quien alcanza 11 puntos gana (11-10 en muerte súbita) o con diferencia de 2 (12-10).
+ */
+export function evaluateSuperTieBreak11Points(points1: number, points2: number): TieBreakResult | null {
+  if (points1 < 0 || points2 < 0) return null;
+
+  // Victoria con 11 puntos y rival con 9 o menos
+  if (points1 === 11 && points2 <= 9) {
+    return {
+      winner: "pair1",
+      points1,
+      points2,
+      isSuddenDeath: false,
+      scoreText: `${points1}-${points2}`,
+    };
+  }
+
+  if (points2 === 11 && points1 <= 9) {
+    return {
+      winner: "pair2",
+      points1,
+      points2,
+      isSuddenDeath: false,
+      scoreText: `${points1}-${points2}`,
+    };
+  }
+
+  // Muerte súbita en 11 (11-10 / 10-11)
+  if (points1 === 11 && points2 === 10) {
+    return {
+      winner: "pair1",
+      points1,
+      points2,
+      isSuddenDeath: true,
+      scoreText: "11-10",
+    };
+  }
+
+  if (points2 === 11 && points1 === 10) {
+    return {
+      winner: "pair2",
+      points1,
+      points2,
+      isSuddenDeath: true,
+      scoreText: "10-11",
+    };
+  }
+
+  // Diferencia de 2 más allá de 10-10 (ej: 12-10, 13-11)
+  if (points1 >= 11 && points1 - points2 === 2) {
+    return {
+      winner: "pair1",
+      points1,
+      points2,
+      isSuddenDeath: false,
+      scoreText: `${points1}-${points2}`,
+    };
+  }
+
+  if (points2 >= 11 && points2 - points1 === 2) {
+    return {
+      winner: "pair2",
+      points1,
+      points2,
+      isSuddenDeath: false,
+      scoreText: `${points1}-${points2}`,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Valida un set tradicional a 6 games.
+ * Casos válidos:
+ * - 6-0, 6-1, 6-2, 6-3, 6-4
+ * - 7-5 / 5-7
+ * - 7-6 / 6-7 (con Tie-Break a 7 puntos en caso de 6-6)
+ */
+export function validateStandardSet(
+  games1: number,
+  games2: number,
+  tbPoints1?: number,
+  tbPoints2?: number
+): { isValid: boolean; winner?: "pair1" | "pair2"; error?: string; tbResult?: TieBreakResult } {
+  if (games1 < 0 || games2 < 0) {
+    return { isValid: false, error: "Los games no pueden ser negativos" };
+  }
+
+  // 6-0 a 6-4
+  if (games1 === 6 && games2 <= 4) return { isValid: true, winner: "pair1" };
+  if (games2 === 6 && games1 <= 4) return { isValid: true, winner: "pair2" };
+
+  // 7-5 / 5-7
+  if (games1 === 7 && games2 === 5) return { isValid: true, winner: "pair1" };
+  if (games2 === 7 && games1 === 5) return { isValid: true, winner: "pair2" };
+
+  // 7-6 / 6-7 (Tie-Break en 6-6)
+  if ((games1 === 7 && games2 === 6) || (games1 === 6 && games2 === 7)) {
+    if (tbPoints1 !== undefined && tbPoints2 !== undefined) {
+      const tb = evaluateTieBreak7PointsStandard(tbPoints1, tbPoints2);
+      if (!tb) {
+        return {
+          isValid: false,
+          error: `Puntuación de Tie-Break a 7 puntos inválida (${tbPoints1}-${tbPoints2}).`,
+        };
+      }
+      const expectedWinner = games1 > games2 ? "pair1" : "pair2";
+      if (tb.winner !== expectedWinner) {
+        return {
+          isValid: false,
+          error: `El ganador del tie-break (${tb.winner}) no coincide con el ganador del set (${expectedWinner}).`,
+        };
+      }
+      return { isValid: true, winner: expectedWinner, tbResult: tb };
+    }
+    // Si no se detallaron puntos específicos del TB, 7-6 / 6-7 es reglamentario
+    return { isValid: true, winner: games1 > games2 ? "pair1" : "pair2" };
+  }
+
+  return {
+    isValid: false,
+    error: `Marcador de set inválido (${games1}-${games2}). Debe ser a 6 games (ej: 6-4, 6-3, 7-5 o 7-6 en Tie-Break).`,
+  };
+}
+
+/**
+ * Valida un partido de la modalidad "2 set + super tie break":
+ * - 2 sets a 6 games.
+ * - En caso de 6-6 definen con un tie break a 7 puntos.
+ * - Si empatan 1-1 en sets, definen con un super tie break a 11 puntos.
+ */
+export function validateTwoSetsSuperTieBreak(
+  set1: [number, number],
+  set2: [number, number],
+  superTb?: [number, number],
+  tbSet1?: [number, number],
+  tbSet2?: [number, number]
+): MatchValidationResult {
+  const vSet1 = validateStandardSet(set1[0], set1[1], tbSet1?.[0], tbSet1?.[1]);
+  if (!vSet1.isValid) return { isValid: false, error: `Set 1: ${vSet1.error}` };
+
+  const vSet2 = validateStandardSet(set2[0], set2[1], tbSet2?.[0], tbSet2?.[1]);
+  if (!vSet2.isValid) return { isValid: false, error: `Set 2: ${vSet2.error}` };
+
+  const s1Text = vSet1.tbResult ? `${set1[0]}-${set1[1]} (${vSet1.tbResult.scoreText})` : `${set1[0]}-${set1[1]}`;
+  const s2Text = vSet2.tbResult ? `${set2[0]}-${set2[1]} (${vSet2.tbResult.scoreText})` : `${set2[0]}-${set2[1]}`;
+
+  // Si una pareja ganó ambos sets (2-0)
+  if (vSet1.winner === vSet2.winner) {
+    return {
+      isValid: true,
+      winner: vSet1.winner,
+      scoreSummary: `${s1Text}, ${s2Text}`,
+    };
+  }
+
+  // Si van 1-1 en sets, se exige el Super Tie-Break a 11 puntos
+  if (!superTb) {
+    return {
+      isValid: false,
+      error: "Con sets empatados 1-1, es obligatorio disputar el Super Tie-Break a 11 puntos.",
+    };
+  }
+
+  const tbResult = evaluateSuperTieBreak11Points(superTb[0], superTb[1]);
+  if (!tbResult) {
+    return {
+      isValid: false,
+      error: `Super Tie-Break inválido (${superTb[0]}-${superTb[1]}). El desempate es a 11 puntos (ej: 11-9, 11-8 o 11-10).`,
+    };
+  }
+
+  return {
+    isValid: true,
+    winner: tbResult.winner,
+    scoreSummary: `${s1Text}, ${s2Text}, [${tbResult.scoreText}]`,
+  };
+}
+
+/**
+ * Calcula el resultado de un partido de "2 set + super tie break" a partir de ScoreData.
+ */
+export function calculateTwoSetsSuperTieBreakScore(
+  score1: ScoreData,
+  score2: ScoreData
+): TwoSetsResult {
+  const sets1 = score1.sets ?? [];
+  const sets2 = score2.sets ?? [];
+
+  let setsWon1 = 0;
+  let setsWon2 = 0;
+  let totalGames1 = 0;
+  let totalGames2 = 0;
+
+  for (let i = 0; i < Math.min(sets1.length, sets2.length); i++) {
+    totalGames1 += sets1[i];
+    totalGames2 += sets2[i];
+    if (sets1[i] > sets2[i]) setsWon1++;
+    else if (sets2[i] > sets1[i]) setsWon2++;
+  }
+
+  // Super Tie-Break en set 3
+  let superTbWon: boolean | undefined;
+  let superTbScore: { pair1: number; pair2: number } | undefined;
+  const stb1 = score1.tiebreak?.[0];
+  const stb2 = score2.tiebreak?.[0];
+
+  if (stb1 !== undefined && stb2 !== undefined) {
+    superTbScore = { pair1: stb1, pair2: stb2 };
+    const tbResult = evaluateSuperTieBreak11Points(stb1, stb2);
+    if (tbResult) {
+      if (tbResult.winner === "pair1") {
+        setsWon1++;
+        superTbWon = true;
+      } else {
+        setsWon2++;
+        superTbWon = false;
+      }
+    }
+  }
+
+  let winner: "pair1" | "pair2" | "draw" = "draw";
+  if (setsWon1 > setsWon2) winner = "pair1";
+  else if (setsWon2 > setsWon1) winner = "pair2";
+
+  const scoreText = sets1
+    .map((s, idx) => `${s}-${sets2[idx]}`)
+    .concat(superTbScore ? [`[${superTbScore.pair1}-${superTbScore.pair2}]`] : [])
+    .join(", ");
+
+  return {
+    setsWon: setsWon1,
+    setsLost: setsWon2,
+    gamesWon: totalGames1,
+    gamesLost: totalGames2,
+    superTbWon,
+    superTbScore,
+    winner,
+    scoreText,
+  };
+}
+
+// ============================================================================
+// 5. ROUND ROBIN POR DIFERENCIA DE GAMES (Sistema Tradicional)
 // ============================================================================
 
 export function calculateGameDifference(gamesWon: number, gamesLost: number): number {

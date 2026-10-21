@@ -78,9 +78,10 @@ CREATE TABLE public.tournaments (
   gender TEXT NOT NULL DEFAULT 'Masculino' CHECK (gender IN ('Masculino', 'Femenino')),
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'zones', 'playoffs', 'finished')),
   game_mode TEXT NOT NULL DEFAULT 'american_9games' CHECK (game_mode IN (
-    'round_robin_diff', -- Todos contra todos por diferencia de games
-    'american_9games',  -- Americano 9 games (empate 8-8 -> TB a 7 "muere en 7")
-    'american_2sets'    -- 2 sets a 3 games + Super TB a 10 "muere en 11"
+    'round_robin_diff',  -- Todos contra todos por diferencia de games
+    'american_9games',   -- Americano 9 games (empate 8-8 -> TB a 7 "muere en 7")
+    'american_2sets',    -- 2 sets a 3 games + Super TB a 10 "muere en 11"
+    'two_sets_super_tb'  -- 2 sets a 6 games (TB a 7 en 6-6) + Super TB a 11
   )),
   zone_size INT NOT NULL DEFAULT 3 CHECK (zone_size IN (3, 4)),
   num_zones INT NOT NULL DEFAULT 2 CHECK (num_zones >= 1 AND num_zones <= 32),
