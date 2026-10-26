@@ -64,6 +64,58 @@ export default function ZoneConformationEditor({
   // Mapa de asignación en edición: coupleId -> zoneId
   const [assignments, setAssignments] = useState<Record<string, string>>(initialAssignments);
 
+  // Configuración de cupo (3 o 4 parejas) específico para cada zona
+  const [zoneSizes, setZoneSizes] = useState<Record<string, number>>(() => {
+    const initialSizes: Record<string, number> = {};
+    let saved: Record<string, number> = {};
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem(`spt_zone_sizes_${tournamentId}`);
+        if (raw) saved = JSON.parse(raw);
+      } catch {}
+    }
+
+    zones.forEach((z) => {
+      if (saved[z.id] === 3 || saved[z.id] === 4) {
+        initialSizes[z.id] = saved[z.id];
+      } else {
+        const currentCount = (zoneCouplesMap[z.id] || []).length;
+        if (currentCount === 3) {
+          initialSizes[z.id] = 3;
+        } else if (currentCount === 4) {
+          initialSizes[z.id] = 4;
+        } else {
+          initialSizes[z.id] = targetZoneSize === 3 ? 3 : 4;
+        }
+      }
+    });
+    return initialSizes;
+  });
+
+  // Helper para obtener el cupo (3 o 4) de una zona específica
+  const getZoneTargetSize = (zoneId: string): number => {
+    return zoneSizes[zoneId] === 3 ? 3 : 4;
+  };
+
+  // Cambiar cupo de una zona entre 3 y 4 parejas
+  const handleSetZoneSize = (zoneId: string, size: 3 | 4) => {
+    setZoneSizes((prev) => {
+      const updated = { ...prev, [zoneId]: size };
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem(`spt_zone_sizes_${tournamentId}`, JSON.stringify(updated));
+        } catch {}
+      }
+      return updated;
+    });
+
+    const zone = zones.find((z) => z.id === zoneId);
+    setFeedbackNotice({
+      type: "info",
+      text: `${zone?.name || "Zona"}: cupo configurado a ${size} parejas.`,
+    });
+  };
+
   // Modo de visualización: "dynamic" (Asistente Dinámico paso a paso) o "grid" (Vista Grilla de Zonas)
   const [viewMode, setViewMode] = useState<"dynamic" | "grid">("dynamic");
 
@@ -72,7 +124,8 @@ export default function ZoneConformationEditor({
     // Buscar la primera zona que aún no esté cerrada
     const incompleteZone = zones.find((z) => {
       const count = Object.values(initialAssignments).filter((zId) => zId === z.id).length;
-      return count < targetZoneSize;
+      const quota = targetZoneSize === 3 ? 3 : 4;
+      return count < quota;
     });
     return incompleteZone ? incompleteZone.id : (zones[0]?.id || "");
   });
@@ -161,6 +214,8 @@ export default function ZoneConformationEditor({
     const activeZone = zones.find((z) => z.id === activeZoneId);
     if (!activeZone) return;
 
+    const currentQuota = getZoneTargetSize(activeZone.id);
+
     const couplesInActive = Object.entries(assignments)
       .filter(([, zId]) => zId === activeZoneId)
       .map(([cId]) => cId);
@@ -169,20 +224,19 @@ export default function ZoneConformationEditor({
     if (couplesInActive.includes(coupleId)) return;
 
     // Verificar si la zona ya está cerrada
-    if (couplesInActive.length >= targetZoneSize) {
+    if (couplesInActive.length >= currentQuota) {
       setFeedbackNotice({
         type: "warning",
-        text: `La ${activeZone.name} ya está cerrada con ${targetZoneSize} parejas. Selecciona otra zona o quita una pareja primero.`,
+        text: `La ${activeZone.name} ya está cerrada con ${currentQuota} parejas. Puedes cambiar su cupo a 4, seleccionar otra zona o quitar una pareja.`,
       });
       return;
     }
 
     const couple = couples.find((c) => c.id === coupleId);
     const coupleNum = couple ? coupleNumberMap.get(couple.id) : null;
-    const coupleName = couple ? getCoupleSummary(couple) : `Pareja ${coupleNum ?? ""}`;
 
     const newCount = couplesInActive.length + 1;
-    const isNowClosed = newCount === targetZoneSize;
+    const isNowClosed = newCount === currentQuota;
 
     // Asignar
     setAssignments((prev) => ({
@@ -195,26 +249,26 @@ export default function ZoneConformationEditor({
       const nextOpenZone = zones.find((z) => {
         if (z.id === activeZoneId) return false;
         const count = Object.values(assignments).filter((zId) => zId === z.id).length;
-        // Cuenta actual antes del cambio
-        return count < targetZoneSize;
+        const quota = getZoneTargetSize(z.id);
+        return count < quota;
       });
 
       if (nextOpenZone) {
         setActiveZoneId(nextOpenZone.id);
         setFeedbackNotice({
           type: "success",
-          text: `¡${activeZone.name} CERRADA (${targetZoneSize} de ${targetZoneSize})! Pareja ${coupleNum ?? ""} asignada. Pasando a ${nextOpenZone.name}...`,
+          text: `¡${activeZone.name} CERRADA (${currentQuota} de ${currentQuota})! Pareja ${coupleNum ?? ""} asignada. Pasando a ${nextOpenZone.name}...`,
         });
       } else {
         setFeedbackNotice({
           type: "success",
-          text: `¡${activeZone.name} CERRADA (${targetZoneSize} de ${targetZoneSize})! Todas las zonas están completas.`,
+          text: `¡${activeZone.name} CERRADA (${currentQuota} de ${currentQuota})! Todas las zonas están completas.`,
         });
       }
     } else {
       setFeedbackNotice({
         type: "info",
-        text: `Pareja ${coupleNum ?? ""} asignada a ${activeZone.name} (${newCount} de ${targetZoneSize}).`,
+        text: `Pareja ${coupleNum ?? ""} asignada a ${activeZone.name} (${newCount} de ${currentQuota}).`,
       });
     }
   };
@@ -321,6 +375,8 @@ export default function ZoneConformationEditor({
 
   // Datos de la zona activa en el asistente dinámico
   const activeZone = zones.find((z) => z.id === activeZoneId) || zones[0];
+  const activeZoneTargetSize = activeZone ? getZoneTargetSize(activeZone.id) : 4;
+
   const activeZoneCouples = useMemo(() => {
     if (!activeZone) return [];
     return Object.entries(assignments)
@@ -329,8 +385,8 @@ export default function ZoneConformationEditor({
       .filter((c): c is Couple => Boolean(c));
   }, [assignments, activeZone, couples]);
 
-  const isActiveZoneClosed = activeZoneCouples.length === targetZoneSize;
-  const isActiveZoneOverfilled = activeZoneCouples.length > targetZoneSize;
+  const isActiveZoneClosed = activeZoneCouples.length === activeZoneTargetSize;
+  const isActiveZoneOverfilled = activeZoneCouples.length > activeZoneTargetSize;
 
   // Filtrado de parejas para la lista del Asistente Dinámico
   const filteredCouplesForAssistant = useMemo(() => {
@@ -351,13 +407,13 @@ export default function ZoneConformationEditor({
     });
   }, [sortedCouples, assignments, coupleFilter, searchTerm, coupleNumberMap]);
 
-  // Cantidad total de zonas cerradas
+  // Cantidad total de zonas cerradas según el cupo individual de cada una
   const closedZonesCount = useMemo(() => {
     return zones.filter((z) => {
       const count = Object.values(assignments).filter((zId) => zId === z.id).length;
-      return count === targetZoneSize;
+      return count === getZoneTargetSize(z.id);
     }).length;
-  }, [zones, assignments, targetZoneSize]);
+  }, [zones, assignments, zoneSizes]);
 
   const allZonesClosed = zones.length > 0 && closedZonesCount === zones.length;
 
@@ -380,11 +436,11 @@ export default function ZoneConformationEditor({
                 Editor de Conformación de Zonas
               </h3>
               <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                {targetZoneSize} parejas por zona
+                Cupos configurables (3 o 4 parejas)
               </span>
             </div>
             <p className="text-xs text-dark-300 mt-0.5">
-              Selecciona una a una las parejas para cada zona. Al llegar a {targetZoneSize} parejas la zona se da por cerrada automáticamente.
+              Configura cada zona a 3 o 4 parejas y selecciónalas una a una. Al alcanzar el cupo elegido, la zona se da por cerrada automáticamente.
             </p>
           </div>
         </div>
@@ -510,8 +566,9 @@ export default function ZoneConformationEditor({
         </span>
         {zones.map((zone) => {
           const count = Object.values(assignments).filter((zId) => zId === zone.id).length;
-          const isClosed = count === targetZoneSize;
-          const isOver = count > targetZoneSize;
+          const quota = getZoneTargetSize(zone.id);
+          const isClosed = count === quota;
+          const isOver = count > quota;
           const isActive = viewMode === "dynamic" && activeZoneId === zone.id;
 
           return (
@@ -536,7 +593,7 @@ export default function ZoneConformationEditor({
             >
               <span>{zone.name}:</span>
               <span className="text-white font-black">{count}</span>
-              <span className="text-dark-400 font-normal">/ {targetZoneSize}</span>
+              <span className="text-dark-400 font-normal">/ {quota}</span>
               {isClosed ? (
                 <Lock className="w-3 h-3 text-emerald-400 ml-0.5" />
               ) : (
@@ -747,7 +804,7 @@ export default function ZoneConformationEditor({
                   : "border-blue-500/50 bg-dark-900/95"
               }`}
             >
-              {/* Cabecera de la Zona Activa */}
+              {/* Cabecera de la Zona Activa con selector de cupo (3 o 4) */}
               <div className="p-4 bg-dark-950 border-b border-dark-800 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <div
@@ -769,18 +826,51 @@ export default function ZoneConformationEditor({
                       )}
                     </h4>
                     <p className="text-[11px] text-dark-400">
-                      Zona configurada a {targetZoneSize} parejas
+                      Cupo configurado: {activeZoneTargetSize} parejas
                     </p>
                   </div>
                 </div>
 
-                <Badge
-                  variant={isActiveZoneClosed ? "success" : isActiveZoneOverfilled ? "danger" : "info"}
-                  size="md"
-                  className="font-black text-xs"
-                >
-                  {activeZoneCouples.length} / {targetZoneSize} parejas
-                </Badge>
+                <div className="flex items-center gap-2">
+                  {/* Selector interactivo de cupo (3 o 4 parejas) para esta zona */}
+                  <div className="flex items-center gap-1 bg-dark-900 px-1.5 py-1 rounded-xl border border-dark-750">
+                    <span className="text-[10px] text-dark-400 font-bold px-1 uppercase tracking-wider">
+                      Cupo:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleSetZoneSize(activeZone.id, 3)}
+                      className={`px-2 py-0.5 rounded text-xs font-black transition-all ${
+                        activeZoneTargetSize === 3
+                          ? "bg-emerald-500 text-dark-950 shadow-sm"
+                          : "text-dark-400 hover:text-white"
+                      }`}
+                      title="Configurar zona para 3 parejas"
+                    >
+                      3
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetZoneSize(activeZone.id, 4)}
+                      className={`px-2 py-0.5 rounded text-xs font-black transition-all ${
+                        activeZoneTargetSize === 4
+                          ? "bg-emerald-500 text-dark-950 shadow-sm"
+                          : "text-dark-400 hover:text-white"
+                      }`}
+                      title="Configurar zona para 4 parejas"
+                    >
+                      4
+                    </button>
+                  </div>
+
+                  <Badge
+                    variant={isActiveZoneClosed ? "success" : isActiveZoneOverfilled ? "danger" : "info"}
+                    size="md"
+                    className="font-black text-xs"
+                  >
+                    {activeZoneCouples.length} / {activeZoneTargetSize}
+                  </Badge>
+                </div>
               </div>
 
               {/* Selector de pestañas para cambiar rápidamente de zona */}
@@ -790,7 +880,8 @@ export default function ZoneConformationEditor({
                 </span>
                 {zones.map((z) => {
                   const zCouples = Object.values(assignments).filter((zId) => zId === z.id);
-                  const isClosed = zCouples.length === targetZoneSize;
+                  const zQuota = getZoneTargetSize(z.id);
+                  const isClosed = zCouples.length === zQuota;
                   const isCurrent = z.id === activeZone.id;
 
                   return (
@@ -808,7 +899,7 @@ export default function ZoneConformationEditor({
                     >
                       <span>{z.name}</span>
                       <span className="text-[10px] opacity-80 font-mono">
-                        ({zCouples.length}/{targetZoneSize})
+                        ({zCouples.length}/{zQuota})
                       </span>
                       {isClosed && <Check className="w-3 h-3" />}
                     </button>
@@ -828,7 +919,7 @@ export default function ZoneConformationEditor({
                           ¡Zona {activeZone.name} Cerrada!
                         </p>
                         <p className="text-[11px] text-emerald-300/80">
-                          Se alcanzaron las {targetZoneSize} parejas requeridas para esta zona.
+                          Se alcanzaron las {activeZoneTargetSize} parejas requeridas para esta zona.
                         </p>
                       </div>
                     </div>
@@ -839,7 +930,7 @@ export default function ZoneConformationEditor({
                     <div>
                       <p className="font-bold">Zona excedida</p>
                       <p className="text-[11px]">
-                        Tiene {activeZoneCouples.length} parejas (máximo {targetZoneSize}). Quita {activeZoneCouples.length - targetZoneSize} para cerrarla.
+                        Tiene {activeZoneCouples.length} parejas (máximo {activeZoneTargetSize}). Quita {activeZoneCouples.length - activeZoneTargetSize} para cerrarla, o amplía el cupo a 4.
                       </p>
                     </div>
                   </div>
@@ -848,10 +939,10 @@ export default function ZoneConformationEditor({
                     <Sparkles className="w-4 h-4 text-blue-400 flex-shrink-0" />
                     <div>
                       <p className="font-bold text-white">
-                        Conformando {activeZone.name}: {activeZoneCouples.length} de {targetZoneSize} parejas
+                        Conformando {activeZone.name}: {activeZoneCouples.length} de {activeZoneTargetSize} parejas
                       </p>
                       <p className="text-[11px] text-blue-200/80">
-                        Selecciona {targetZoneSize - activeZoneCouples.length} {targetZoneSize - activeZoneCouples.length === 1 ? "pareja más" : "parejas más"} de la lista para darla por cerrada.
+                        Selecciona {activeZoneTargetSize - activeZoneCouples.length} {activeZoneTargetSize - activeZoneCouples.length === 1 ? "pareja más" : "parejas más"} de la lista de la izquierda para darla por cerrada.
                       </p>
                     </div>
                   </div>
@@ -860,7 +951,7 @@ export default function ZoneConformationEditor({
                 {/* Lista de parejas ya seleccionadas en esta zona */}
                 <div className="space-y-2">
                   <span className="text-[11px] font-bold text-dark-400 uppercase tracking-wider block">
-                    Parejas en {activeZone.name} ({activeZoneCouples.length}):
+                    Parejas en {activeZone.name} ({activeZoneCouples.length} / {activeZoneTargetSize}):
                   </span>
 
                   {activeZoneCouples.map((c, idx) => {
@@ -901,15 +992,15 @@ export default function ZoneConformationEditor({
                     );
                   })}
 
-                  {/* Slots vacíos pendientes */}
-                  {Array.from({ length: Math.max(0, targetZoneSize - activeZoneCouples.length) }).map((_, i) => (
+                  {/* Slots vacíos pendientes según el cupo actual de la zona */}
+                  {Array.from({ length: Math.max(0, activeZoneTargetSize - activeZoneCouples.length) }).map((_, i) => (
                     <div
                       key={`empty-${i}`}
                       className="p-3.5 rounded-xl border border-dashed border-dark-800 bg-dark-950/40 text-center flex items-center justify-center gap-2 text-xs text-dark-500"
                     >
                       <PlusCircle className="w-4 h-4 text-dark-600" />
                       <span>
-                        Espacio {activeZoneCouples.length + i + 1} de {targetZoneSize}: Haz clic en una pareja de la lista para sumar
+                        Espacio {activeZoneCouples.length + i + 1} de {activeZoneTargetSize}: Haz clic en una pareja de la izquierda para sumar
                       </span>
                     </div>
                   ))}
@@ -938,7 +1029,8 @@ export default function ZoneConformationEditor({
                       {(() => {
                         const nextZone = zones.find((z) => {
                           const count = Object.values(assignments).filter((zId) => zId === z.id).length;
-                          return count < targetZoneSize;
+                          const quota = getZoneTargetSize(z.id);
+                          return count < quota;
                         });
                         if (nextZone) {
                           return (
@@ -974,7 +1066,7 @@ export default function ZoneConformationEditor({
                   ¡Todas las Zonas han sido Cerradas!
                 </h4>
                 <p className="text-xs text-emerald-200/90 max-w-sm mx-auto">
-                  Las {zones.length} zonas cuentan exactamente con {targetZoneSize} parejas reglamentarias.
+                  Las {zones.length} zonas cuentan exactamente con sus parejas reglamentarias (3 o 4 por zona).
                 </p>
                 <Button
                   size="sm"
@@ -992,7 +1084,7 @@ export default function ZoneConformationEditor({
       )}
 
       {/* ========================================================================= */}
-      {/* VISTA 2: VISTA GRILLA DE TODAS LAS ZONAS (CON SWAP Y REORDENAMIENTO) */}
+      {/* VISTA 2: VISTA GRILLA DE TODAS LAS ZONAS (CON SELECTOR DE CUPO 3 O 4) */}
       {/* ========================================================================= */}
       {viewMode === "grid" && (
         <div className="space-y-6">
@@ -1038,8 +1130,9 @@ export default function ZoneConformationEditor({
                 .map((cId) => couples.find((c) => c.id === cId))
                 .filter((c): c is Couple => Boolean(c));
 
-              const isZoneClosed = zoneCouplesList.length === targetZoneSize;
-              const isZoneOver = zoneCouplesList.length > targetZoneSize;
+              const quota = getZoneTargetSize(zone.id);
+              const isZoneClosed = zoneCouplesList.length === quota;
+              const isZoneOver = zoneCouplesList.length > quota;
 
               return (
                 <Card
@@ -1053,20 +1146,54 @@ export default function ZoneConformationEditor({
                   }`}
                 >
                   <div>
-                    {/* Cabecera de Zona */}
-                    <div className="px-4 py-3 bg-dark-950 border-b border-dark-800 flex items-center justify-between">
+                    {/* Cabecera de Zona con selector de 3 o 4 parejas */}
+                    <div className="px-4 py-3 bg-dark-950 border-b border-dark-800 flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <div className="w-6 h-6 rounded-md bg-blue-500/10 border border-blue-500/30 flex items-center justify-center">
                           <span className="text-blue-400 font-bold text-xs">{zone.zone_number}</span>
                         </div>
                         <h4 className="text-white font-black text-sm">{zone.name}</h4>
                       </div>
-                      <Badge
-                        variant={isZoneClosed ? "success" : isZoneOver ? "danger" : "info"}
-                        size="sm"
-                      >
-                        {zoneCouplesList.length} / {targetZoneSize} parejas
-                      </Badge>
+
+                      <div className="flex items-center gap-2">
+                        {/* Selector de 3 o 4 parejas en Grilla */}
+                        <div className="flex items-center gap-0.5 bg-dark-900 px-1 py-0.5 rounded-lg border border-dark-750">
+                          <span className="text-[9px] text-dark-400 font-bold px-1 uppercase">
+                            Cupo:
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleSetZoneSize(zone.id, 3)}
+                            className={`px-1.5 py-0.5 rounded text-[11px] font-black transition-all ${
+                              quota === 3
+                                ? "bg-emerald-500 text-dark-950 shadow-sm"
+                                : "text-dark-400 hover:text-white"
+                            }`}
+                            title="3 parejas"
+                          >
+                            3
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSetZoneSize(zone.id, 4)}
+                            className={`px-1.5 py-0.5 rounded text-[11px] font-black transition-all ${
+                              quota === 4
+                                ? "bg-emerald-500 text-dark-950 shadow-sm"
+                                : "text-dark-400 hover:text-white"
+                            }`}
+                            title="4 parejas"
+                          >
+                            4
+                          </button>
+                        </div>
+
+                        <Badge
+                          variant={isZoneClosed ? "success" : isZoneOver ? "danger" : "info"}
+                          size="sm"
+                        >
+                          {zoneCouplesList.length} / {quota}
+                        </Badge>
+                      </div>
                     </div>
 
                     {/* Lista de parejas en esta zona */}
@@ -1170,6 +1297,7 @@ export default function ZoneConformationEditor({
                                     <option value="" disabled>
                                       ↔ Cambiar por otra pareja...
                                     </option>
+                                    {/* Parejas de otras zonas agrupadas */}
                                     {zones
                                       .filter((z) => z.id !== zone.id)
                                       .map((otherZone) => {
@@ -1250,7 +1378,7 @@ export default function ZoneConformationEditor({
                   <div className="p-3 bg-dark-950/70 border-t border-dark-800">
                     <label className="block text-[11px] font-bold text-dark-300 mb-1.5 flex items-center gap-1">
                       <PlusCircle className="w-3.5 h-3.5 text-emerald-400" />
-                      + Asignar / Traer pareja a {zone.name}:
+                      + Asignar / Traer pareja a {zone.name} (Cupo {quota}):
                     </label>
                     <select
                       defaultValue=""
@@ -1390,7 +1518,7 @@ export default function ZoneConformationEditor({
                           </option>
                           {zones.map((z) => (
                             <option key={z.id} value={z.id}>
-                              {z.name}
+                              {z.name} (Cupo {getZoneTargetSize(z.id)})
                             </option>
                           ))}
                         </select>
@@ -1408,16 +1536,16 @@ export default function ZoneConformationEditor({
       <div className="p-4 rounded-xl bg-dark-900/60 border border-dark-800/80 flex items-start gap-3 text-xs text-dark-400">
         <HelpCircle className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
         <div className="space-y-1">
-          <p className="text-dark-200 font-semibold">Consejos para conformar las zonas de forma dinámica:</p>
+          <p className="text-dark-200 font-semibold">Consejos para conformar las zonas con cupos de 3 o 4 parejas:</p>
           <ul className="list-disc pl-4 space-y-0.5 text-dark-300 text-[11px]">
+            <li>
+              Puedes configurar el cupo de cada zona a <strong>3 o 4 parejas</strong> individualmente mediante los botones <strong>[ 3 ] [ 4 ]</strong>.
+            </li>
             <li>
               En el <strong>Asistente Dinámico</strong>, haz clic en cualquier pareja del listado para sumarla a la zona activa.
             </li>
             <li>
-              Al alcanzar las <strong>{targetZoneSize} parejas</strong>, la zona se da por <strong>Cerrada ✔</strong> automáticamente y el foco avanza a la siguiente zona abierta.
-            </li>
-            <li>
-              Puedes alternar entre el <strong>Asistente Dinámico</strong> y la <strong>Vista Grilla</strong> en cualquier momento sin perder los cambios.
+              Al alcanzar las <strong>3 o 4 parejas configuradas</strong>, la zona se da por <strong>Cerrada ✔</strong> automáticamente y el foco avanza a la siguiente zona abierta.
             </li>
             <li>
               Al presionar <strong>&quot;Guardar Conformación&quot;</strong>, se actualizarán las zonas y se regenerará automáticamente el fixture de partidos.
