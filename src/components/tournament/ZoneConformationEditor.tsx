@@ -557,7 +557,186 @@ export default function ZoneConformationEditor({
       {/* ========================================================================= */}
       {viewMode === "dynamic" && activeZone && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* PANEL IZQUIERDO (5 cols): Zona Activa en Conformación */}
+          {/* PANEL IZQUIERDO (7 cols): Padrón de Parejas del Torneo */}
+          <div className="lg:col-span-7 space-y-4">
+            <Card className="p-4 border-dark-750 bg-dark-900/95 shadow-xl">
+              {/* Encabezado del Panel de Parejas */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 pb-3 border-b border-dark-800">
+                <div>
+                  <h4 className="text-sm font-black text-white flex items-center gap-2">
+                    <Users className="w-4 h-4 text-emerald-400" />
+                    Padrón de Parejas del Torneo ({couples.length})
+                  </h4>
+                  <p className="text-[11px] text-dark-400">
+                    Haz clic en una pareja para sumarla a{" "}
+                    <strong className="text-emerald-400">{activeZone.name}</strong>.
+                  </p>
+                </div>
+
+                {/* Filtros rápidos: Todas / Disponibles / Asignadas */}
+                <div className="flex items-center gap-1 bg-dark-950 p-1 rounded-lg border border-dark-800 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setCoupleFilter("all")}
+                    className={`px-2.5 py-1 rounded-md font-bold transition-all ${
+                      coupleFilter === "all"
+                        ? "bg-dark-800 text-white"
+                        : "text-dark-400 hover:text-white"
+                    }`}
+                  >
+                    Todas ({couples.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCoupleFilter("unassigned")}
+                    className={`px-2.5 py-1 rounded-md font-bold transition-all ${
+                      coupleFilter === "unassigned"
+                        ? "bg-amber-500/20 text-amber-300 font-black"
+                        : "text-dark-400 hover:text-white"
+                    }`}
+                  >
+                    Libres ({unassignedCouples.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCoupleFilter("assigned")}
+                    className={`px-2.5 py-1 rounded-md font-bold transition-all ${
+                      coupleFilter === "assigned"
+                        ? "bg-emerald-500/20 text-emerald-300 font-black"
+                        : "text-dark-400 hover:text-white"
+                    }`}
+                  >
+                    Asignadas ({couples.length - unassignedCouples.length})
+                  </button>
+                </div>
+              </div>
+
+              {/* Buscador */}
+              <div className="relative mb-3">
+                <Search className="w-4 h-4 text-dark-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Buscar pareja por apellido, nombre o número (#)..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-dark-950 text-xs text-white placeholder-dark-500 rounded-xl pl-9 pr-8 py-2.5 border border-dark-800 focus:outline-none focus:border-emerald-500 transition-colors"
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-dark-400 hover:text-white"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Lista dinámica de parejas */}
+              <div className="space-y-2 max-h-[640px] overflow-y-auto pr-1">
+                {filteredCouplesForAssistant.length === 0 ? (
+                  <div className="py-12 text-center text-dark-500 text-xs border border-dashed border-dark-800 rounded-xl space-y-1">
+                    <p className="font-bold">No se encontraron parejas con ese criterio.</p>
+                    <p className="text-[11px] text-dark-600">
+                      Prueba con otro término de búsqueda o cambia el filtro.
+                    </p>
+                  </div>
+                ) : (
+                  filteredCouplesForAssistant.map((c) => {
+                    const num = coupleNumberMap.get(c.id);
+                    const assignedZoneId = assignments[c.id];
+                    const assignedZone = assignedZoneId ? zones.find((z) => z.id === assignedZoneId) : null;
+                    const isInActiveZone = assignedZoneId === activeZone.id;
+
+                    return (
+                      <div
+                        key={c.id}
+                        className={`p-3 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                          isInActiveZone
+                            ? "bg-emerald-500/10 border-emerald-500/40 shadow-sm"
+                            : assignedZone
+                            ? "bg-dark-950/70 border-dark-800 opacity-80 hover:opacity-100"
+                            : "bg-dark-950 border-dark-800 hover:border-emerald-500/40 hover:bg-dark-900 shadow-sm"
+                        }`}
+                      >
+                        {/* Info de la pareja */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="text-xs font-black px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                              Pareja {num ?? "-"}
+                            </span>
+                            {c.seed && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                #{c.seed}
+                              </span>
+                            )}
+                            <span className="text-[11px] text-dark-400 font-semibold">
+                              Cat. {c.player1?.category ?? "?"} + {c.player2?.category ?? "?"}
+                            </span>
+                          </div>
+
+                          <h5 className="text-xs font-bold text-white leading-snug">
+                            {getCoupleSummary(c)}
+                          </h5>
+                        </div>
+
+                        {/* Botón de acción para asignar/mover */}
+                        <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
+                          {isInActiveZone ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] font-bold px-2 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                                <Check className="w-3 h-3 stroke-[3]" /> En {activeZone.name}
+                              </span>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleRemoveFromActiveZone(c.id)}
+                                className="text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 px-2 py-1 h-auto"
+                                title="Quitar de esta zona"
+                              >
+                                Quitar
+                              </Button>
+                            </div>
+                          ) : assignedZone ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[11px] text-dark-400 px-2 py-1 rounded bg-dark-900 border border-dark-800">
+                                En {assignedZone.name}
+                              </span>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => handleAssignToActiveZone(c.id)}
+                                disabled={isActiveZoneClosed}
+                                className="text-xs font-bold bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/30 px-2.5 py-1 h-auto"
+                              >
+                                Mover a {activeZone.name}
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              onClick={() => handleAssignToActiveZone(c.id)}
+                              disabled={isActiveZoneClosed}
+                              className={`text-xs font-black px-3 py-1.5 h-auto flex items-center gap-1.5 shadow-sm ${
+                                isActiveZoneClosed
+                                  ? "bg-dark-800 text-dark-500 cursor-not-allowed"
+                                  : "bg-emerald-500 hover:bg-emerald-400 text-dark-950"
+                              }`}
+                            >
+                              <PlusCircle className="w-3.5 h-3.5" />
+                              Sumar a {activeZone.name}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </Card>
+          </div>
+
+          {/* PANEL DERECHO (5 cols): Zona Activa en Conformación */}
           <div className="lg:col-span-5 space-y-4 lg:sticky lg:top-4">
             <Card
               className={`overflow-hidden border-2 shadow-2xl transition-all ${
@@ -808,185 +987,6 @@ export default function ZoneConformationEditor({
                 </Button>
               </div>
             )}
-          </div>
-
-          {/* PANEL DERECHO (7 cols): Lista Completa de Parejas para Selección Dinámica */}
-          <div className="lg:col-span-7 space-y-4">
-            <Card className="p-4 border-dark-750 bg-dark-900/95 shadow-xl">
-              {/* Encabezado del Panel de Parejas */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 pb-3 border-b border-dark-800">
-                <div>
-                  <h4 className="text-sm font-black text-white flex items-center gap-2">
-                    <Users className="w-4 h-4 text-emerald-400" />
-                    Padrón de Parejas del Torneo ({couples.length})
-                  </h4>
-                  <p className="text-[11px] text-dark-400">
-                    Haz clic en una pareja para sumarla a{" "}
-                    <strong className="text-emerald-400">{activeZone.name}</strong>.
-                  </p>
-                </div>
-
-                {/* Filtros rápidos: Todas / Disponibles / Asignadas */}
-                <div className="flex items-center gap-1 bg-dark-950 p-1 rounded-lg border border-dark-800 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setCoupleFilter("all")}
-                    className={`px-2.5 py-1 rounded-md font-bold transition-all ${
-                      coupleFilter === "all"
-                        ? "bg-dark-800 text-white"
-                        : "text-dark-400 hover:text-white"
-                    }`}
-                  >
-                    Todas ({couples.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCoupleFilter("unassigned")}
-                    className={`px-2.5 py-1 rounded-md font-bold transition-all ${
-                      coupleFilter === "unassigned"
-                        ? "bg-amber-500/20 text-amber-300 font-black"
-                        : "text-dark-400 hover:text-white"
-                    }`}
-                  >
-                    Libres ({unassignedCouples.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCoupleFilter("assigned")}
-                    className={`px-2.5 py-1 rounded-md font-bold transition-all ${
-                      coupleFilter === "assigned"
-                        ? "bg-emerald-500/20 text-emerald-300 font-black"
-                        : "text-dark-400 hover:text-white"
-                    }`}
-                  >
-                    Asignadas ({couples.length - unassignedCouples.length})
-                  </button>
-                </div>
-              </div>
-
-              {/* Buscador */}
-              <div className="relative mb-3">
-                <Search className="w-4 h-4 text-dark-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Buscar pareja por apellido, nombre o número (#)..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-dark-950 text-xs text-white placeholder-dark-500 rounded-xl pl-9 pr-8 py-2.5 border border-dark-800 focus:outline-none focus:border-emerald-500 transition-colors"
-                />
-                {searchTerm && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchTerm("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-dark-400 hover:text-white"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {/* Lista dinámica de parejas */}
-              <div className="space-y-2 max-h-[640px] overflow-y-auto pr-1">
-                {filteredCouplesForAssistant.length === 0 ? (
-                  <div className="py-12 text-center text-dark-500 text-xs border border-dashed border-dark-800 rounded-xl space-y-1">
-                    <p className="font-bold">No se encontraron parejas con ese criterio.</p>
-                    <p className="text-[11px] text-dark-600">
-                      Prueba con otro término de búsqueda o cambia el filtro.
-                    </p>
-                  </div>
-                ) : (
-                  filteredCouplesForAssistant.map((c) => {
-                    const num = coupleNumberMap.get(c.id);
-                    const assignedZoneId = assignments[c.id];
-                    const assignedZone = assignedZoneId ? zones.find((z) => z.id === assignedZoneId) : null;
-                    const isInActiveZone = assignedZoneId === activeZone.id;
-
-                    return (
-                      <div
-                        key={c.id}
-                        className={`p-3 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                          isInActiveZone
-                            ? "bg-emerald-500/10 border-emerald-500/40 shadow-sm"
-                            : assignedZone
-                            ? "bg-dark-950/70 border-dark-800 opacity-80 hover:opacity-100"
-                            : "bg-dark-950 border-dark-800 hover:border-emerald-500/40 hover:bg-dark-900 shadow-sm"
-                        }`}
-                      >
-                        {/* Info de la pareja */}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <span className="text-xs font-black px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                              Pareja {num ?? "-"}
-                            </span>
-                            {c.seed && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                                #{c.seed}
-                              </span>
-                            )}
-                            <span className="text-[11px] text-dark-400 font-semibold">
-                              Cat. {c.player1?.category ?? "?"} + {c.player2?.category ?? "?"}
-                            </span>
-                          </div>
-
-                          <h5 className="text-xs font-bold text-white leading-snug">
-                            {getCoupleSummary(c)}
-                          </h5>
-                        </div>
-
-                        {/* Botón de acción para asignar/mover */}
-                        <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
-                          {isInActiveZone ? (
-                            <div className="flex items-center gap-2">
-                              <span className="text-[11px] font-bold px-2 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
-                                <Check className="w-3 h-3 stroke-[3]" /> En {activeZone.name}
-                              </span>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleRemoveFromActiveZone(c.id)}
-                                className="text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 px-2 py-1 h-auto"
-                                title="Quitar de esta zona"
-                              >
-                                Quitar
-                              </Button>
-                            </div>
-                          ) : assignedZone ? (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[11px] text-dark-400 px-2 py-1 rounded bg-dark-900 border border-dark-800">
-                                En {assignedZone.name}
-                              </span>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={() => handleAssignToActiveZone(c.id)}
-                                disabled={isActiveZoneClosed}
-                                className="text-xs font-bold bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/30 px-2.5 py-1 h-auto"
-                              >
-                                Mover a {activeZone.name}
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button
-                              size="sm"
-                              onClick={() => handleAssignToActiveZone(c.id)}
-                              disabled={isActiveZoneClosed}
-                              className={`text-xs font-black px-3 py-1.5 h-auto flex items-center gap-1.5 shadow-sm ${
-                                isActiveZoneClosed
-                                  ? "bg-dark-800 text-dark-500 cursor-not-allowed"
-                                  : "bg-emerald-500 hover:bg-emerald-400 text-dark-950"
-                              }`}
-                            >
-                              <PlusCircle className="w-3.5 h-3.5" />
-                              Sumar a {activeZone.name}
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </Card>
           </div>
         </div>
       )}
