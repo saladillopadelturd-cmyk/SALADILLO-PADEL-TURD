@@ -40,6 +40,7 @@ import {
   Trash2,
   Medal,
   Settings2,
+  ShieldAlert,
   X,
   RotateCcw,
 } from "lucide-react";
@@ -340,6 +341,35 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
 
   const handleShuffleZones = () => {
     executeShuffleZones(true);
+  };
+
+  // Conteo de zonas sin parejas
+  const emptyZonesCount = useMemo(() => {
+    return zones.filter((z) => (zoneCouplesMap[z.id] || []).length === 0).length;
+  }, [zones, zoneCouplesMap]);
+
+  // Action: Eliminar zonas que no tienen parejas asignadas
+  const handleDeleteEmptyZones = async () => {
+    startTransition(async () => {
+      try {
+        const res = await fetch("/api/zonas", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tournamentId, action: "delete_empty_zones" }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Error al eliminar zonas vacías");
+
+        await loadData();
+        setNotification({
+          type: "success",
+          text: data.message || "Zonas vacías eliminadas exitosamente.",
+        });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Error al eliminar zonas vacías";
+        setNotification({ type: "error", text: msg });
+      }
+    });
   };
 
   // 2. Action: Generar Partidos de Fase de Zonas
@@ -1181,6 +1211,19 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                           Editar Conformación
                         </Button>
                       )}
+                      {zones.length > 0 && emptyZonesCount > 0 && !isEditingConformation && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={handleDeleteEmptyZones}
+                          disabled={isPending}
+                          className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold flex items-center gap-1.5"
+                          title="Eliminar del torneo las zonas que no tienen parejas asignadas"
+                        >
+                          <Trash2 className="w-4 h-4 text-rose-400" />
+                          Eliminar zonas vacías ({emptyZonesCount})
+                        </Button>
+                      )}
                       {zones.length > 0 && (
                         <Button
                           variant="secondary"
@@ -1196,6 +1239,27 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                     </div>
                   </div>
                 </div>
+
+                {/* Banner de alerta si hay zonas vacías creadas sin parejas */}
+                {zones.length > 0 && emptyZonesCount > 0 && !isEditingConformation && (
+                  <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-rose-300 shadow-lg animate-fadeIn">
+                    <div className="flex items-center gap-2.5">
+                      <ShieldAlert className="w-5 h-5 text-rose-400 flex-shrink-0" />
+                      <span>
+                        Se detectaron <strong>{emptyZonesCount} {emptyZonesCount === 1 ? "zona vacía" : "zonas vacías"}</strong> sin parejas asignadas. Nunca debe haber zonas vacías en el torneo.
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={handleDeleteEmptyZones}
+                      disabled={isPending}
+                      className="bg-rose-500 hover:bg-rose-400 text-dark-950 font-black text-xs flex items-center gap-1.5 flex-shrink-0 shadow-md"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Eliminar zonas vacías ahora
+                    </Button>
+                  </div>
+                )}
 
                 {/* Modo Edición Interactivo de Conformación de Zonas */}
                 {isEditingConformation ? (

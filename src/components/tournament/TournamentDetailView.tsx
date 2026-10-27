@@ -522,6 +522,34 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
     }
   };
 
+  const emptyZonesCount = useMemo(() => {
+    return zones.filter((z) => (zoneCouplesMap[z.id] || []).length === 0).length;
+  }, [zones, zoneCouplesMap]);
+
+  const handleDeleteEmptyZones = async () => {
+    try {
+      setIsGeneratingZones(true);
+      const res = await fetch("/api/zonas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tournamentId: id, action: "delete_empty_zones" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error al eliminar zonas vacías");
+
+      await loadTournamentData();
+      setNotification({
+        type: "success",
+        text: data.message || "Zonas vacías eliminadas exitosamente.",
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error al eliminar zonas vacías";
+      setNotification({ type: "error", text: msg });
+    } finally {
+      setIsGeneratingZones(false);
+    }
+  };
+
   const handleGeneratePlayoffs = async () => {
     if (!tournament) return;
     setIsGeneratingPlayoffs(true);
@@ -1217,6 +1245,20 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                   >
                     <Settings2 className="w-4 h-4 text-emerald-400" />
                     <span>Editar Conformación</span>
+                  </Button>
+                )}
+
+                {zones.length > 0 && emptyZonesCount > 0 && !isEditingConformation && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleDeleteEmptyZones}
+                    disabled={isGeneratingZones}
+                    className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold flex items-center gap-1.5"
+                    title="Eliminar las zonas que no tienen ninguna pareja asignada"
+                  >
+                    <Trash2 className="w-4 h-4 text-rose-400" />
+                    <span>Eliminar zonas vacías ({emptyZonesCount})</span>
                   </Button>
                 )}
               </div>

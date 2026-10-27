@@ -339,21 +339,25 @@ export default function ZoneConformationEditor({
   const handleSave = () => {
     setErrorMessage(null);
 
-    // Validación estricta SPT: NUNCA debe haber zonas vacías ni zonas con una sola pareja (mínimo 2 parejas)
+    // Validación estricta SPT: Las zonas con parejas deben tener al menos 2 parejas (nunca 1 sola pareja).
+    // Las zonas que no tienen ninguna pareja asignada (0 parejas) se eliminarán automáticamente al guardar.
+    let activeZonesCount = 0;
     for (const zone of zones) {
       const count = Object.values(assignments).filter((zId) => zId === zone.id).length;
-      if (count === 0) {
-        setErrorMessage(
-          `No se puede guardar: la ${zone.name} está vacía. Cada zona debe tener al menos 2 parejas.`
-        );
-        return;
-      }
       if (count === 1) {
         setErrorMessage(
           `No se puede guardar: la ${zone.name} tiene una sola pareja. Nunca debe haber zonas con una sola pareja (mínimo 2 parejas).`
         );
         return;
       }
+      if (count >= 2) {
+        activeZonesCount++;
+      }
+    }
+
+    if (activeZonesCount === 0) {
+      setErrorMessage("Debes asignar al menos 2 parejas a una zona para conformar el torneo.");
+      return;
     }
 
     startTransition(async () => {
@@ -381,6 +385,37 @@ export default function ZoneConformationEditor({
         await onSaveSuccess();
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Error al guardar cambios";
+        setErrorMessage(msg);
+      }
+    });
+  };
+
+  // Acción explícita: Eliminar del torneo todas las zonas que no tienen parejas
+  const handleDeleteEmptyZones = () => {
+    setErrorMessage(null);
+    startTransition(async () => {
+      try {
+        const res = await fetch("/api/zonas", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tournamentId,
+            action: "delete_empty_zones",
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Error al eliminar zonas vacías");
+        }
+
+        setFeedbackNotice({
+          type: "success",
+          text: data.message || "Zonas vacías eliminadas con éxito.",
+        });
+        await onSaveSuccess();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Error al eliminar zonas vacías";
         setErrorMessage(msg);
       }
     });
@@ -424,6 +459,11 @@ export default function ZoneConformationEditor({
       return num.includes(q) || p1.includes(q) || p2.includes(q) || cat.includes(q);
     });
   }, [sortedCouples, assignments, coupleFilter, searchTerm, coupleNumberMap]);
+
+  // Cantidad total de zonas vacías (sin parejas)
+  const emptyZonesCount = useMemo(() => {
+    return zones.filter((z) => !Object.values(assignments).some((zId) => zId === z.id)).length;
+  }, [zones, assignments]);
 
   // Cantidad total de zonas cerradas según el cupo individual de cada una
   const closedZonesCount = useMemo(() => {
@@ -516,6 +556,20 @@ export default function ZoneConformationEditor({
             <Trash2 className="w-3.5 h-3.5 mr-1" />
             Vaciar Zonas
           </Button>
+
+          {emptyZonesCount > 0 && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleDeleteEmptyZones}
+              disabled={isPending}
+              className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-bold"
+              title="Eliminar del torneo las zonas que no tienen ninguna pareja"
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-1" />
+              Eliminar {emptyZonesCount} {emptyZonesCount === 1 ? "zona vacía" : "zonas vacías"}
+            </Button>
+          )}
 
           <Button
             variant="ghost"
@@ -1222,13 +1276,25 @@ export default function ZoneConformationEditor({
                           <Users className="w-6 h-6 mx-auto text-rose-400" />
                           <p className="font-bold text-rose-300">Zona vacía actualmente</p>
                           <p className="text-[11px] text-dark-400">Nunca debe haber zonas vacías (mínimo 2 parejas).</p>
-                          {selectedForSwap && swapCouple && (
+                          {selectedForSwap && swapCouple ? (
                             <Button
                               size="sm"
                               onClick={() => handleMoveCouple(selectedForSwap, zone.id)}
                               className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 text-xs font-bold"
                             >
                               Mover Pareja {coupleNumberMap.get(swapCouple.id)} aquí
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={handleDeleteEmptyZones}
+                              disabled={isPending}
+                              className="bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-bold inline-flex items-center gap-1 mx-auto mt-2"
+                              title="Eliminar esta zona del torneo"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Eliminar zona vacía
                             </Button>
                           )}
                         </div>
