@@ -41,6 +41,7 @@ import {
   Medal,
   Settings2,
   ShieldAlert,
+  ArrowRightLeft,
   X,
   RotateCcw,
 } from "lucide-react";
@@ -85,6 +86,8 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
   const [schedulingMatch, setSchedulingMatch] = useState<Match | null>(null);
   const [formCourt, setFormCourt] = useState("");
   const [formTime, setFormTime] = useState("");
+  const [formCouple1Id, setFormCouple1Id] = useState("");
+  const [formCouple2Id, setFormCouple2Id] = useState("");
 
   const [scoringMatch, setScoringMatch] = useState<Match | null>(null);
   const [formScoreSet1, setFormScoreSet1] = useState("");
@@ -422,10 +425,34 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     });
   };
 
-  // 4. Action: Abrir Programación de Cancha y Horario
+  // Parejas disponibles para programar en un partido
+  const availableCouplesForScheduling = useMemo(() => {
+    if (!schedulingMatch) return couples;
+    // Si es partido de zona, priorizar parejas asignadas a esa zona
+    if (schedulingMatch.stage === "zone" && schedulingMatch.zone_id) {
+      return [...couples].sort((a, b) => {
+        const aInZone = a.zone_id === schedulingMatch.zone_id;
+        const bInZone = b.zone_id === schedulingMatch.zone_id;
+        if (aInZone && !bInZone) return -1;
+        if (!aInZone && bInZone) return 1;
+        const numA = coupleNumberMap.get(a.id) ?? 999;
+        const numB = coupleNumberMap.get(b.id) ?? 999;
+        return numA - numB;
+      });
+    }
+    return [...couples].sort((a, b) => {
+      const numA = coupleNumberMap.get(a.id) ?? 999;
+      const numB = coupleNumberMap.get(b.id) ?? 999;
+      return numA - numB;
+    });
+  }, [schedulingMatch, couples, coupleNumberMap]);
+
+  // 4. Action: Abrir Programación de Cancha, Horario y Parejas
   const openScheduleModal = (m: Match) => {
     setSchedulingMatch(m);
     setFormCourt(m.court_name || "");
+    setFormCouple1Id(m.couple1_id || "");
+    setFormCouple2Id(m.couple2_id || "");
     if (m.scheduled_time) {
       try {
         const d = new Date(m.scheduled_time);
@@ -442,29 +469,71 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
 
   const handleSaveSchedule = async () => {
     if (!schedulingMatch) return;
+
+    if (formCouple1Id && formCouple2Id && formCouple1Id === formCouple2Id) {
+      setNotification({ type: "error", text: "La Pareja 1 y la Pareja 2 no pueden ser la misma pareja." });
+      return;
+    }
+
     startTransition(async () => {
       try {
         const normalizedTime = normalizeScheduledTime(formTime, tournament?.date);
+        const c1Id = formCouple1Id.trim() || null;
+        const c2Id = formCouple2Id.trim() || null;
+
+        const payload: {
+          court_name: string | null;
+          scheduled_time: string | null;
+          couple1_id: string | null;
+          couple2_id: string | null;
+          winner_couple_id?: string | null;
+          updated_at: string;
+        } = {
+          court_name: formCourt.trim() || null,
+          scheduled_time: normalizedTime,
+          couple1_id: c1Id,
+          couple2_id: c2Id,
+          updated_at: new Date().toISOString(),
+        };
+
+        // Si cambió alguna pareja y el ganador anterior ya no coincide, resetear ganador
+        if (
+          schedulingMatch.winner_couple_id &&
+          schedulingMatch.winner_couple_id !== c1Id &&
+          schedulingMatch.winner_couple_id !== c2Id
+        ) {
+          payload.winner_couple_id = null;
+        }
+
         const { error } = await supabase
           .from("matches")
-          .update({
-            court_name: formCourt.trim() || null,
-            scheduled_time: normalizedTime,
-            updated_at: new Date().toISOString(),
-          })
+          .update(payload)
           .eq("id", schedulingMatch.id);
 
         if (error) throw error;
 
+        // Buscar objetos de pareja actualizados para el estado local
+        const c1Obj = couples.find((c) => c.id === c1Id) || null;
+        const c2Obj = couples.find((c) => c.id === c2Id) || null;
+
         setMatches((prev) =>
           prev.map((m) =>
             m.id === schedulingMatch.id
-              ? { ...m, court_name: formCourt.trim() || null, scheduled_time: normalizedTime }
+              ? {
+                  ...m,
+                  court_name: formCourt.trim() || null,
+                  scheduled_time: normalizedTime,
+                  couple1_id: c1Id,
+                  couple2_id: c2Id,
+                  couple1: c1Obj || undefined,
+                  couple2: c2Obj || undefined,
+                  winner_couple_id: payload.winner_couple_id !== undefined ? payload.winner_couple_id : m.winner_couple_id,
+                }
               : m
           )
         );
         setSchedulingMatch(null);
-        setNotification({ type: "success", text: "Cancha y horario programados correctamente." });
+        setNotification({ type: "success", text: "Partido y parejas programados correctamente." });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Error al guardar programación";
         setNotification({ type: "error", text: msg });
@@ -1598,10 +1667,12 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                                   variant="secondary"
                                   size="sm"
                                   onClick={() => openScheduleModal(m)}
-                                  className="flex items-center gap-1 text-xs"
+                                  className="flex items-center gap-1.5 text-xs font-bold border-dark-700 hover:border-emerald-500/50"
+                                  title="Editar parejas, cancha y horario de este partido"
                                 >
-                                  <Clock className="w-3.5 h-3.5 mr-1 text-sky-400" />
-                                  Reprogramar
+                                  <Users className="w-3.5 h-3.5 text-emerald-400" />
+                                  <Clock className="w-3.5 h-3.5 text-sky-400" />
+                                  <span>Editar / Parejas</span>
                                 </Button>
                               </div>
                             </Card>
@@ -1789,24 +1860,97 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
             </TabsContent>
           </Tabs>
 
-          {/* Modal: Programar Cancha y Horario */}
+          {/* Modal: Programar Cancha, Horario y Modificar Parejas */}
           <Modal
             isOpen={!!schedulingMatch}
             onClose={() => setSchedulingMatch(null)}
-            title="Programar Cancha y Horario"
+            title="Programar Partido y Modificar Parejas"
           >
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-dark-300 mb-1.5">
-                  Partido
-                </label>
-                <p className="text-white text-sm font-semibold p-2.5 bg-dark-900 rounded-lg border border-dark-700">
-                  {getCoupleLabel(schedulingMatch?.couple1, schedulingMatch?.couple1_id)} vs {getCoupleLabel(schedulingMatch?.couple2, schedulingMatch?.couple2_id)}
-                </p>
+              {/* Información del Partido */}
+              <div className="flex items-center justify-between p-2.5 bg-dark-950/80 rounded-xl border border-dark-800 text-xs">
+                <span className="font-bold text-dark-300">
+                  {schedulingMatch && (STAGE_LABELS[schedulingMatch.stage] ?? getStageName(schedulingMatch.stage))}
+                </span>
+                <span className="font-mono text-dark-400">
+                  Partido #{schedulingMatch?.match_number ?? "-"}
+                </span>
+              </div>
+
+              {/* Selector interactivo de Parejas del Partido */}
+              <div className="p-3 bg-dark-900/90 rounded-xl border border-dark-750 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5" />
+                    Parejas que disputan el partido
+                  </label>
+                  {/* Botón rápido para invertir lados */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const temp = formCouple1Id;
+                      setFormCouple1Id(formCouple2Id);
+                      setFormCouple2Id(temp);
+                    }}
+                    className="text-[11px] font-bold text-dark-300 hover:text-white flex items-center gap-1 bg-dark-800 hover:bg-dark-750 px-2 py-1 rounded-lg border border-dark-700 transition-colors cursor-pointer"
+                    title="Invertir Pareja 1 y Pareja 2"
+                  >
+                    <ArrowRightLeft className="w-3 h-3 text-sky-400" />
+                    <span>Invertir lados</span>
+                  </button>
+                </div>
+
+                {/* Pareja 1 */}
+                <div>
+                  <label className="block text-[11px] font-bold text-dark-300 mb-1">
+                    Pareja 1 (Lado A):
+                  </label>
+                  <select
+                    value={formCouple1Id}
+                    onChange={(e) => setFormCouple1Id(e.target.value)}
+                    className="w-full px-3 py-2 bg-dark-950 border border-dark-700 rounded-lg text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="">-- Sin asignar (Por definir) --</option>
+                    {availableCouplesForScheduling.map((c) => {
+                      const num = coupleNumberMap.get(c.id);
+                      const isOther = formCouple2Id === c.id;
+                      const inZone = schedulingMatch?.zone_id && c.zone_id === schedulingMatch.zone_id;
+                      return (
+                        <option key={c.id} value={c.id} disabled={isOther}>
+                          {num ? `[#${num}] ` : ""}{getCoupleLabel(c, c.id)}{inZone ? " ★ (Zona)" : ""}{isOther ? " (ya elegida en Pareja 2)" : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {/* Pareja 2 */}
+                <div>
+                  <label className="block text-[11px] font-bold text-dark-300 mb-1">
+                    Pareja 2 (Lado B):
+                  </label>
+                  <select
+                    value={formCouple2Id}
+                    onChange={(e) => setFormCouple2Id(e.target.value)}
+                    className="w-full px-3 py-2 bg-dark-950 border border-dark-700 rounded-lg text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="">-- Sin asignar (Por definir) --</option>
+                    {availableCouplesForScheduling.map((c) => {
+                      const num = coupleNumberMap.get(c.id);
+                      const isOther = formCouple1Id === c.id;
+                      const inZone = schedulingMatch?.zone_id && c.zone_id === schedulingMatch.zone_id;
+                      return (
+                        <option key={c.id} value={c.id} disabled={isOther}>
+                          {num ? `[#${num}] ` : ""}{getCoupleLabel(c, c.id)}{inZone ? " ★ (Zona)" : ""}{isOther ? " (ya elegida en Pareja 1)" : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-dark-300 mb-1.5">
+                <label className="block text-xs font-bold text-dark-300 mb-1.5 uppercase tracking-wider">
                   Cancha Asignada
                 </label>
                 <input
@@ -1814,29 +1958,29 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                   placeholder="Ej: Cancha 1 / Cancha Central"
                   value={formCourt}
                   onChange={(e) => setFormCourt(e.target.value)}
-                  className="w-full px-3 py-2 bg-dark-900 border border-dark-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 bg-dark-900 border border-dark-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-dark-300 mb-1.5">
-                  Horario Estimado
+                <label className="block text-xs font-bold text-dark-300 mb-1.5 uppercase tracking-wider">
+                  Horario Estimado (HH:mm)
                 </label>
                 <input
                   type="text"
                   placeholder="Ej: 14:30 hs / Sábado 16:00"
                   value={formTime}
                   onChange={(e) => setFormTime(e.target.value)}
-                  className="w-full px-3 py-2 bg-dark-900 border border-dark-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 bg-dark-900 border border-dark-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
                 />
               </div>
 
-              <div className="flex justify-end gap-3 pt-4">
+              <div className="flex justify-end gap-3 pt-4 border-t border-dark-800">
                 <Button variant="ghost" onClick={() => setSchedulingMatch(null)} disabled={isPending}>
                   Cancelar
                 </Button>
-                <Button onClick={handleSaveSchedule} disabled={isPending}>
-                  {isPending ? "Guardando..." : "Guardar Programación"}
+                <Button onClick={handleSaveSchedule} disabled={isPending} className="font-bold bg-emerald-500 hover:bg-emerald-600 text-dark-950">
+                  {isPending ? "Guardando..." : "Guardar Partido"}
                 </Button>
               </div>
             </div>
