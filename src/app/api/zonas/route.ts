@@ -144,6 +144,25 @@ export async function POST(request: Request) {
 
     const tourZoneIds = tourZones ? tourZones.map((z) => z.id) : [];
 
+    // Validar regla estricta SPT: NUNCA debe haber zonas vacías ni zonas con una sola pareja (mínimo 2 parejas por zona)
+    if (tourZones && tourZones.length > 0) {
+      for (const zone of tourZones) {
+        const couplesInZone = validAssignments.filter((a) => a.zoneId === zone.id);
+        if (couplesInZone.length === 0) {
+          return NextResponse.json(
+            { error: `No se puede conformar el torneo: la ${zone.name} está vacía. Cada zona debe tener al menos 2 parejas.` },
+            { status: 400 }
+          );
+        }
+        if (couplesInZone.length === 1) {
+          return NextResponse.json(
+            { error: `No se puede conformar el torneo: la ${zone.name} tiene una sola pareja. Nunca debe haber zonas con una sola pareja (mínimo 2 parejas por zona).` },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     // 2. Limpiar asignaciones previas en zone_couples para las zonas de este torneo
     if (tourZoneIds.length > 0) {
       await supabase.from("zone_couples").delete().in("zone_id", tourZoneIds);
@@ -345,8 +364,11 @@ export async function POST(request: Request) {
     targetNumZones > 0 ? targetNumZones : null
   );
 
-  // Respetar estrictamente la cantidad fijada en la creación del torneo
-  const numZones = targetNumZones > 0 ? targetNumZones : optimal.numZones;
+  // Regla estricta SPT: Cada zona debe tener al menos 2 parejas (nunca zonas vacías ni con 1 pareja).
+  // El número máximo admisible de zonas es Math.floor(couples.length / 2).
+  const maxPossibleZones = Math.max(1, Math.floor(couples.length / 2));
+  const rawNumZones = targetNumZones > 0 ? targetNumZones : optimal.numZones;
+  const numZones = Math.max(1, Math.min(rawNumZones, maxPossibleZones));
   const zoneSize = targetZoneSize > 0 ? targetZoneSize : optimal.zoneSize;
 
   // Si no se cumple la igualdad de zonas y no se forzó explícitamente ni es generate_zones / confirm_structure,
@@ -411,20 +433,14 @@ export async function POST(request: Request) {
   // 2. Mezclar aleatoriamente las parejas (Sorteo)
   const shuffledPairs = shuffleArray(couples);
 
-  // 3. Distribuir parejas según la estructura confirmada por el administrador:
-  // Llenar las zonas con targetZoneSize (ej: 4 o 3) y la última zona con las parejas sobrantes si las hay
+  // 3. Distribuir parejas equitativamente asegurando que NUNCA haya zonas vacías ni con 1 pareja
+  // Cada zona recibe baseCount o baseCount + 1, donde baseCount >= 2.
+  const baseCount = Math.floor(shuffledPairs.length / numZones);
+  const remainder = shuffledPairs.length % numZones;
   const zoneCapacities: number[] = [];
-  let remainingCouples = shuffledPairs.length;
 
   for (let i = 0; i < numZones; i++) {
-    if (i === numZones - 1) {
-      // Última zona recibe el remanente/sobrante
-      zoneCapacities.push(remainingCouples);
-    } else {
-      const cap = Math.min(zoneSize, Math.max(1, remainingCouples - (numZones - 1 - i)));
-      zoneCapacities.push(cap);
-      remainingCouples -= cap;
-    }
+    zoneCapacities.push(i < remainder ? baseCount + 1 : baseCount);
   }
 
   const zoneCouplesToInsert = [];

@@ -338,6 +338,24 @@ export default function ZoneConformationEditor({
   // Guardar conformación de zonas
   const handleSave = () => {
     setErrorMessage(null);
+
+    // Validación estricta SPT: NUNCA debe haber zonas vacías ni zonas con una sola pareja (mínimo 2 parejas)
+    for (const zone of zones) {
+      const count = Object.values(assignments).filter((zId) => zId === zone.id).length;
+      if (count === 0) {
+        setErrorMessage(
+          `No se puede guardar: la ${zone.name} está vacía. Cada zona debe tener al menos 2 parejas.`
+        );
+        return;
+      }
+      if (count === 1) {
+        setErrorMessage(
+          `No se puede guardar: la ${zone.name} tiene una sola pareja. Nunca debe haber zonas con una sola pareja (mínimo 2 parejas).`
+        );
+        return;
+      }
+    }
+
     startTransition(async () => {
       try {
         const payloadAssignments = Object.entries(assignments).map(([coupleId, zoneId]) => ({
@@ -1188,10 +1206,11 @@ export default function ZoneConformationEditor({
                         </div>
 
                         <Badge
-                          variant={isZoneClosed ? "success" : isZoneOver ? "danger" : "info"}
+                          variant={isZoneClosed ? "success" : zoneCouplesList.length < 2 ? "danger" : isZoneOver ? "danger" : "info"}
                           size="sm"
                         >
                           {zoneCouplesList.length} / {quota}
+                          {zoneCouplesList.length < 2 && " (mín. 2)"}
                         </Badge>
                       </div>
                     </div>
@@ -1199,9 +1218,10 @@ export default function ZoneConformationEditor({
                     {/* Lista de parejas en esta zona */}
                     <div className="p-3.5 space-y-3">
                       {zoneCouplesList.length === 0 ? (
-                        <div className="py-8 text-center text-dark-500 text-xs border border-dashed border-dark-800 rounded-xl px-4 space-y-2">
-                          <Users className="w-6 h-6 mx-auto text-dark-600" />
-                          <p>Zona vacía actualmente.</p>
+                        <div className="py-8 text-center text-rose-400/80 text-xs border border-dashed border-rose-500/30 bg-rose-500/5 rounded-xl px-4 space-y-2">
+                          <Users className="w-6 h-6 mx-auto text-rose-400" />
+                          <p className="font-bold text-rose-300">Zona vacía actualmente</p>
+                          <p className="text-[11px] text-dark-400">Nunca debe haber zonas vacías (mínimo 2 parejas).</p>
                           {selectedForSwap && swapCouple && (
                             <Button
                               size="sm"
@@ -1213,7 +1233,14 @@ export default function ZoneConformationEditor({
                           )}
                         </div>
                       ) : (
-                        zoneCouplesList.map((c) => {
+                        <>
+                          {zoneCouplesList.length === 1 && (
+                            <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[11px] font-bold flex items-center gap-1.5">
+                              <ShieldAlert className="w-4 h-4 flex-shrink-0 text-rose-400" />
+                              <span>Sólo 1 pareja: debe tener al menos 2 parejas para poder conformar la zona.</span>
+                            </div>
+                          )}
+                          {zoneCouplesList.map((c) => {
                           const num = coupleNumberMap.get(c.id);
                           const isSelected = selectedForSwap === c.id;
 
@@ -1369,7 +1396,8 @@ export default function ZoneConformationEditor({
                               </div>
                             </div>
                           );
-                        })
+                        })}
+                        </>
                       )}
                     </div>
                   </div>

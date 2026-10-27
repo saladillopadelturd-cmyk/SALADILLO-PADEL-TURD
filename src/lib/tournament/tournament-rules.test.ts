@@ -954,6 +954,48 @@ export function runTournamentBusinessLogicTests(): TestResult {
   assert(sugs12.suggestion4.numZones === 3 && sugs12.suggestion4.hasRemainder === false, "12 parejas da 3 zonas exactas de 4");
   assert(sugs12.suggestion3.numZones === 4 && sugs12.suggestion3.hasRemainder === false, "12 parejas da 4 zonas exactas de 3");
 
+  // Regla SPT: NUNCA zonas vacías ni con una sola pareja (mínimo 2 parejas por zona)
+  // Caso 5 parejas: zonas de 4 no pueden dar (4, 1), deben dar 1 zona de 3 y 1 zona de 2
+  const sugs5 = getZoneSuggestions(5);
+  assert(sugs5.suggestion4.numZones === 2, "5 parejas genera 2 zonas");
+  assert(sugs5.suggestion4.distribution.every((z) => z.count >= 2), "5 parejas: ninguna zona tiene menos de 2 parejas");
+  assert(sugs5.suggestion4.distribution.length === 2, "5 parejas: 2 zonas en distribución");
+  assert(sugs5.suggestion4.distribution[0].count === 3 && sugs5.suggestion4.distribution[1].count === 2, "5 parejas se reparten en 3 y 2");
+
+  // Caso 9 parejas con zonas de 4: 9 = 4 + 3 + 2 (nunca 4 + 4 + 1)
+  const sugs9 = getZoneSuggestions(9);
+  assert(sugs9.suggestion4.numZones === 3, "9 parejas genera 3 zonas");
+  assert(sugs9.suggestion4.distribution.every((z) => z.count >= 2), "9 parejas con zonas de 4: todas las zonas tienen >= 2 parejas");
+  assert(!sugs9.suggestion4.distribution.some((z) => z.count === 1 || z.count === 0), "9 parejas: nunca zonas de 1 ni de 0 parejas");
+
+  // Caso 7 parejas con zonas de 3: 7 = 3 + 2 + 2 (nunca 3 + 3 + 1)
+  const sugs7 = getZoneSuggestions(7);
+  assert(sugs7.suggestion3.numZones === 3, "7 parejas genera 3 zonas");
+  assert(sugs7.suggestion3.distribution.every((z) => z.count >= 2), "7 parejas con zonas de 3: todas las zonas tienen >= 2 parejas");
+  assert(!sugs7.suggestion3.distribution.some((z) => z.count === 1 || z.count === 0), "7 parejas: nunca zonas de 1 ni de 0 parejas");
+
+  // Test de invariante exhaustivo: Para 2 a 32 parejas, NUNCA debe haber zonas de 0 ni 1 parejas
+  for (let c = 2; c <= 32; c++) {
+    const opt4 = calculateOptimalZones(c, 4);
+    assert(opt4.distribution.every((z) => z.targetCount >= 2), `calculateOptimalZones(${c}, 4): todas las zonas tienen >= 2 parejas`);
+    assert(!opt4.distribution.some((z) => z.targetCount === 0), `calculateOptimalZones(${c}, 4): ninguna zona vacía`);
+    assert(!opt4.distribution.some((z) => z.targetCount === 1), `calculateOptimalZones(${c}, 4): ninguna zona con 1 pareja`);
+
+    const opt3 = calculateOptimalZones(c, 3);
+    assert(opt3.distribution.every((z) => z.targetCount >= 2), `calculateOptimalZones(${c}, 3): todas las zonas tienen >= 2 parejas`);
+    assert(!opt3.distribution.some((z) => z.targetCount === 0), `calculateOptimalZones(${c}, 3): ninguna zona vacía`);
+    assert(!opt3.distribution.some((z) => z.targetCount === 1), `calculateOptimalZones(${c}, 3): ninguna zona con 1 pareja`);
+
+    const sugs = getZoneSuggestions(c);
+    assert(sugs.suggestion4.distribution.every((z) => z.count >= 2), `getZoneSuggestions(${c}).sug4: todas las zonas tienen >= 2 parejas`);
+    assert(!sugs.suggestion4.distribution.some((z) => z.count === 0), `getZoneSuggestions(${c}).sug4: ninguna zona vacía`);
+    assert(!sugs.suggestion4.distribution.some((z) => z.count === 1), `getZoneSuggestions(${c}).sug4: ninguna zona con 1 pareja`);
+
+    assert(sugs.suggestion3.distribution.every((z) => z.count >= 2), `getZoneSuggestions(${c}).sug3: todas las zonas tienen >= 2 parejas`);
+    assert(!sugs.suggestion3.distribution.some((z) => z.count === 0), `getZoneSuggestions(${c}).sug3: ninguna zona vacía`);
+    assert(!sugs.suggestion3.distribution.some((z) => z.count === 1), `getZoneSuggestions(${c}).sug3: ninguna zona con 1 pareja`);
+  }
+
   // ==========================================================================
   // 8. AVANCE AUTOMÁTICO DE GANADORES EN CUADRO DE PLAYOFFS
   // ==========================================================================

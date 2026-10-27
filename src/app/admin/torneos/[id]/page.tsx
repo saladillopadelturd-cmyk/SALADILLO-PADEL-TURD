@@ -1127,7 +1127,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                         </strong>
                         {couples.length % targetZoneSize !== 0 && (
                           <span className="text-amber-400 font-medium ml-1">
-                            (incluye 1 zona con las {couples.length % targetZoneSize} parejas sobrantes)
+                            ({targetZoneSize === 4 ? zoneSuggestions.suggestion4.summary : zoneSuggestions.suggestion3.summary})
                           </span>
                         )}
                       </span>
@@ -1136,7 +1136,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                         <input
                           type="number"
                           min={1}
-                          max={couples.length || 1}
+                          max={Math.max(1, Math.floor(couples.length / 2))}
                           value={targetNumZones}
                           onChange={(e) => setTargetNumZones(e.target.value)}
                           className="w-16 px-2 py-1 bg-dark-900 border border-dark-700 rounded-lg text-white font-bold text-xs text-center focus:outline-none focus:ring-1 focus:ring-emerald-500"
