@@ -373,6 +373,15 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     return zones.filter((z) => (zoneCouplesMap[z.id] || []).length === 0).length;
   }, [zones, zoneCouplesMap]);
 
+  // Detección de zonas de 4 parejas con fixture antiguo (más de 4 partidos)
+  const hasLegacy4MatchZones = useMemo(() => {
+    return zones.some((z) => {
+      const coupleCount = (zoneCouplesMap[z.id] || []).length;
+      const zoneMatchesCount = matches.filter((m) => m.zone_id === z.id && m.stage === "zone").length;
+      return coupleCount === 4 && zoneMatchesCount > 4;
+    });
+  }, [zones, zoneCouplesMap, matches]);
+
   // Action: Eliminar zonas que no tienen parejas asignadas
   const handleDeleteEmptyZones = async () => {
     startTransition(async () => {
@@ -1561,6 +1570,17 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                     <Button
                       variant="secondary"
                       size="sm"
+                      onClick={handleGenerateZoneMatches}
+                      disabled={isPending || zones.length === 0}
+                      className="flex items-center gap-1.5"
+                      title="Regenerar fixture de zonas respetando el orden oficial (4 partidos en zonas de 4)"
+                    >
+                      <RotateCcw className="w-4 h-4 text-emerald-400" />
+                      Regenerar Fixture de Zonas
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={handleGeneratePlayoffs}
                       disabled={isPending || zones.length === 0}
                       className="flex items-center gap-1.5"
@@ -1570,6 +1590,27 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                     </Button>
                   </div>
                 </div>
+
+                {/* Banner de alerta si hay zonas de 4 parejas con formato legacy (6 partidos) */}
+                {hasLegacy4MatchZones && (
+                  <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-300 shadow-lg animate-fadeIn">
+                    <div className="flex items-center gap-2.5">
+                      <ShieldAlert className="w-5 h-5 text-amber-400 flex-shrink-0" />
+                      <span>
+                        Se detectaron zonas de 4 parejas con fixture antiguo (6 partidos). Con la regla oficial actual, cada zona de 4 parejas debe jugar exactamente <strong>4 partidos</strong> (P1 vs P4, P2 vs P3, Ganador vs Ganador, Perdedor vs Perdedor).
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={handleGenerateZoneMatches}
+                      disabled={isPending}
+                      className="bg-amber-400 hover:bg-amber-300 text-dark-950 font-black text-xs flex items-center gap-1.5 flex-shrink-0 shadow-md"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Regenerar Fixture Oficial (4 partidos)
+                    </Button>
+                  </div>
+                )}
 
                 {matches.length === 0 ? (
                   <Card className="p-12 text-center">
