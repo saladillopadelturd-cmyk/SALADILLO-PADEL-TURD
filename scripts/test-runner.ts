@@ -11,10 +11,10 @@ import {
   calculateFAPZoneStructure,
   generateZones,
   generateFAPZoneMatches,
+  calculateFAPZoneStandings,
   resolveQualifiers,
-  buildBracket32,
-  FAP_32_BASE_TEMPLATES,
   type FAPPair,
+  type MatchResultInput,
   type ZoneResolvedResults,
 } from "../src/lib/tournament/fap-engine";
 
@@ -77,25 +77,41 @@ function runFAPEngineSuite(): { passed: number; failed: number; errors: string[]
   check(m4[2].isWinnersMatch === true, "Partido 3 debe ser Ganador vs Ganador");
   check(m4[3].isLosersMatch === true, "Partido 4 debe ser Perdedor vs Perdedor");
 
-  // 4. Validar plantillas de llaves de 32 (28, 29, 30, 31, 32, 33, 34, 35, 36, 48)
-  const sizesToTest = [28, 29, 30, 31, 32, 33, 34, 35, 36, 48];
-  for (const couples of sizesToTest) {
-    const tmpl = FAP_32_BASE_TEMPLATES[couples];
-    check(tmpl !== undefined, `Plantilla de 32 debe existir para ${couples} parejas`);
-    check(tmpl.length === 16, `Plantilla de 32 para ${couples} debe tener 16 partidos`);
-    check(tmpl[0].includes("1º A"), `Plantilla ${couples}: 1º A debe estar en match 0`);
-    check(tmpl[15].includes("1º B"), `Plantilla ${couples}: 1º B debe estar en match 15`);
+  // 4. Validar desempate y definición de posiciones en Zonas de 3 y 4
+  const completedMatches4: MatchResultInput[] = [
+    { matchNumber: 1, couple1Id: "1", couple2Id: "4", winnerCoupleId: "1", setsWon1: 2, setsWon2: 0, gamesWon1: 12, gamesWon2: 2 },
+    { matchNumber: 2, couple1Id: "2", couple2Id: "3", winnerCoupleId: "2", setsWon1: 2, setsWon2: 0, gamesWon1: 12, gamesWon2: 4 },
+    { matchNumber: 3, couple1Id: "1", couple2Id: "2", winnerCoupleId: "1", isWinnersMatch: true, setsWon1: 2, setsWon2: 0, gamesWon1: 12, gamesWon2: 6 },
+    { matchNumber: 4, couple1Id: "4", couple2Id: "3", winnerCoupleId: "3", isLosersMatch: true, setsWon1: 0, setsWon2: 2, gamesWon1: 4, gamesWon2: 12 },
+  ];
+  const standings4 = calculateFAPZoneStandings(z4, completedMatches4);
+  check(standings4[0].pair.id === "1" && standings4[0].position === 1, "Ganador de Ganadores debe ser 1°");
+  check(standings4[1].pair.id === "2" && standings4[1].position === 2, "Perdedor de Ganadores debe ser 2°");
+  check(standings4[2].pair.id === "3" && standings4[2].position === 3, "Ganador de Perdedores debe ser 3°");
+  check(standings4[3].pair.id === "4" && standings4[3].position === 4, "Perdedor de Perdedores debe ser 4°");
 
-    // Comprobar que 3º A y 3º B NUNCA reciben BYE
-    for (const [t1, t2] of tmpl) {
-      if (t1 === "3º A" || t2 === "3º A") {
-        check(t1 !== "BYE" && t2 !== "BYE", `Plantilla ${couples}: 3º A NUNCA debe tener BYE`);
-      }
-      if (t1 === "3º B" || t2 === "3º B") {
-        check(t1 !== "BYE" && t2 !== "BYE", `Plantilla ${couples}: 3º B NUNCA debe tener BYE`);
-      }
-    }
-  }
+  // 5. Validar clasificados
+  const zonesResolved: ZoneResolvedResults[] = [
+    {
+      zoneLetter: "A",
+      capacity: 4,
+      standings: standings4.map((s) => ({
+        pair: s.pair,
+        position: s.position as 1 | 2 | 3 | 4,
+        points: s.points,
+        setsWon: s.setsWon,
+        setsLost: s.setsLost,
+        gamesWon: s.gamesWon,
+        gamesLost: s.gamesLost,
+        setsDiff: s.setsWon - s.setsLost,
+        gamesDiff: s.gamesWon - s.gamesLost,
+      })),
+    },
+  ];
+  const q = resolveQualifiers(zonesResolved);
+  check(q.firsts.length === 1 && q.firsts[0].token === "1º A", "Clasificado 1° A correcto");
+  check(q.seconds.length === 1 && q.seconds[0].token === "2º A", "Clasificado 2° A correcto");
+  check(q.thirds.length === 1 && q.thirds[0].token === "3º A", "Clasificado 3° A correcto");
 
   return { passed, failed, errors };
 }

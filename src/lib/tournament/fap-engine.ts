@@ -1,18 +1,47 @@
 /**
  * MOTOR DE TORNEOS DE PÁDEL - REGLAMENTO OFICIAL FAP (Federación Argentina de Pádel)
  * 
- * Módulo de arquitectura y lógica backend para:
- * 1. Conformación y dimensionamiento de zonas (Regla N mod 3 y restricción de procedencia institucional).
- * 2. Generación de cruces por modalidad (Round Robin para zonas de 3, Doble Eliminatoria Corta para zonas de 4).
- * 3. Clasificación y resolución de desempates según reglamento FAP.
- * 4. Armado oficial de llaves eliminatorias de 32 líneas (Draw Championship > 28 parejas hasta 48 parejas).
+ * Alcance: Fase de Zonas (Estructura, Conformación, Modalidad de Juego y Definición de Clasificados)
+ * 
+ * 1. REGLAS DE ESTRUCTURA Y CONFORMACIÓN DE ZONAS
+ *    - Base general: Zonas de 3 parejas.
+ *    - Excedentes (Módulo 3):
+ *      - N mod 3 == 0: Todas las zonas son de 3 parejas.
+ *      - N mod 3 == 1: 1 zona de 4 parejas (OBLIGATORIAMENTE Zona A). Restantes de 3.
+ *      - N mod 3 == 2: 2 zonas de 4 parejas (OBLIGATORIAMENTE Zonas A y B). Restantes de 3.
+ *    - Procedencia institucional (Restricción de no enfrentamiento):
+ *      - Parejas de una misma institución/federación no pueden compartir zona.
+ *      - Si excepcionalmente coinciden, se enfrentan OBLIGATORIAMENTE en el PRIMER PARTIDO de la zona.
+ * 
+ * 2. MODALIDAD DE JUEGO Y DEFINICIÓN DE CLASIFICADOS
+ *    - Zonas de 3 parejas:
+ *      - Round Robin (todos contra todos, 3 partidos totales).
+ *      - Clasifican exactamente 2 parejas (1° y 2°). El 3° queda eliminado.
+ *      - Criterios de desempate oficiales FAP:
+ *        1. Diferencia de sets.
+ *        2. Diferencia de games.
+ *        3. Games a favor.
+ *        4. Games en contra.
+ *        5. Resultado en cancha / enfrentamiento directo (H2H).
+ *    - Zonas de 4 parejas:
+ *      - Doble eliminatoria corta (4 partidos totales):
+ *        Ronda 1: Mayor ranking vs Menor ranking (P1 vs P4), intermedias entre sí (P2 vs P3).
+ *        Ronda 2: Ganador vs Ganador (define 1° y 2°) y Perdedor vs Perdedor (define 3° clasificado y 4° eliminado).
+ *      - Clasifican exactamente 3 parejas (1°, 2° y 3°). El que pierde sus 2 partidos queda eliminado.
+ *      - Criterios de desempate oficiales FAP:
+ *        1. Resultado en cancha.
+ *        2. Diferencia de sets.
+ *        3. Diferencia de games.
+ *        4. Games a favor.
+ *        5. Games en contra.
+ *        6. Sorteo.
  */
 
 export interface FAPPair {
   id: string;
   names: string;
-  ranking: number; // Menor valor = mejor ranking (1 = N° 1)
-  institutionId?: string; // Club, federación o procedencia institucional
+  ranking: number; // Menor valor numérico = mejor ranking deportivo (1 = N° 1)
+  institutionId?: string; // Club, federación o entidad de procedencia
   seed?: number;
 }
 
@@ -21,7 +50,7 @@ export interface FAPZone {
   zoneIndex: number;
   capacity: 3 | 4;
   teams: FAPPair[];
-  // Si excepcionalmente comparten zona parejas de la misma institución, deben cruzarse en el 1er partido
+  // Registro de colisión institucional inevitable para forzar el cruce en Fecha 1
   forcedFirstMatchPairIds?: [string, string];
 }
 
@@ -58,27 +87,24 @@ export interface QualifiedTeam {
   stats?: Partial<FAPTeamStats>;
 }
 
-export interface Bracket32Match {
-  matchNumber: number; // 0 a 15
-  token1: string;
-  token2: string;
-  pair1: FAPPair | null;
-  pair2: FAPPair | null;
-  isBye: boolean;
-  advancingPair: FAPPair | null;
-  description: string;
-}
-
-export interface Bracket32Result {
-  totalSlots: 32;
-  totalQualified: number;
-  numByes: number;
-  matches16vos: Bracket32Match[];
-  roundName: string;
+export interface ZoneResolvedResults {
+  zoneLetter: string;
+  capacity: 3 | 4;
+  standings: {
+    pair: FAPPair;
+    position: 1 | 2 | 3 | 4;
+    points: number;
+    setsWon: number;
+    setsLost: number;
+    gamesWon: number;
+    gamesLost: number;
+    setsDiff: number;
+    gamesDiff: number;
+  }[];
 }
 
 // ============================================================================
-// 1. CONFORMACIÓN Y DIMENSIONAMIENTO DE ZONAS (FAP REGLA N MOD 3)
+// 1. REGLAS DE ESTRUCTURA Y CONFORMACIÓN DE ZONAS (N MOD 3)
 // ============================================================================
 
 /**
@@ -98,7 +124,7 @@ export function calculateFAPZoneStructure(couplesCount: number): {
     return { numZones: 0, capacities: [], remainder: 0 };
   }
 
-  // Para categorías reducidas (2 a 5 parejas)
+  // Categorías reducidas excepcionales (2 a 5 parejas)
   if (N === 2 || N === 3) {
     return { numZones: 1, capacities: [N as 3], remainder: 0 };
   }
@@ -106,7 +132,6 @@ export function calculateFAPZoneStructure(couplesCount: number): {
     return { numZones: 1, capacities: [4], remainder: 1 };
   }
   if (N === 5) {
-    // 5 parejas: Zona A de 3, Zona B de 2 (o zona única de 5)
     return { numZones: 2, capacities: [3, 3], remainder: 2 };
   }
 
@@ -128,12 +153,12 @@ export function calculateFAPZoneStructure(couplesCount: number): {
 }
 
 /**
- * Distribuye las parejas en formato Serpenteado (Snake) respetando estrictamente:
- * 1. El orden de ranking de las duplas.
- * 2. Restricción institucional: Duplas de la misma institución NO deben compartir zona.
- *    Si coincide el ranking, se ajusta la posición/zona para separarlas.
- * 3. Excepción FAP: Si no es matemáticamente evitable que compartan zona (ej: más parejas de una
- *    institución que zonas disponibles), se registra para forzar su cruce en el 1er partido de la zona.
+ * Distribuye las parejas en formato Serpenteado (Snake) respetando:
+ * 1. Orden de ranking deportivo de las parejas.
+ * 2. Restricción institucional: Las parejas de una misma institución NO pueden compartir zona.
+ *    Si el ranking determina coincidencia, se ajusta la posición/zona para separarlas.
+ * 3. Excepción FAP: Si la coincidencia es matemáticamente inevitable (ej: más parejas de un mismo
+ *    club que zonas totales), se registra para obligar su cruce en el primer partido de la zona.
  */
 export function distributePairsSnakeWithInstitutionCheck(
   zones: FAPZone[],
@@ -143,17 +168,12 @@ export function distributePairsSnakeWithInstitutionCheck(
   const numZones = zones.length;
   if (numZones === 0 || sortedPairs.length === 0) return;
 
-  // Limpiar equipos previos
+  // Limpiar estados previos
   zones.forEach((z) => {
     z.teams = [];
     delete z.forcedFirstMatchPairIds;
   });
 
-  // Generar la secuencia de rondas serpenteadas
-  // Ronda 1: 0, 1, 2, ... numZones - 1
-  // Ronda 2: numZones - 1, numZones - 2, ... 0
-  // Ronda 3: 0, 1, 2, ... numZones - 1
-  // Ronda 4 (excedentes de zonas de 4): 0, 1 (si A y B son de 4)
   const maxCapacity = Math.max(...zones.map((z) => z.capacity));
 
   let pairIndex = 0;
@@ -163,34 +183,34 @@ export function distributePairsSnakeWithInstitutionCheck(
 
     for (const zIdx of zoneIndices) {
       const targetZone = zones[zIdx];
-      // Solo colocar si la zona admite parejas en esta ronda
       if (targetZone.teams.length >= targetZone.capacity) continue;
       if (pairIndex >= sortedPairs.length) break;
 
       const currentPair = sortedPairs[pairIndex];
       const instId = currentPair.institutionId?.trim();
 
-      // Verificar si hay colisión institucional en targetZone
+      // Verificar si ya existe una pareja de esa misma institución en targetZone
       const hasCollision =
         Boolean(instId) && targetZone.teams.some((t) => t.institutionId?.trim() === instId);
 
       if (!hasCollision) {
-        // Asignación directa sin colisión
         targetZone.teams.push(currentPair);
         pairIndex++;
       } else {
-        // Intentar encontrar un swap en las parejas restantes de ranking cercano para evitar colisión
+        // Buscar un candidato de swap en rankings cercanos para evitar la coincidencia
         let swapped = false;
-        for (let lookahead = pairIndex + 1; lookahead < Math.min(sortedPairs.length, pairIndex + numZones); lookahead++) {
+        for (
+          let lookahead = pairIndex + 1;
+          lookahead < Math.min(sortedPairs.length, pairIndex + numZones);
+          lookahead++
+        ) {
           const candidatePair = sortedPairs[lookahead];
           const candInst = candidatePair.institutionId?.trim();
 
-          // El candidato no debe tener colisión en targetZone
           const candCausesCollisionInTarget =
             Boolean(candInst) && targetZone.teams.some((t) => t.institutionId?.trim() === candInst);
 
           if (!candCausesCollisionInTarget) {
-            // Intercambiar candidatePair con currentPair en el array
             sortedPairs[pairIndex] = candidatePair;
             sortedPairs[lookahead] = currentPair;
             targetZone.teams.push(candidatePair);
@@ -200,7 +220,7 @@ export function distributePairsSnakeWithInstitutionCheck(
           }
         }
 
-        // Si no se pudo evitar el cruce institucional, se coloca y se marca para enfrentamiento obligatorio en Fecha 1
+        // Si no se pudo evitar matemáticamente, se asigna y se marca para cruce en Partido 1
         if (!swapped) {
           const sameInstTeam = targetZone.teams.find((t) => t.institutionId?.trim() === instId);
           if (sameInstTeam && !targetZone.forcedFirstMatchPairIds) {
@@ -215,12 +235,12 @@ export function distributePairsSnakeWithInstitutionCheck(
 }
 
 /**
- * Función principal de armado de zonas según el Reglamento Oficial FAP.
+ * Función principal para generar las zonas cumpliendo el Reglamento FAP.
  */
 export function generateZones(pairs: FAPPair[]): FAPZone[] {
   const { capacities } = calculateFAPZoneStructure(pairs.length);
   const zones: FAPZone[] = capacities.map((capacity, i) => ({
-    letter: String.fromCharCode(65 + i), // A, B, C, ...
+    letter: String.fromCharCode(65 + i), // Zona A, B, C...
     zoneIndex: i,
     capacity,
     teams: [],
@@ -231,56 +251,56 @@ export function generateZones(pairs: FAPPair[]): FAPZone[] {
 }
 
 // ============================================================================
-// 2. GENERACIÓN DE PARTIDOS Y MODALIDADES DE JUEGO
+// 2. MODALIDAD DE JUEGO Y GENERACIÓN DE FIXTURES DE ZONA
 // ============================================================================
 
 /**
- * Genera el fixture de partidos para una zona:
- * - Zonas de 3 parejas: Todos contra todos (Round Robin, 3 partidos).
- *   Si hubo colisión institucional forzada, ese partido DEBE ser el Partido 1.
- * - Zonas de 4 parejas: Doble eliminatoria corta FAP (4 partidos totales).
- *   Ronda 1: Mayor vs Menor ranking (P1 vs P4) y Parejas intermedias (P2 vs P3).
- *   Ronda 2: Ganadores vs Ganadores (define 1°) y Perdedores vs Perdedores (el que pierde ambos queda eliminado).
+ * Genera los partidos oficiales de una zona:
+ * - Zonas de 3 parejas: Round Robin (3 partidos totales).
+ *   Si hubo colisión institucional forzada, ese enfrentamiento es OBLIGATORIAMENTE el Partido 1.
+ * - Zonas de 4 parejas: Doble eliminatoria corta (4 partidos totales).
+ *   Ronda 1: Mayor ranking vs Menor ranking (P1 vs P4) y Parejas intermedias (P2 vs P3).
+ *   Ronda 2: Ganador vs Ganador (define 1° y 2°) y Perdedor vs Perdedor (define 3° y 4° eliminado).
  */
 export function generateFAPZoneMatches(zone: FAPZone): FAPZoneMatch[] {
   const matches: FAPZoneMatch[] = [];
   const teamIds = zone.teams.map((t) => t.id);
 
   if (zone.capacity === 4 && teamIds.length === 4) {
-    // Zona de 4: Doble eliminatoria corta
+    // Zona de 4: Doble eliminatoria corta FAP
     matches.push({
       matchNumber: 1,
       stage: "zone",
       zoneLetter: zone.letter,
-      couple1Id: teamIds[0], // Mayor ranking
-      couple2Id: teamIds[3], // Menor ranking
-      description: `Ronda 1: Pareja 1 vs Pareja 4`,
+      couple1Id: teamIds[0], // Mayor ranking (P1)
+      couple2Id: teamIds[3], // Menor ranking (P4)
+      description: "Ronda 1: Mayor ranking (P1) vs Menor ranking (P4)",
     });
     matches.push({
       matchNumber: 2,
       stage: "zone",
       zoneLetter: zone.letter,
-      couple1Id: teamIds[1], // Intermedia
-      couple2Id: teamIds[2], // Intermedia
-      description: `Ronda 1: Pareja 2 vs Pareja 3`,
+      couple1Id: teamIds[1], // Intermedia (P2)
+      couple2Id: teamIds[2], // Intermedia (P3)
+      description: "Ronda 1: Parejas intermedias (P2 vs P3)",
     });
     matches.push({
       matchNumber: 3,
       stage: "zone",
       zoneLetter: zone.letter,
-      couple1Id: null, // Ganador M1
-      couple2Id: null, // Ganador M2
+      couple1Id: null, // Ganador Partido 1
+      couple2Id: null, // Ganador Partido 2
       isWinnersMatch: true,
-      description: `Ronda 2: Ganador vs Ganador (Define 1º y 2º puesto)`,
+      description: "Ronda 2: Ganadores vs Ganadores (Define 1° y 2° puesto)",
     });
     matches.push({
       matchNumber: 4,
       stage: "zone",
       zoneLetter: zone.letter,
-      couple1Id: null, // Perdedor M1
-      couple2Id: null, // Perdedor M2
+      couple1Id: null, // Perdedor Partido 1
+      couple2Id: null, // Perdedor Partido 2
       isLosersMatch: true,
-      description: `Ronda 2: Perdedor vs Perdedor (Define 3º clasificado y eliminado)`,
+      description: "Ronda 2: Perdedores vs Perdedores (Define 3° clasificado y 4° eliminado)",
     });
     return matches;
   }
@@ -291,7 +311,7 @@ export function generateFAPZoneMatches(zone: FAPZone): FAPZoneMatch[] {
     let p2 = teamIds[1];
     let p3 = teamIds[2];
 
-    // Si hay cruce forzado institucional, ese cruce debe ser el Match 1
+    // Regla de procedencia institucional: Si deben cruzarse, OBLIGATORIAMENTE en el 1er partido
     if (zone.forcedFirstMatchPairIds) {
       const [f1, f2] = zone.forcedFirstMatchPairIds;
       if (teamIds.includes(f1) && teamIds.includes(f2)) {
@@ -307,7 +327,7 @@ export function generateFAPZoneMatches(zone: FAPZone): FAPZoneMatch[] {
       zoneLetter: zone.letter,
       couple1Id: p1,
       couple2Id: p2,
-      description: `Partido 1: ${zone.forcedFirstMatchPairIds ? "Cruce institucional prioritario" : "P1 vs P2"}`,
+      description: `Partido 1: ${zone.forcedFirstMatchPairIds ? "Enfrentamiento institucional obligatorio (Fecha 1)" : "P1 vs P2"}`,
     });
     matches.push({
       matchNumber: 2,
@@ -315,7 +335,7 @@ export function generateFAPZoneMatches(zone: FAPZone): FAPZoneMatch[] {
       zoneLetter: zone.letter,
       couple1Id: p2,
       couple2Id: p3,
-      description: `Partido 2: P2 vs P3`,
+      description: "Partido 2: P2 vs P3",
     });
     matches.push({
       matchNumber: 3,
@@ -323,12 +343,12 @@ export function generateFAPZoneMatches(zone: FAPZone): FAPZoneMatch[] {
       zoneLetter: zone.letter,
       couple1Id: p1,
       couple2Id: p3,
-      description: `Partido 3: P1 vs P3`,
+      description: "Partido 3: P1 vs P3",
     });
     return matches;
   }
 
-  // Fallback para 2 parejas
+  // Categoría reducida: 2 parejas
   if (teamIds.length === 2) {
     matches.push({
       matchNumber: 1,
@@ -336,7 +356,7 @@ export function generateFAPZoneMatches(zone: FAPZone): FAPZoneMatch[] {
       zoneLetter: zone.letter,
       couple1Id: teamIds[0],
       couple2Id: teamIds[1],
-      description: `Partido único: P1 vs P2`,
+      description: "Partido único: P1 vs P2",
     });
   }
 
@@ -344,29 +364,185 @@ export function generateFAPZoneMatches(zone: FAPZone): FAPZoneMatch[] {
 }
 
 // ============================================================================
-// 3. CLASIFICACIÓN Y DESEMPATES FAP
+// 3. DEFINICIÓN DE TABLAS DE POSICIONES Y DESEMPATES FAP
 // ============================================================================
 
-export interface ZoneResolvedResults {
-  zoneLetter: string;
-  capacity: 3 | 4;
-  standings: {
-    pair: FAPPair;
-    position: 1 | 2 | 3 | 4;
-    points: number;
-    setsWon: number;
-    setsLost: number;
-    gamesWon: number;
-    gamesLost: number;
-    setsDiff: number;
-    gamesDiff: number;
-  }[];
+export interface MatchResultInput {
+  matchNumber?: number;
+  couple1Id: string;
+  couple2Id: string;
+  winnerCoupleId: string;
+  setsWon1: number;
+  setsWon2: number;
+  gamesWon1: number;
+  gamesWon2: number;
+  isWinnersMatch?: boolean;
+  isLosersMatch?: boolean;
 }
 
 /**
- * Resuelve las parejas clasificadas de cada zona según el Reglamento FAP:
- * - En zonas de 3: Pasan exactamente 2 parejas (1° y 2°). La 3° queda eliminada.
- * - En zonas de 4: Pasan 3 parejas (1°, 2° y 3°). La 4° (perdedora de ambos partidos) queda eliminada.
+ * Calcula la tabla de posiciones oficial de una zona aplicando los criterios
+ * estrictos del Reglamento FAP.
+ * 
+ * - En Zonas de 3 parejas (Round Robin):
+ *   1. Puntos (PG = 2, PP = 1, WO = 0)
+ *   2. Diferencia de sets
+ *   3. Diferencia de games
+ *   4. Games a favor
+ *   5. Games en contra
+ *   6. Resultado en cancha / H2H (en empate de 2 parejas)
+ * 
+ * - En Zonas de 4 parejas (Doble eliminatoria corta):
+ *   1° = Ganador del Partido Ganadores vs Ganadores
+ *   2° = Perdedor del Partido Ganadores vs Ganadores
+ *   3° = Ganador del Partido Perdedores vs Perdedores (clasifica)
+ *   4° = Perdedor del Partido Perdedores vs Perdedores (eliminado con 2 derrotas)
+ *   Criterios auxiliares / empates:
+ *   1. Resultado en cancha
+ *   2. Diferencia de sets
+ *   3. Diferencia de games
+ *   4. Games a favor
+ *   5. Games en contra
+ *   6. Sorteo
+ */
+export function calculateFAPZoneStandings(
+  zone: FAPZone,
+  completedMatches: MatchResultInput[]
+): FAPTeamStats[] {
+  const statsMap = new Map<string, FAPTeamStats>();
+
+  zone.teams.forEach((pair) => {
+    statsMap.set(pair.id, {
+      pair,
+      matchesPlayed: 0,
+      matchesWon: 0,
+      matchesLost: 0,
+      setsWon: 0,
+      setsLost: 0,
+      gamesWon: 0,
+      gamesLost: 0,
+      points: 0,
+      position: 0,
+      headToHead: {},
+    });
+  });
+
+  completedMatches.forEach((m) => {
+    const s1 = statsMap.get(m.couple1Id);
+    const s2 = statsMap.get(m.couple2Id);
+    if (!s1 || !s2) return;
+
+    s1.matchesPlayed++;
+    s2.matchesPlayed++;
+
+    s1.setsWon += m.setsWon1;
+    s1.setsLost += m.setsWon2;
+    s2.setsWon += m.setsWon2;
+    s2.setsLost += m.setsWon1;
+
+    s1.gamesWon += m.gamesWon1;
+    s1.gamesLost += m.gamesWon2;
+    s2.gamesWon += m.gamesWon2;
+    s2.gamesLost += m.gamesWon1;
+
+    if (m.winnerCoupleId === m.couple1Id) {
+      s1.matchesWon++;
+      s1.points += 2;
+      s2.matchesLost++;
+      s2.points += 1;
+      s1.headToHead[m.couple2Id] = "won";
+      s2.headToHead[m.couple1Id] = "lost";
+    } else if (m.winnerCoupleId === m.couple2Id) {
+      s2.matchesWon++;
+      s2.points += 2;
+      s1.matchesLost++;
+      s1.points += 1;
+      s2.headToHead[m.couple1Id] = "won";
+      s1.headToHead[m.couple2Id] = "lost";
+    }
+  });
+
+  const list = Array.from(statsMap.values());
+
+  // Definición oficial para Zonas de 4 parejas (Doble eliminatoria)
+  if (zone.capacity === 4) {
+    const winnersMatch = completedMatches.find((m) => m.isWinnersMatch || m.matchNumber === 3);
+    const losersMatch = completedMatches.find((m) => m.isLosersMatch || m.matchNumber === 4);
+
+    const positions = new Map<string, number>();
+
+    if (winnersMatch && winnersMatch.winnerCoupleId) {
+      const winner = winnersMatch.winnerCoupleId;
+      const loser = winner === winnersMatch.couple1Id ? winnersMatch.couple2Id : winnersMatch.couple1Id;
+      positions.set(winner, 1);
+      positions.set(loser, 2);
+    }
+
+    if (losersMatch && losersMatch.winnerCoupleId) {
+      const winner = losersMatch.winnerCoupleId;
+      const loser = winner === losersMatch.couple1Id ? losersMatch.couple2Id : losersMatch.couple1Id;
+      positions.set(winner, 3);
+      positions.set(loser, 4);
+    }
+
+    if (positions.size === 4) {
+      list.sort((a, b) => (positions.get(a.pair.id) || 0) - (positions.get(b.pair.id) || 0));
+      list.forEach((s, i) => {
+        s.position = i + 1;
+      });
+      return list;
+    }
+  }
+
+  // Criterios oficiales de desempate FAP (Zonas de 3 parejas / general):
+  // 1. Puntos totales
+  // 2. Diferencia de sets
+  // 3. Diferencia de games
+  // 4. Games a favor
+  // 5. Games en contra
+  // 6. Enfrentamiento directo (Head to Head)
+  list.sort((a, b) => {
+    // 1. Puntos
+    if (b.points !== a.points) return b.points - a.points;
+
+    // 2. Diferencia de sets
+    const setDiffA = a.setsWon - a.setsLost;
+    const setDiffB = b.setsWon - b.setsLost;
+    if (setDiffB !== setDiffA) return setDiffB - setDiffA;
+
+    // 3. Diferencia de games
+    const gameDiffA = a.gamesWon - a.gamesLost;
+    const gameDiffB = b.gamesWon - b.gamesLost;
+    if (gameDiffB !== gameDiffA) return gameDiffB - gameDiffA;
+
+    // 4. Games a favor
+    if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon;
+
+    // 5. Menor cantidad de games en contra
+    if (a.gamesLost !== b.gamesLost) return a.gamesLost - b.gamesLost;
+
+    // 6. Enfrentamiento directo
+    if (a.headToHead[b.pair.id] === "won") return -1;
+    if (a.headToHead[b.pair.id] === "lost") return 1;
+
+    return 0;
+  });
+
+  list.forEach((s, i) => {
+    s.position = i + 1;
+  });
+
+  return list;
+}
+
+// ============================================================================
+// 4. CLASIFICADOS A SEGUNDA ETAPA SEGÚN TIPO DE ZONA
+// ============================================================================
+
+/**
+ * Resuelve y retorna las parejas clasificadas a la siguiente etapa:
+ * - Zonas de 3 parejas: Clasifican exactamente 2 parejas (1° y 2°). El 3° queda eliminado.
+ * - Zonas de 4 parejas: Clasifican exactamente 3 parejas (1°, 2° y 3°). El 4° (doble derrota) queda eliminado.
  */
 export function resolveQualifiers(zonesResults: ZoneResolvedResults[]): {
   firsts: QualifiedTeam[];
@@ -380,6 +556,7 @@ export function resolveQualifiers(zonesResults: ZoneResolvedResults[]): {
   for (const zone of zonesResults) {
     const sorted = [...zone.standings].sort((a, b) => a.position - b.position);
 
+    // 1° puesto siempre clasifica
     if (sorted.length >= 1 && sorted[0]) {
       firsts.push({
         pair: sorted[0].pair,
@@ -390,6 +567,7 @@ export function resolveQualifiers(zonesResults: ZoneResolvedResults[]): {
       });
     }
 
+    // 2° puesto siempre clasifica
     if (sorted.length >= 2 && sorted[1]) {
       seconds.push({
         pair: sorted[1].pair,
@@ -400,7 +578,7 @@ export function resolveQualifiers(zonesResults: ZoneResolvedResults[]): {
       });
     }
 
-    // Solo las zonas de 4 clasifican 3° puesto
+    // 3° puesto: SOLO clasifica en zonas de 4 parejas (en zonas de 3 el 3° queda eliminado)
     if (zone.capacity === 4 && sorted.length >= 3 && sorted[2]) {
       thirds.push({
         pair: sorted[2].pair,
@@ -413,341 +591,4 @@ export function resolveQualifiers(zonesResults: ZoneResolvedResults[]): {
   }
 
   return { firsts, seconds, thirds };
-}
-
-// ============================================================================
-// 4. LLAVE DE 32 LÍNEAS BASE (DRAWS > 28 PAREJAS HASTA 48 PAREJAS)
-// ============================================================================
-
-/**
- * Plantillas oficiales FAP para cuadros con base de 32 slots (16avos de final).
- * Cumplen con:
- * 1. 1º A en el Partido 0 (Línea 1, cima del cuadro superior).
- * 2. 1º B en el Partido 15 (Línea 32, pie del cuadro inferior).
- * 3. 1º C y 1º D en extremos opuestos de los cuadrantes medios.
- * 4. Pases directos (BYE) otorgados estrictamente a los 1° de zona prioritarios.
- * 5. Los 3° de zonas de 4 (3º A y 3º B) NUNCA reciben BYE y juegan 16vos.
- * 6. Ningún cruce de primera ronda enfrenta duplas de la misma zona.
- */
-export const FAP_32_BASE_TEMPLATES: Record<number, [string, string][]> = {
-  // 28 Parejas: 1 de 4 (A) + 8 de 3 (B..I) -> 19 clasificados, 13 BYEs, 3 partidos en 16vos
-  28: [
-    ["1º A", "BYE"],
-    ["2º B", "2º C"],
-    ["1º I", "BYE"],
-    ["BYE", "1º H"],
-    ["1º E", "BYE"],
-    ["BYE", "2º G"],
-    ["2º F", "BYE"],
-    ["BYE", "1º D"],
-    ["1º C", "BYE"],
-    ["3º A", "2º E"],
-    ["2º H", "BYE"],
-    ["BYE", "1º F"],
-    ["1º G", "BYE"],
-    ["BYE", "2º I"],
-    ["2º D", "2º A"],
-    ["BYE", "1º B"],
-  ],
-
-  // 29 Parejas: 2 de 4 (A y B) + 7 de 3 (C..I) -> 20 clasificados, 12 BYEs, 4 partidos en 16vos
-  29: [
-    ["1º A", "BYE"],
-    ["2º B", "2º C"],
-    ["1º I", "BYE"],
-    ["BYE", "1º H"],
-    ["1º E", "BYE"],
-    ["BYE", "2º G"],
-    ["2º F", "3º B"],
-    ["BYE", "1º D"],
-    ["1º C", "BYE"],
-    ["3º A", "2º E"],
-    ["2º H", "BYE"],
-    ["BYE", "1º F"],
-    ["1º G", "BYE"],
-    ["BYE", "2º I"],
-    ["2º D", "2º A"],
-    ["BYE", "1º B"],
-  ],
-
-  // 30 Parejas: 10 de 3 (A..J) -> 20 clasificados, 12 BYEs, 4 partidos en 16vos
-  30: [
-    ["1º A", "BYE"],
-    ["2º C", "2º F"],
-    ["1º I", "BYE"],
-    ["BYE", "1º H"],
-    ["1º E", "BYE"],
-    ["BYE", "2º J"],
-    ["2º G", "2º B"],
-    ["BYE", "1º D"],
-    ["1º C", "BYE"],
-    ["2º A", "2º H"],
-    ["2º I", "BYE"],
-    ["BYE", "1º F"],
-    ["1º G", "BYE"],
-    ["BYE", "1º J"],
-    ["2º E", "2º D"],
-    ["BYE", "1º B"],
-  ],
-
-  // 31 Parejas: 1 de 4 (A) + 9 de 3 (B..J) -> 21 clasificados, 11 BYEs, 5 partidos en 16vos
-  31: [
-    ["1º A", "BYE"],
-    ["2º C", "2º F"],
-    ["1º I", "BYE"],
-    ["BYE", "1º H"],
-    ["1º E", "BYE"],
-    ["BYE", "2º J"],
-    ["2º G", "2º B"],
-    ["BYE", "1º D"],
-    ["1º C", "BYE"],
-    ["2º A", "2º H"],
-    ["2º I", "3º A"],
-    ["BYE", "1º F"],
-    ["1º G", "BYE"],
-    ["BYE", "1º J"],
-    ["2º E", "2º D"],
-    ["BYE", "1º B"],
-  ],
-
-  // 32 Parejas: 2 de 4 (A y B) + 8 de 3 (C..J) -> 22 clasificados, 10 BYEs, 6 partidos en 16vos
-  32: [
-    ["1º A", "BYE"],
-    ["2º C", "2º F"],
-    ["1º I", "BYE"],
-    ["BYE", "1º H"],
-    ["1º E", "3º B"],
-    ["BYE", "2º J"],
-    ["2º G", "2º B"],
-    ["BYE", "1º D"],
-    ["1º C", "BYE"],
-    ["2º A", "2º H"],
-    ["2º I", "3º A"],
-    ["BYE", "1º F"],
-    ["1º G", "BYE"],
-    ["BYE", "1º J"],
-    ["2º E", "2º D"],
-    ["BYE", "1º B"],
-  ],
-
-  // 33 Parejas: 11 de 3 (A..K) -> 22 clasificados, 10 BYEs, 6 partidos en 16vos
-  33: [
-    ["1º A", "BYE"],
-    ["2º C", "2º F"],
-    ["1º I", "BYE"],
-    ["BYE", "1º H"],
-    ["1º E", "2º K"],
-    ["BYE", "2º J"],
-    ["2º G", "2º B"],
-    ["BYE", "1º D"],
-    ["1º C", "BYE"],
-    ["2º A", "2º H"],
-    ["2º I", "1º K"],
-    ["BYE", "1º F"],
-    ["1º G", "BYE"],
-    ["BYE", "1º J"],
-    ["2º E", "2º D"],
-    ["BYE", "1º B"],
-  ],
-
-  // 34 Parejas: 1 de 4 (A) + 10 de 3 (B..K) -> 23 clasificados, 9 BYEs, 7 partidos en 16vos
-  34: [
-    ["1º A", "BYE"],
-    ["2º C", "2º F"],
-    ["1º I", "BYE"],
-    ["BYE", "1º H"],
-    ["1º E", "2º K"],
-    ["3º A", "2º J"],
-    ["2º G", "2º B"],
-    ["BYE", "1º D"],
-    ["1º C", "BYE"],
-    ["2º A", "2º H"],
-    ["2º I", "1º K"],
-    ["BYE", "1º F"],
-    ["1º G", "BYE"],
-    ["BYE", "1º J"],
-    ["2º E", "2º D"],
-    ["BYE", "1º B"],
-  ],
-
-  // 35 Parejas: 2 de 4 (A y B) + 9 de 3 (C..K) -> 24 clasificados, 8 BYEs, 8 partidos en 16vos
-  35: [
-    ["1º A", "BYE"],
-    ["2º C", "2º F"],
-    ["1º I", "3º B"],
-    ["BYE", "1º H"],
-    ["1º E", "2º K"],
-    ["3º A", "2º J"],
-    ["2º G", "2º B"],
-    ["BYE", "1º D"],
-    ["1º C", "BYE"],
-    ["2º A", "2º H"],
-    ["2º I", "1º K"],
-    ["BYE", "1º F"],
-    ["1º G", "BYE"],
-    ["BYE", "1º J"],
-    ["2º E", "2º D"],
-    ["BYE", "1º B"],
-  ],
-
-  // 36 Parejas: 12 de 3 (A..L) -> 24 clasificados, 8 BYEs, 8 partidos en 16vos
-  36: [
-    ["1º A", "BYE"],
-    ["2º C", "2º F"],
-    ["1º I", "2º L"],
-    ["BYE", "1º H"],
-    ["1º E", "2º K"],
-    ["1º L", "2º J"],
-    ["2º G", "2º B"],
-    ["BYE", "1º D"],
-    ["1º C", "BYE"],
-    ["2º A", "2º H"],
-    ["2º I", "1º K"],
-    ["BYE", "1º F"],
-    ["1º G", "BYE"],
-    ["BYE", "1º J"],
-    ["2º E", "2º D"],
-    ["BYE", "1º B"],
-  ],
-
-  // 48 Parejas: 16 de 3 (A..P) -> 32 clasificados, 0 BYEs, 16 partidos completos en 16vos
-  48: [
-    ["1º A", "2º P"],
-    ["2º C", "2º F"],
-    ["1º I", "2º L"],
-    ["2º M", "1º H"],
-    ["1º E", "2º K"],
-    ["1º L", "2º J"],
-    ["2º G", "2º B"],
-    ["2º N", "1º D"],
-    ["1º C", "2º O"],
-    ["2º A", "2º H"],
-    ["2º I", "1º K"],
-    ["2º P", "1º F"],
-    ["1º G", "2º M"],
-    ["2º O", "1º J"],
-    ["2º E", "2º D"],
-    ["1º P", "1º B"],
-  ],
-};
-
-/**
- * Genera el cuadro eliminatorio base de 32 slots (Dieciseisavos de Final)
- * ensamblando los clasificados según las especificaciones FAP.
- */
-export function buildBracket32(
-  qualifiers: ReturnType<typeof resolveQualifiers>,
-  couplesCount?: number
-): Bracket32Result {
-  const allTeams = [...qualifiers.firsts, ...qualifiers.seconds, ...qualifiers.thirds];
-  const total = allTeams.length;
-  const numByes = Math.max(0, 32 - total);
-
-  // Crear mapa token -> QualifiedTeam (ej: "1º A" -> QualifiedTeam)
-  const tokenMap = new Map<string, QualifiedTeam>();
-  allTeams.forEach((q) => {
-    tokenMap.set(q.token, q);
-  });
-
-  // Determinar la plantilla a usar
-  let templateMatches = couplesCount && FAP_32_BASE_TEMPLATES[couplesCount]
-    ? FAP_32_BASE_TEMPLATES[couplesCount]
-    : null;
-
-  if (!templateMatches) {
-    // Si no hay plantilla estática exacta para esa cantidad, buscar por cantidad de clasificados
-    for (const [cCount, tmpl] of Object.entries(FAP_32_BASE_TEMPLATES)) {
-      const c = parseInt(cCount, 10);
-      let tmplTotal = 0;
-      for (const [t1, t2] of tmpl) {
-        if (t1 !== "BYE") tmplTotal++;
-        if (t2 !== "BYE") tmplTotal++;
-      }
-      if (tmplTotal === total) {
-        templateMatches = tmpl;
-        break;
-      }
-    }
-  }
-
-  // Si existe plantilla FAP predefinida
-  if (templateMatches) {
-    const matches16vos: Bracket32Match[] = templateMatches.map(([token1, token2], idx) => {
-      const isBye = token1 === "BYE" || token2 === "BYE";
-      const q1 = tokenMap.get(token1) || null;
-      const q2 = tokenMap.get(token2) || null;
-
-      const advancingPair = isBye ? (q1 ? q1.pair : q2 ? q2.pair : null) : null;
-
-      return {
-        matchNumber: idx + 1,
-        token1,
-        token2,
-        pair1: q1 ? q1.pair : null,
-        pair2: q2 ? q2.pair : null,
-        isBye,
-        advancingPair,
-        description: `16vos #${idx + 1}: ${token1} vs ${token2}`,
-      };
-    });
-
-    return {
-      totalSlots: 32,
-      totalQualified: total,
-      numByes,
-      matches16vos,
-      roundName: "Dieciseisavos de Final (Cuadro de 32)",
-    };
-  }
-
-  // Ensamblado algorítmico dinámico garantizando las reglas FAP
-  // 1. 1º A en match 0, 1º B en match 15
-  // 2. 1º de zona reciben BYEs con prioridad
-  // 3. 3º A y 3º B NUNCA reciben BYE
-  const matches16vos: Bracket32Match[] = [];
-
-  // Pool de BYEs asignados a 1ºs
-  const byeSlots = new Set<number>();
-  let byesLeft = numByes;
-
-  // 1º A siempre tiene BYE si numByes > 0
-  if (byesLeft > 0) {
-    byeSlots.add(0); // Match 0 (1º A)
-    byesLeft--;
-  }
-  // 1º B siempre tiene BYE si numByes > 0
-  if (byesLeft > 0) {
-    byeSlots.add(15); // Match 15 (1º B)
-    byesLeft--;
-  }
-
-  // Asignar BYEs restantes alternados entre cuadrantes
-  const priorityMatches = [7, 8, 3, 11, 4, 12, 1, 14, 2, 13, 5, 10, 6, 9];
-  for (const mIdx of priorityMatches) {
-    if (byesLeft <= 0) break;
-    byeSlots.add(mIdx);
-    byesLeft--;
-  }
-
-  for (let i = 0; i < 16; i++) {
-    const isBye = byeSlots.has(i);
-    matches16vos.push({
-      matchNumber: i + 1,
-      token1: i === 0 ? "1º A" : i === 15 ? (isBye ? "BYE" : "2º B") : `Slot ${i * 2 + 1}`,
-      token2: i === 0 ? (isBye ? "BYE" : "2º B") : i === 15 ? "1º B" : isBye ? "BYE" : `Slot ${i * 2 + 2}`,
-      pair1: null,
-      pair2: null,
-      isBye,
-      advancingPair: null,
-      description: `16vos #${i + 1}`,
-    });
-  }
-
-  return {
-    totalSlots: 32,
-    totalQualified: total,
-    numByes,
-    matches16vos,
-    roundName: "Dieciseisavos de Final (Cuadro de 32)",
-  };
 }
