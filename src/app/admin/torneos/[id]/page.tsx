@@ -345,20 +345,39 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     return { qualified, eliminated };
   }, [zones, zoneCouplesMap, matches, couples]);
 
+  // Cuadro de Eliminación: se dibuja siempre la estructura completa del árbol (Bracket)
+  // combinando los partidos ya creados en la BD con los slots pendientes para asignación manual.
   const bracketRounds = useMemo(() => {
-    const STAGE_ORDER: Record<string, number> = {
-      round_of_32: 0,
-      dieciseisavos: 0,
-      round_of_16: 1,
-      octavos: 1,
-      quarter: 2,
-      cuartos: 2,
-      semi: 3,
-      semifinal: 3,
-      final: 4,
-      third_place: 5,
-      tercer_puesto: 5,
-    };
+    const qCount = zoneQualifications.qualified.length || couples.length || 8;
+    let stageSequence: { stage: string; count: number }[] = [];
+
+    if (qCount > 16) {
+      stageSequence = [
+        { stage: "round_of_32", count: 16 },
+        { stage: "round_of_16", count: 8 },
+        { stage: "quarter", count: 4 },
+        { stage: "semi", count: 2 },
+        { stage: "final", count: 1 },
+      ];
+    } else if (qCount > 8) {
+      stageSequence = [
+        { stage: "round_of_16", count: 8 },
+        { stage: "quarter", count: 4 },
+        { stage: "semi", count: 2 },
+        { stage: "final", count: 1 },
+      ];
+    } else if (qCount > 4) {
+      stageSequence = [
+        { stage: "quarter", count: 4 },
+        { stage: "semi", count: 2 },
+        { stage: "final", count: 1 },
+      ];
+    } else {
+      stageSequence = [
+        { stage: "semi", count: 2 },
+        { stage: "final", count: 1 },
+      ];
+    }
 
     const playoffMatches = displayMatches
       .filter((m) => m.stage !== "zone")
@@ -372,33 +391,58 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
         return a.id.localeCompare(b.id);
       });
 
-    if (playoffMatches.length > 0) {
-      const playoffRoundsMap: Record<string, { id?: string; pair1: string; pair2: string; winner?: string; score?: string; status?: string }[]> = {};
+    // Agrupar partidos reales de la BD por etapa
+    const matchesByStage: Record<string, Match[]> = {};
+    playoffMatches.forEach((m) => {
+      const stageStr = m.stage as string;
+      const stageNorm =
+        stageStr === "cuartos"
+          ? "quarter"
+          : stageStr === "octavos"
+          ? "round_of_16"
+          : stageStr === "semifinal"
+          ? "semi"
+          : stageStr === "dieciseisavos"
+          ? "round_of_32"
+          : m.stage;
+      if (!matchesByStage[stageNorm]) matchesByStage[stageNorm] = [];
+      matchesByStage[stageNorm].push(m);
+    });
 
-      playoffMatches.forEach((m) => {
-        const stage = m.stage;
-        if (!playoffRoundsMap[stage]) playoffRoundsMap[stage] = [];
-        const scoreStr = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
-        playoffRoundsMap[stage].push({
-          id: m.id,
-          pair1: m.couple1_id ?? "Por definir",
-          pair2: m.couple2_id ?? "Por definir",
-          winner: m.winner_couple_id ?? undefined,
-          score: scoreStr || undefined,
-          status: m.status,
-        });
-      });
+    const roundsResult = stageSequence.map(({ stage, count }) => {
+      const dbMatches = matchesByStage[stage] || [];
+      const stageMatches = [];
 
-      return Object.entries(playoffRoundsMap)
-        .sort(([roundA], [roundB]) => (STAGE_ORDER[roundA] ?? 99) - (STAGE_ORDER[roundB] ?? 99))
-        .map(([round, roundMatches]) => ({
-          round,
-          matches: roundMatches,
-        }));
-    }
+      for (let i = 0; i < count; i++) {
+        if (i < dbMatches.length) {
+          const m = dbMatches[i];
+          const scoreStr = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
+          stageMatches.push({
+            id: m.id,
+            pair1: m.couple1_id ?? "Por definir",
+            pair2: m.couple2_id ?? (m.score_set1?.includes("BYE") ? "BYE" : "Por definir"),
+            winner: m.winner_couple_id ?? undefined,
+            score: scoreStr || undefined,
+            status: m.status,
+          });
+        } else {
+          stageMatches.push({
+            id: `slot_${stage}_${i}`,
+            pair1: "Por definir",
+            pair2: "Por definir",
+            status: "pending",
+          });
+        }
+      }
 
-    return [];
-  }, [displayMatches]);
+      return {
+        round: stage,
+        matches: stageMatches,
+      };
+    });
+
+    return roundsResult;
+  }, [displayMatches, zoneQualifications.qualified.length, couples.length]);
 
   // Configuración interactiva de Zonas para el sorteo
   const [targetZoneSize, setTargetZoneSize] = useState<number>(4);
@@ -559,6 +603,60 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     setPlayoffCouple2Id(m.couple2_id || "");
     setPlayoffIsBye(Boolean(m.score_set1?.includes("BYE") || (!m.couple2_id && m.status === "completed")));
     setIsPlayoffMatchModalOpen(true);
+  };
+
+  const handleBracketAssignClick = (
+    bracketMatch: { id?: string; pair1: string; pair2: string; winner?: string; status?: string },
+    stage: string,
+    matchIndex: number
+  ) => {
+    let existingMatch: Match | undefined;
+    if (bracketMatch.id && !bracketMatch.id.startsWith("slot_") && !bracketMatch.id.startsWith("proj_")) {
+      existingMatch = matches.find((m) => m.id === bracketMatch.id);
+    }
+    if (!existingMatch) {
+      const playoffMatchesThisStage = matches
+        .filter(
+          (m) =>
+            m.stage === stage ||
+            (stage === "quarter" && (m.stage as string) === "cuartos") ||
+            (stage === "semi" && (m.stage as string) === "semifinal") ||
+            (stage === "round_of_16" && (m.stage as string) === "octavos") ||
+            (stage === "round_of_32" && (m.stage as string) === "dieciseisavos")
+        )
+        .sort((a, b) => (a.match_number ?? 999) - (b.match_number ?? 999));
+      existingMatch = playoffMatchesThisStage[matchIndex];
+    }
+
+    if (existingMatch) {
+      openEditPlayoffMatchModal(existingMatch);
+    } else {
+      setEditingPlayoffMatch(null);
+      setPlayoffStage(stage);
+      const baseNum =
+        stage === "round_of_32" || stage === "dieciseisavos"
+          ? 100
+          : stage === "round_of_16" || stage === "octavos"
+          ? 120
+          : stage === "quarter" || stage === "cuartos"
+          ? 140
+          : stage === "semi" || stage === "semifinal"
+          ? 150
+          : 160;
+      setPlayoffMatchNumber(String(baseNum + matchIndex + 1));
+      setPlayoffCouple1Id(
+        bracketMatch.pair1 && bracketMatch.pair1 !== "Por definir" && bracketMatch.pair1 !== "BYE"
+          ? bracketMatch.pair1
+          : ""
+      );
+      setPlayoffCouple2Id(
+        bracketMatch.pair2 && bracketMatch.pair2 !== "Por definir" && bracketMatch.pair2 !== "BYE"
+          ? bracketMatch.pair2
+          : ""
+      );
+      setPlayoffIsBye(bracketMatch.pair2 === "BYE");
+      setIsPlayoffMatchModalOpen(true);
+    }
   };
 
   const handleSavePlayoffMatch = async () => {
@@ -2240,64 +2338,65 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                 </div>
 
                 {/* Cuadro Gráfico (Bracket) */}
-                {bracketRounds.length === 0 ? (
-                  <Card className="p-10 text-center text-dark-400 border-dark-800 bg-dark-950/40">
-                    <Trophy className="w-12 h-12 text-dark-600 mx-auto mb-3" />
-                    <h4 className="text-base font-bold text-white mb-2">Aún no hay partidos conformados en el cuadro</h4>
-                    <p className="text-dark-400 text-sm max-w-md mx-auto mb-5 leading-relaxed">
-                      El cuadro de eliminación no se genera automáticamente. Creá cada partido seleccionando qué parejas clasificadas se enfrentan, o cargá la sugerencia oficial FAP como punto de partida.
-                    </p>
-                    <div className="flex items-center justify-center gap-3 flex-wrap">
+                <Card className="p-6 overflow-x-auto border-dark-800 bg-dark-950/40">
+                  <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                    <div>
+                      <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <Trophy className="w-4 h-4 text-amber-400" />
+                        Esquema Visual de Llaves (Cuadro de Eliminación)
+                      </h4>
+                      <p className="text-xs text-dark-400 mt-0.5">
+                        El administrador asigna manualmente las parejas a cada partido usando el botón &quot;Asignar Parejas&quot; o haciendo clic sobre el cruce.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
                       <Button
+                        size="sm"
                         onClick={openCreatePlayoffMatchModal}
                         disabled={isPending || zoneQualifications.qualified.length === 0}
-                        className="bg-emerald-500 hover:bg-emerald-600 text-dark-950 font-bold"
+                        className="bg-emerald-500 hover:bg-emerald-600 text-dark-950 font-bold text-xs"
                       >
-                        <Plus className="w-4 h-4 mr-1.5" />
-                        Armar Primer Partido
+                        <Plus className="w-3.5 h-3.5 mr-1" />
+                        Nuevo Partido
                       </Button>
                       <Button
                         variant="secondary"
+                        size="sm"
                         onClick={handleLoadFAPSuggestion}
                         disabled={isPending || zoneQualifications.qualified.length < 2}
+                        className="text-xs"
                       >
-                        <Sparkles className="w-4 h-4 text-amber-400 mr-1.5" />
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400 mr-1" />
                         Sugerir Cruces FAP
                       </Button>
                     </div>
-                  </Card>
-                ) : (
-                  <Card className="p-6 overflow-x-auto border-dark-800 bg-dark-950/40">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                        <Trophy className="w-4 h-4 text-amber-400" />
-                        Esquema Visual de Llaves
-                      </h4>
-                      <span className="text-xs text-dark-400">
-                        Hacé clic en cualquier partido para cargar o modificar el marcador
-                      </span>
-                    </div>
-                    <Bracket
-                      rounds={bracketRounds}
-                      pairNames={bracketPairNames}
-                      isAdmin={true}
-                      onMatchClick={(matchId, winningPairId, matchData) => {
-                        let found = matches.find((m) => m.id === matchId);
-                        if (!found && matchData) {
-                          found = matches.find(
-                            (m) =>
-                              m.stage !== "zone" &&
-                              ((m.couple1_id === matchData.pair1 && m.couple2_id === matchData.pair2) ||
-                               (m.couple1_id === matchData.pair2 && m.couple2_id === matchData.pair1))
-                          );
-                        }
-                        if (found) {
-                          openScoreModal(found, winningPairId);
-                        }
-                      }}
-                    />
-                  </Card>
-                )}
+                  </div>
+                  <Bracket
+                    rounds={bracketRounds}
+                    pairNames={bracketPairNames}
+                    isAdmin={true}
+                    onAssignClick={handleBracketAssignClick}
+                    onMatchClick={(matchId, winningPairId, matchData) => {
+                      let found = matches.find((m) => m.id === matchId);
+                      if (!found && matchData) {
+                        found = matches.find(
+                          (m) =>
+                            m.stage !== "zone" &&
+                            ((m.couple1_id === matchData.pair1 && m.couple2_id === matchData.pair2) ||
+                             (m.couple1_id === matchData.pair2 && m.couple2_id === matchData.pair1))
+                        );
+                      }
+                      if (found) {
+                        openScoreModal(found, winningPairId);
+                      } else if (matchData) {
+                        const roundObj = bracketRounds.find((r) => r.matches.some((m) => m.id === matchId));
+                        const stage = roundObj ? roundObj.round : "quarter";
+                        const matchIndex = roundObj ? roundObj.matches.findIndex((m) => m.id === matchId) : 0;
+                        handleBracketAssignClick(matchData, stage, matchIndex >= 0 ? matchIndex : 0);
+                      }
+                    }}
+                  />
+                </Card>
 
                 {/* Listado Detallado de Partidos del Cuadro de Eliminación */}
                 {matches.filter((m) => m.stage !== "zone").length > 0 && (

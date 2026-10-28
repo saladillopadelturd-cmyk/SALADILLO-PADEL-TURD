@@ -956,19 +956,36 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
 
   // Incondicional: Estructura del cuadro eliminatorio para pestaña playoffs
   const bracketRounds = useMemo(() => {
-    const STAGE_ORDER: Record<string, number> = {
-      round_of_32: 0,
-      dieciseisavos: 0,
-      round_of_16: 1,
-      octavos: 1,
-      quarter: 2,
-      cuartos: 2,
-      semi: 3,
-      semifinal: 3,
-      final: 4,
-      third_place: 5,
-      tercer_puesto: 5,
-    };
+    const qCount = allQualifiedPairs.length || couples.length || 8;
+    let stageSequence: { stage: string; count: number }[] = [];
+
+    if (qCount > 16) {
+      stageSequence = [
+        { stage: "round_of_32", count: 16 },
+        { stage: "round_of_16", count: 8 },
+        { stage: "quarter", count: 4 },
+        { stage: "semi", count: 2 },
+        { stage: "final", count: 1 },
+      ];
+    } else if (qCount > 8) {
+      stageSequence = [
+        { stage: "round_of_16", count: 8 },
+        { stage: "quarter", count: 4 },
+        { stage: "semi", count: 2 },
+        { stage: "final", count: 1 },
+      ];
+    } else if (qCount > 4) {
+      stageSequence = [
+        { stage: "quarter", count: 4 },
+        { stage: "semi", count: 2 },
+        { stage: "final", count: 1 },
+      ];
+    } else {
+      stageSequence = [
+        { stage: "semi", count: 2 },
+        { stage: "final", count: 1 },
+      ];
+    }
 
     const playoffMatches = displayMatches
       .filter((m) => m.stage !== "zone")
@@ -982,34 +999,57 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
         return a.id.localeCompare(b.id);
       });
 
-    // Solo dibujar los partidos que han sido conformados en la base de datos
-    if (playoffMatches.length > 0) {
-      const playoffRoundsMap: Record<string, { id?: string; pair1: string; pair2: string; winner?: string; score?: string; status?: string }[]> = {};
+    const matchesByStage: Record<string, Match[]> = {};
+    playoffMatches.forEach((m) => {
+      const stageStr = m.stage as string;
+      const stageNorm =
+        stageStr === "cuartos"
+          ? "quarter"
+          : stageStr === "octavos"
+          ? "round_of_16"
+          : stageStr === "semifinal"
+          ? "semi"
+          : stageStr === "dieciseisavos"
+          ? "round_of_32"
+          : m.stage;
+      if (!matchesByStage[stageNorm]) matchesByStage[stageNorm] = [];
+      matchesByStage[stageNorm].push(m);
+    });
 
-      playoffMatches.forEach((m) => {
-        const stage = m.stage;
-        if (!playoffRoundsMap[stage]) playoffRoundsMap[stage] = [];
-        const scoreStr = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
-        playoffRoundsMap[stage].push({
-          id: m.id,
-          pair1: m.couple1_id ?? "Por definir",
-          pair2: m.couple2_id ?? "Por definir",
-          winner: m.winner_couple_id ?? undefined,
-          score: scoreStr || undefined,
-          status: m.status,
-        });
-      });
+    const roundsResult = stageSequence.map(({ stage, count }) => {
+      const dbMatches = matchesByStage[stage] || [];
+      const stageMatches = [];
 
-      return Object.entries(playoffRoundsMap)
-        .sort(([roundA], [roundB]) => (STAGE_ORDER[roundA] ?? 99) - (STAGE_ORDER[roundB] ?? 99))
-        .map(([round, roundMatches]) => ({
-          round,
-          matches: roundMatches,
-        }));
-    }
+      for (let i = 0; i < count; i++) {
+        if (i < dbMatches.length) {
+          const m = dbMatches[i];
+          const scoreStr = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
+          stageMatches.push({
+            id: m.id,
+            pair1: m.couple1_id ?? "Por definir",
+            pair2: m.couple2_id ?? (m.score_set1?.includes("BYE") ? "BYE" : "Por definir"),
+            winner: m.winner_couple_id ?? undefined,
+            score: scoreStr || undefined,
+            status: m.status,
+          });
+        } else {
+          stageMatches.push({
+            id: `slot_${stage}_${i}`,
+            pair1: "Por definir",
+            pair2: "Por definir",
+            status: "pending",
+          });
+        }
+      }
 
-    return [];
-  }, [displayMatches]);
+      return {
+        round: stage,
+        matches: stageMatches,
+      };
+    });
+
+    return roundsResult;
+  }, [displayMatches, allQualifiedPairs.length, couples.length]);
 
   if (loading) {
     return (

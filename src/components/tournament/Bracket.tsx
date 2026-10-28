@@ -1,7 +1,7 @@
 "use client";
 
 import Card from "@/components/ui/Card";
-import { Trophy, Award, ChevronRight, Flame, Star, Zap, Shield, Medal, Sparkles } from "lucide-react";
+import { Trophy, Award, ChevronRight, Flame, Star, Zap, Shield, Medal, Sparkles, Users, Edit2, Plus } from "lucide-react";
 
 export interface BracketMatch {
   id?: string;
@@ -21,6 +21,7 @@ export interface BracketProps {
   rounds: BracketRound[];
   pairNames: Record<string, string>;
   onMatchClick?: (matchId: string, winningPairId?: string, match?: BracketMatch) => void;
+  onAssignClick?: (match: BracketMatch, stage: string, matchIndex: number) => void;
   isAdmin?: boolean;
 }
 
@@ -254,7 +255,7 @@ function getStageTheme(roundKey: string): StageTheme {
   return STAGE_THEMES[normalizedKey] ?? DEFAULT_STAGE_THEME;
 }
 
-export default function Bracket({ rounds, pairNames, onMatchClick, isAdmin }: BracketProps) {
+export default function Bracket({ rounds, pairNames, onMatchClick, onAssignClick, isAdmin }: BracketProps) {
   const canInteract = isAdmin !== false && Boolean(onMatchClick);
 
   if (!rounds || rounds.length === 0) {
@@ -369,27 +370,66 @@ export default function Bracket({ rounds, pairNames, onMatchClick, isAdmin }: Br
                             onClick={() => {
                               if (isMatchClickable && onMatchClick) {
                                 onMatchClick(matchIdentifier, match.winner || match.pair1, match);
+                              } else if (isAdmin && onAssignClick) {
+                                onAssignClick(match, round.round, matchIndex);
                               }
                             }}
                             className={`p-3.5 w-full border transition-all relative z-10 ${
-                              isMatchClickable ? "cursor-pointer hover:border-emerald-400/60 hover:scale-[1.01] active:scale-[0.99]" : ""
+                              isMatchClickable || (isAdmin && onAssignClick)
+                                ? "cursor-pointer hover:border-emerald-400/60 hover:scale-[1.01] active:scale-[0.99]"
+                                : ""
                             } ${
                               isFinal && match.winner
                                 ? "border-amber-400/70 bg-dark-900/95 shadow-xl shadow-amber-400/20"
                                 : `${theme.cardBorder} ${theme.cardBg} ${theme.cardHoverBorder} shadow-lg`
                             }`}
                           >
+                            {/* Cabecera de Asignación / Edición para el Administrador */}
+                            {isAdmin && onAssignClick && (
+                              <div className="flex items-center justify-between mb-2.5 pb-2 border-b border-dark-800/80 text-[11px]">
+                                <span className="font-mono text-dark-400 font-bold">
+                                  Partido #{matchIndex + 1}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onAssignClick(match, round.round, matchIndex);
+                                  }}
+                                  className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/30 transition-colors cursor-pointer"
+                                  title="Asignar manualmente las parejas de este partido"
+                                >
+                                  {isP1Pending || isP2Pending ? (
+                                    <>
+                                      <Plus className="w-3 h-3" />
+                                      <span>Asignar Parejas</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Edit2 className="w-3 h-3" />
+                                      <span>Cambiar Cruce</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            )}
+
                             {/* Pareja 1 */}
                             <div
                               onClick={(e) => {
                                 if (isP1Clickable && onMatchClick) {
                                   e.stopPropagation();
                                   onMatchClick(matchIdentifier, match.pair1, match);
+                                } else if (isAdmin && onAssignClick && isP1Pending) {
+                                  e.stopPropagation();
+                                  onAssignClick(match, round.round, matchIndex);
                                 }
                               }}
                               title={
                                 isP1Clickable
                                   ? "Hacé clic para marcar a esta pareja como ganadora y anotar el resultado"
+                                  : isAdmin && isP1Pending
+                                  ? "Hacé clic para asignar la Pareja 1"
                                   : undefined
                               }
                               className={`group/p1 flex items-center justify-between px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all mb-1.5 ${
@@ -398,7 +438,9 @@ export default function Bracket({ rounds, pairNames, onMatchClick, isAdmin }: Br
                                   : isP1Loser
                                   ? "bg-rose-500/20 text-rose-300 border-2 border-rose-500/60 font-medium shadow-sm shadow-rose-500/10"
                                   : isP1Pending
-                                  ? "bg-dark-950/40 text-dark-400 italic font-normal border border-dark-800/50"
+                                  ? isAdmin
+                                    ? "bg-dark-950/60 text-emerald-400/80 hover:text-emerald-300 hover:border-emerald-500/40 italic font-normal border border-dashed border-dark-700/80 cursor-pointer"
+                                    : "bg-dark-950/40 text-dark-400 italic font-normal border border-dark-800/50"
                                   : `bg-dark-950/70 text-slate-200 border border-dark-800 ${
                                       isP1Clickable
                                         ? "hover:bg-emerald-500/15 hover:border-emerald-400/70 hover:text-emerald-200 cursor-pointer"
@@ -447,11 +489,16 @@ export default function Bracket({ rounds, pairNames, onMatchClick, isAdmin }: Br
                                 if (isP2Clickable && onMatchClick) {
                                   e.stopPropagation();
                                   onMatchClick(matchIdentifier, match.pair2, match);
+                                } else if (isAdmin && onAssignClick && isP2Pending) {
+                                  e.stopPropagation();
+                                  onAssignClick(match, round.round, matchIndex);
                                 }
                               }}
                               title={
                                 isP2Clickable
                                   ? "Hacé clic para marcar a esta pareja como ganadora y anotar el resultado"
+                                  : isAdmin && isP2Pending
+                                  ? "Hacé clic para asignar la Pareja 2"
                                   : undefined
                               }
                               className={`group/p2 flex items-center justify-between px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
@@ -460,7 +507,9 @@ export default function Bracket({ rounds, pairNames, onMatchClick, isAdmin }: Br
                                   : isP2Loser
                                   ? "bg-rose-500/20 text-rose-300 border-2 border-rose-500/60 font-medium shadow-sm shadow-rose-500/10"
                                   : isP2Pending
-                                  ? "bg-dark-950/40 text-dark-400 italic font-normal border border-dark-800/50"
+                                  ? isAdmin
+                                    ? "bg-dark-950/60 text-sky-400/80 hover:text-sky-300 hover:border-sky-500/40 italic font-normal border border-dashed border-dark-700/80 cursor-pointer"
+                                    : "bg-dark-950/40 text-dark-400 italic font-normal border border-dark-800/50"
                                   : `bg-dark-950/70 text-slate-200 border border-dark-800 ${
                                       isP2Clickable
                                         ? "hover:bg-emerald-500/15 hover:border-emerald-400/70 hover:text-emerald-200 cursor-pointer"
