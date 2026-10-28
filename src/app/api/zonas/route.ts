@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { calculateOptimalZones } from "@/lib/tournament/zones";
+import { calculateOptimalZones, generateZoneMatches } from "@/lib/tournament/zones";
 
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];
@@ -12,19 +12,12 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 /**
- * Genera el fixture Round-Robin (todos contra todos) para una lista de parejas.
+ * Genera los cruces de zona aplicando la regla oficial SPT:
+ * - Para zona de 4 parejas: Pareja 1 vs Pareja 4, Pareja 2 vs Pareja 3, y luego Ganador vs Ganador, Perdedor vs Perdedor.
+ * - Para zona de 3 parejas: Round-Robin todos contra todos.
  */
-function generateRoundRobinPairs(coupleIds: string[]): { couple1Id: string; couple2Id: string }[] {
-  const matches: { couple1Id: string; couple2Id: string }[] = [];
-  for (let i = 0; i < coupleIds.length; i++) {
-    for (let j = i + 1; j < coupleIds.length; j++) {
-      matches.push({
-        couple1Id: coupleIds[i],
-        couple2Id: coupleIds[j],
-      });
-    }
-  }
-  return matches;
+function generateRoundRobinPairs(coupleIds: string[]): { couple1Id: string | null; couple2Id: string | null }[] {
+  return generateZoneMatches(coupleIds);
 }
 
 /**
@@ -355,8 +348,8 @@ export async function POST(request: Request) {
       zone_id: string;
       stage: string;
       match_number: number;
-      couple1_id: string;
-      couple2_id: string;
+      couple1_id: string | null;
+      couple2_id: string | null;
       status: string;
     }[] = [];
 
@@ -426,8 +419,8 @@ export async function POST(request: Request) {
       zone_id: string;
       stage: string;
       match_number: number;
-      couple1_id: string;
-      couple2_id: string;
+      couple1_id: string | null;
+      couple2_id: string | null;
       status: string;
     }[] = [];
 
@@ -629,8 +622,8 @@ export async function POST(request: Request) {
     zone_id: string;
     stage: string;
     match_number: number;
-    couple1_id: string;
-    couple2_id: string;
+    couple1_id: string | null;
+    couple2_id: string | null;
     status: string;
   }[] = [];
 

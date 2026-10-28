@@ -13,7 +13,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase/client";
 import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
 import { calculateRoundRobinStandings } from "@/lib/tournament/standings";
-import { calculateOptimalZones, getZoneSuggestions } from "@/lib/tournament/zones";
+import { calculateOptimalZones, getZoneSuggestions, getMatchZoneDisplayName, propagateZoneMatches, getZone4MatchInfo } from "@/lib/tournament/zones";
 import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel, isSumaCategory, formatScoreInput } from "@/lib/tournament/couples";
 import { findNextPlayoffMatchSlot, propagatePlayoffWinners, getStageName } from "@/lib/tournament/elimination";
 import ZoneCard from "@/components/tournament/ZoneCard";
@@ -146,20 +146,33 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
 
       if (matchesRes.data) {
         const rawMatches = matchesRes.data as unknown as Match[];
-        // Conformar y propagar automáticamente los ganadores de eliminatorias a las siguientes rondas del fixture
-        const { updatedMatches, updatesToPersist } = propagatePlayoffWinners(rawMatches);
+        // 1. Propagar automáticamente parejas en zonas de 4 (Ganadores y Perdedores)
+        const { updatedMatches: zoneUpdatedMatches, updatesToPersist: zoneUpdates } = propagateZoneMatches(rawMatches);
+
+        // 2. Conformar y propagar automáticamente los ganadores de eliminatorias a las siguientes rondas del fixture
+        const { updatedMatches, updatesToPersist: playoffUpdates } = propagatePlayoffWinners(zoneUpdatedMatches);
         setMatches(updatedMatches);
 
         // Auto-sanar y persistir slots en segundo plano si hubiera desincronización
-        if (updatesToPersist.length > 0) {
-          for (const update of updatesToPersist) {
-            const payload: Record<string, unknown> = {
-              updated_at: new Date().toISOString(),
-            };
-            if (update.couple1_id !== undefined) payload.couple1_id = update.couple1_id;
-            if (update.couple2_id !== undefined) payload.couple2_id = update.couple2_id;
-            await supabase.from("matches").update(payload).eq("id", update.id);
+        for (const update of zoneUpdates) {
+          const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+          if (update.couple1_id !== undefined) payload.couple1_id = update.couple1_id;
+          if (update.couple2_id !== undefined) payload.couple2_id = update.couple2_id;
+          if (update.resetScore) {
+            payload.winner_couple_id = null;
+            payload.status = "pending";
+            payload.score_set1 = null;
+            payload.score_set2 = null;
+            payload.score_super_tb = null;
           }
+          await supabase.from("matches").update(payload).eq("id", update.matchId);
+        }
+
+        for (const update of playoffUpdates) {
+          const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+          if (update.couple1_id !== undefined) payload.couple1_id = update.couple1_id;
+          if (update.couple2_id !== undefined) payload.couple2_id = update.couple2_id;
+          await supabase.from("matches").update(payload).eq("id", update.id);
         }
       }
     } catch (err: unknown) {
@@ -189,9 +202,9 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     return map;
   }, [couples, coupleNumberMap]);
 
-  const getCoupleLabel = (c?: Couple | null, coupleId?: string | null) => {
+  const getCoupleLabel = (c?: Couple | null, coupleId?: string | null, placeholder?: string) => {
     const coupleObj = c || (coupleId ? couples.find((item) => item.id === coupleId) : null);
-    if (!coupleObj) return "Por definir";
+    if (!coupleObj) return placeholder || "Por definir";
     const num = coupleNumberMap.get(coupleObj.id);
     return getCoupleLabelWithNumber(coupleObj, num);
   };
@@ -202,6 +215,14 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     return getCouplePlayersShortLabel(coupleObj);
   };
 
+  const getMatchZoneLabel = useCallback(
+    (m?: Match | null): string | null => {
+      if (!m) return null;
+      return getMatchZoneDisplayName(m, zones, couples, zoneCouplesMap);
+    },
+    [zones, couples, zoneCouplesMap]
+  );
+
   // Determinar si la Gran Final ya tiene ganador para habilitar liquidación de rankings
   const hasCompletedFinal = useMemo(() => {
     return matches.some(
@@ -211,9 +232,10 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     );
   }, [matches]);
 
-  // Propagación reactiva de ganadores de playoffs para la vista administrativa
+  // Propagación reactiva de ganadores de zonas y playoffs para la vista administrativa
   const { updatedMatches: displayMatches } = useMemo(() => {
-    return propagatePlayoffWinners(matches);
+    const { updatedMatches: zoneMatches } = propagateZoneMatches(matches);
+    return propagatePlayoffWinners(zoneMatches);
   }, [matches]);
 
   const bracketPairNames = useMemo(() => {
@@ -667,6 +689,36 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
             } else {
               advancedToNextStage = true;
             }
+          }
+        }
+
+        // Propagar avance en zonas de 4 parejas (Ganador vs Ganador y Perdedor vs Perdedor)
+        if (scoringMatch.stage === "zone" && scoringMatch.zone_id) {
+          const simulatedMatches = matches.map((m) =>
+            m.id === scoringMatch.id
+              ? {
+                  ...m,
+                  score_set1: formScoreSet1.trim(),
+                  score_set2: formScoreSet2.trim() || null,
+                  score_super_tb: formScoreSuperTb.trim() || null,
+                  winner_couple_id: formWinnerCoupleId,
+                  status: "completed" as const,
+                }
+              : m
+          );
+          const { updatesToPersist: zoneUpdates } = propagateZoneMatches(simulatedMatches);
+          for (const upd of zoneUpdates) {
+            const p: Record<string, unknown> = { updated_at: new Date().toISOString() };
+            if (upd.couple1_id !== undefined) p.couple1_id = upd.couple1_id;
+            if (upd.couple2_id !== undefined) p.couple2_id = upd.couple2_id;
+            if (upd.resetScore) {
+              p.winner_couple_id = null;
+              p.status = "pending";
+              p.score_set1 = null;
+              p.score_set2 = null;
+              p.score_super_tb = null;
+            }
+            await supabase.from("matches").update(p).eq("id", upd.matchId);
           }
         }
 
@@ -1576,11 +1628,13 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                         })
                         .map((m) => {
                           const isPlayoff = m.stage !== "zone";
-                          const isPendingRival = isPlayoff && (!m.couple1_id || !m.couple2_id);
+                          const zone4Info = getZone4MatchInfo(m, matches);
+                          const isPendingRival = !m.couple1_id || !m.couple2_id;
                           const hasResult = m.status === "completed" || Boolean(m.score_set1 || m.score_set2 || m.score_super_tb);
                           const isP1Winner = m.winner_couple_id && m.winner_couple_id === m.couple1_id;
                           const isP2Winner = m.winner_couple_id && m.winner_couple_id === m.couple2_id;
                           const scoreDisplay = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
+                          const zoneLabel = getMatchZoneLabel(m);
 
                           return (
                             <Card
@@ -1598,13 +1652,23 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                                   <Badge variant={m.stage === "zone" ? "info" : "success"} size="sm">
                                     {STAGE_LABELS[m.stage] ?? getStageName(m.stage)}
                                   </Badge>
+                                  {zoneLabel && (
+                                    <Badge variant="warning" size="sm" className="font-bold">
+                                      {zoneLabel}
+                                    </Badge>
+                                  )}
+                                  {zone4Info.roundBadge && (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-dark-800 text-sky-300 border border-dark-700">
+                                      {zone4Info.roundBadge}
+                                    </span>
+                                  )}
                                   <span className="text-dark-400 text-xs">Partido #{m.match_number ?? "-"}</span>
-                                  {isPlayoff && (
-                                    isPendingRival ? (
-                                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/10 text-amber-300 border border-amber-400/25">
-                                        Esperando Clasificados
-                                      </span>
-                                    ) : hasResult ? (
+                                  {isPendingRival ? (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/10 text-amber-300 border border-amber-400/25">
+                                      Esperando Clasificados
+                                    </span>
+                                  ) : isPlayoff ? (
+                                    hasResult ? (
                                       <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
                                         Clasificó Ganador
                                       </span>
@@ -1613,7 +1677,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                                         Cruce Confirmado
                                       </span>
                                     )
-                                  )}
+                                  ) : null}
                                 </div>
 
                                 {/* Parejas: hacer clic en la pareja ganadora para abrir modal de resultado */}
@@ -1640,7 +1704,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                                     }`}
                                   >
                                     {isP1Winner && <Trophy className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />}
-                                    <span className="truncate">{getCoupleLabel(m.couple1, m.couple1_id)}</span>
+                                    <span className="truncate">{getCoupleLabel(m.couple1, m.couple1_id, zone4Info.couple1Placeholder)}</span>
                                   </button>
 
                                   <span className="text-dark-500 font-bold px-1">vs</span>
@@ -1667,7 +1731,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                                     }`}
                                   >
                                     {isP2Winner && <Trophy className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />}
-                                    <span className="truncate">{getCoupleLabel(m.couple2, m.couple2_id)}</span>
+                                    <span className="truncate">{getCoupleLabel(m.couple2, m.couple2_id, zone4Info.couple2Placeholder)}</span>
                                   </button>
                                 </div>
 
@@ -1886,6 +1950,11 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                               <span className="text-xs text-dark-400">
                                 {STAGE_LABELS[m.stage] ?? getStageName(m.stage)}
                               </span>
+                              {getMatchZoneLabel(m) && (
+                                <Badge variant="warning" size="xs" className="font-bold">
+                                  {getMatchZoneLabel(m)}
+                                </Badge>
+                              )}
                               <span className="text-dark-500 text-xs">Partido #{m.match_number ?? "-"}</span>
                             </div>
                             <div className="text-sm font-semibold text-white">
@@ -1937,9 +2006,16 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
             <div className="space-y-4">
               {/* Información del Partido */}
               <div className="flex items-center justify-between p-2.5 bg-dark-950/80 rounded-xl border border-dark-800 text-xs">
-                <span className="font-bold text-dark-300">
-                  {schedulingMatch && (STAGE_LABELS[schedulingMatch.stage] ?? getStageName(schedulingMatch.stage))}
-                </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-dark-300">
+                    {schedulingMatch && (STAGE_LABELS[schedulingMatch.stage] ?? getStageName(schedulingMatch.stage))}
+                  </span>
+                  {schedulingMatch && getMatchZoneLabel(schedulingMatch) && (
+                    <Badge variant="warning" size="xs" className="font-bold">
+                      {getMatchZoneLabel(schedulingMatch)}
+                    </Badge>
+                  )}
+                </div>
                 <span className="font-mono text-dark-400">
                   Partido #{schedulingMatch?.match_number ?? "-"}
                 </span>

@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
 import { calculateRoundRobinStandings, getQualifiedPairs } from "@/lib/tournament/standings";
+import { getMatchZoneDisplayName, propagateZoneMatches, getZone4MatchInfo } from "@/lib/tournament/zones";
 import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel, isSumaCategory, formatScoreInput } from "@/lib/tournament/couples";
 import {
   propagatePlayoffWinners,
@@ -143,6 +144,14 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
 
   // Incondicional: Mapas de parejas y numeración correlativa
   const coupleNumberMap = useMemo(() => getCoupleNumberMap(couples), [couples]);
+
+  const getMatchZoneLabel = useCallback(
+    (m?: Match | null): string | null => {
+      if (!m) return null;
+      return getMatchZoneDisplayName(m, zones, couples, zoneCouplesMap);
+    },
+    [zones, couples, zoneCouplesMap]
+  );
 
   // Parejas disponibles para programar en un partido
   const availableCouplesForScheduling = useMemo(() => {
@@ -392,6 +401,36 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
         }
       }
 
+      // Propagar avance en zonas de 4 parejas (Ganador vs Ganador y Perdedor vs Perdedor)
+      if (scoringMatch.stage === "zone" && scoringMatch.zone_id) {
+        const simulatedMatches = matches.map((m) =>
+          m.id === scoringMatch.id
+            ? {
+                ...m,
+                score_set1: formScoreSet1.trim(),
+                score_set2: formScoreSet2.trim() || null,
+                score_super_tb: formScoreSuperTb.trim() || null,
+                winner_couple_id: formWinnerCoupleId,
+                status: "completed" as const,
+              }
+            : m
+        );
+        const { updatesToPersist: zoneUpdates } = propagateZoneMatches(simulatedMatches);
+        for (const upd of zoneUpdates) {
+          const p: Record<string, unknown> = { updated_at: new Date().toISOString() };
+          if (upd.couple1_id !== undefined) p.couple1_id = upd.couple1_id;
+          if (upd.couple2_id !== undefined) p.couple2_id = upd.couple2_id;
+          if (upd.resetScore) {
+            p.winner_couple_id = null;
+            p.status = "pending";
+            p.score_set1 = null;
+            p.score_set2 = null;
+            p.score_super_tb = null;
+          }
+          await supabase.from("matches").update(p).eq("id", upd.matchId);
+        }
+      }
+
       // Actualización optimista inmediata en memoria para que el cuadro refleje al instante la pareja ganadora en verde y avanzando
       setMatches((prev) => {
         let updated = prev.map((m) =>
@@ -548,7 +587,34 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
         .eq("tournament_id", id)
         .order("scheduled_time", { ascending: true, nullsFirst: false });
 
-      if (matchesData) setMatches(matchesData);
+      if (matchesData) {
+        const rawMatches = matchesData as Match[];
+        const { updatedMatches: zoneUpdatedMatches, updatesToPersist: zoneUpdates } = propagateZoneMatches(rawMatches);
+        const { updatedMatches, updatesToPersist: playoffUpdates } = propagatePlayoffWinners(zoneUpdatedMatches);
+        setMatches(updatedMatches);
+
+        if (isAdmin) {
+          for (const update of zoneUpdates) {
+            const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+            if (update.couple1_id !== undefined) payload.couple1_id = update.couple1_id;
+            if (update.couple2_id !== undefined) payload.couple2_id = update.couple2_id;
+            if (update.resetScore) {
+              payload.winner_couple_id = null;
+              payload.status = "pending";
+              payload.score_set1 = null;
+              payload.score_set2 = null;
+              payload.score_super_tb = null;
+            }
+            await supabase.from("matches").update(payload).eq("id", update.matchId);
+          }
+          for (const update of playoffUpdates) {
+            const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+            if (update.couple1_id !== undefined) payload.couple1_id = update.couple1_id;
+            if (update.couple2_id !== undefined) payload.couple2_id = update.couple2_id;
+            await supabase.from("matches").update(payload).eq("id", update.id);
+          }
+        }
+      }
     } catch (err) {
       console.error("Error loading tournament details:", err);
     } finally {
@@ -804,9 +870,10 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
     return { coupleNamesMap: names, couplePlayersMap: players, coupleByIdMap: byId };
   }, [couples, matches, coupleNumberMap]);
 
-  // Incondicional: Propagar reactivamente en memoria los ganadores de eliminatorias
+  // Incondicional: Propagar reactivamente en memoria los clasificados de zonas y eliminatorias
   const { updatedMatches: displayMatches } = useMemo(() => {
-    return propagatePlayoffWinners(matches);
+    const { updatedMatches: zoneMatches } = propagateZoneMatches(matches);
+    return propagatePlayoffWinners(zoneMatches);
   }, [matches]);
 
   // Incondicional: Ordenar fixture cronológicamente
@@ -1573,17 +1640,19 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredMatches.map((m) => {
                   const isPlayoff = m.stage !== "zone";
-                  const isPendingRival = isPlayoff && (!m.couple1_id || !m.couple2_id);
+                  const zone4Info = getZone4MatchInfo(m, matches);
+                  const isPendingRival = !m.couple1_id || !m.couple2_id;
                   const hasResult = m.status === "completed" || Boolean(m.score_set1 || m.score_set2 || m.score_super_tb);
                   const isFinished = m.status === "completed";
                   const isLive = m.status === "in_progress";
                   const isP1Winner = m.winner_couple_id && m.winner_couple_id === m.couple1_id;
                   const isP2Winner = m.winner_couple_id && m.winner_couple_id === m.couple2_id;
+                  const matchZoneLabel = getMatchZoneLabel(m);
 
-                  const c1Players = couplePlayersMap[m.couple1_id ?? ""] ?? (m.couple1 ? getCouplePlayersShortLabel(m.couple1) : "Por definir");
-                  const c2Players = couplePlayersMap[m.couple2_id ?? ""] ?? (m.couple2 ? getCouplePlayersShortLabel(m.couple2) : "Por definir");
-                  const c1Name = coupleNamesMap[m.couple1_id ?? ""] ?? (m.couple1 ? getCoupleLabelWithNumber(m.couple1, coupleNumberMap.get(m.couple1.id)) : "Por definir");
-                  const c2Name = coupleNamesMap[m.couple2_id ?? ""] ?? (m.couple2 ? getCoupleLabelWithNumber(m.couple2, coupleNumberMap.get(m.couple2.id)) : "Por definir");
+                  const c1Players = couplePlayersMap[m.couple1_id ?? ""] ?? (m.couple1 ? getCouplePlayersShortLabel(m.couple1) : (zone4Info.couple1Placeholder || "Por definir"));
+                  const c2Players = couplePlayersMap[m.couple2_id ?? ""] ?? (m.couple2 ? getCouplePlayersShortLabel(m.couple2) : (zone4Info.couple2Placeholder || "Por definir"));
+                  const c1Name = coupleNamesMap[m.couple1_id ?? ""] ?? (m.couple1 ? getCoupleLabelWithNumber(m.couple1, coupleNumberMap.get(m.couple1.id)) : (zone4Info.couple1Placeholder || "Por definir"));
+                  const c2Name = coupleNamesMap[m.couple2_id ?? ""] ?? (m.couple2 ? getCoupleLabelWithNumber(m.couple2, coupleNumberMap.get(m.couple2.id)) : (zone4Info.couple2Placeholder || "Por definir"));
 
                   return (
                     <Card
@@ -1609,12 +1678,22 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                               {getStageName(m.stage)}
                             </span>
                           )}
-                          {isPlayoff && (
-                            isPendingRival ? (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/10 text-amber-300 border border-amber-400/25">
-                                Esperando Rival
-                              </span>
-                            ) : hasResult ? (
+                          {matchZoneLabel && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/15 text-amber-300 border border-amber-400/30 uppercase tracking-wide">
+                              {matchZoneLabel}
+                            </span>
+                          )}
+                          {zone4Info.roundBadge && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-dark-800 text-sky-300 border border-dark-700">
+                              {zone4Info.roundBadge}
+                            </span>
+                          )}
+                          {isPendingRival ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/10 text-amber-300 border border-amber-400/25">
+                              Esperando Clasificados
+                            </span>
+                          ) : isPlayoff ? (
+                            hasResult ? (
                               <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
                                 CLASIFICÓ GANADOR
                               </span>
@@ -1623,7 +1702,7 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                                 Cruce Confirmado
                               </span>
                             )
-                          )}
+                          ) : null}
                           <span className="text-dark-500 text-[11px]">#{m.match_number ?? "-"}</span>
                         </div>
 
@@ -1947,9 +2026,16 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
         <div className="space-y-4">
           {/* Información del Partido */}
           <div className="flex items-center justify-between p-2.5 bg-dark-950/80 rounded-xl border border-dark-800 text-xs">
-            <span className="font-bold text-dark-300">
-              {schedulingMatch && (STATUS_LABELS[schedulingMatch.stage] || schedulingMatch.stage)}
-            </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-dark-300">
+                {schedulingMatch && (STATUS_LABELS[schedulingMatch.stage] || schedulingMatch.stage)}
+              </span>
+              {schedulingMatch && getMatchZoneLabel(schedulingMatch) && (
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/15 text-amber-300 border border-amber-400/30 uppercase tracking-wide">
+                  {getMatchZoneLabel(schedulingMatch)}
+                </span>
+              )}
+            </div>
             <span className="font-mono text-dark-400">
               Partido #{schedulingMatch?.match_number ?? "-"}
             </span>

@@ -184,6 +184,75 @@ export function calculateRoundRobinStandings(
     pointsCount[s.points] = (pointsCount[s.points] || 0) + 1;
   });
 
+  // Regla Oficial SPT para zona de 4 parejas (Ganador vs Ganador y Perdedor vs Perdedor):
+  // 1º = Ganador del partido de Ganadores
+  // 2º = Perdedor del partido de Ganadores
+  // 3º = Ganador del partido de Perdedores
+  // 4º = Perdedor del partido de Perdedores
+  if (pairIds.length === 4 && matches.length === 4) {
+    const sortedZoneMatches = [...matches].sort((a, b) => {
+      if (a.match_number != null && b.match_number != null && a.match_number !== b.match_number) {
+        return a.match_number - b.match_number;
+      }
+      if (a.created_at && b.created_at && a.created_at !== b.created_at) {
+        return a.created_at.localeCompare(b.created_at);
+      }
+      return (a.id || "").localeCompare(b.id || "");
+    });
+
+    const mWinners = sortedZoneMatches[2];
+    const mLosers = sortedZoneMatches[3];
+    const finalRanks = new Map<string, number>();
+
+    if (mWinners && mWinners.status === "completed" && mWinners.winner_couple_id) {
+      const winner = mWinners.winner_couple_id;
+      const loser = winner === mWinners.couple1_id ? mWinners.couple2_id : mWinners.couple1_id;
+      finalRanks.set(winner, 1);
+      if (loser) finalRanks.set(loser, 2);
+    }
+
+    if (mLosers && mLosers.status === "completed" && mLosers.winner_couple_id) {
+      const winner = mLosers.winner_couple_id;
+      const loser = winner === mLosers.couple1_id ? mLosers.couple2_id : mLosers.couple1_id;
+      finalRanks.set(winner, 3);
+      if (loser) finalRanks.set(loser, 4);
+    }
+
+    if (finalRanks.size > 0) {
+      list.sort((a, b) => {
+        const rankA = finalRanks.get(a.pairId);
+        const rankB = finalRanks.get(b.pairId);
+        if (rankA !== undefined && rankB !== undefined) return rankA - rankB;
+        if (rankA !== undefined) return -1;
+        if (rankB !== undefined) return 1;
+
+        if (b.points !== a.points) return b.points - a.points;
+        const setDiffA = a.setsWon - a.setsLost;
+        const setDiffB = b.setsWon - b.setsLost;
+        if (setDiffB !== setDiffA) return setDiffB - setDiffA;
+        const gameDiffA = a.gamesWon - a.gamesLost;
+        const gameDiffB = b.gamesWon - b.gamesLost;
+        return gameDiffB - gameDiffA;
+      });
+
+      return list.map((item, index) => ({
+        id: item.pairId,
+        zone_id: matches[0]?.zone_id || "",
+        couple_id: item.pairId,
+        pair_id: item.pairId,
+        matches_played: item.matchesPlayed,
+        matches_won: item.matchesWon,
+        matches_lost: item.matchesLost,
+        sets_won: item.setsWon,
+        sets_lost: item.setsLost,
+        games_won: item.gamesWon,
+        games_lost: item.gamesLost,
+        points: item.points,
+        position: index + 1,
+      }));
+    }
+  }
+
   // Ordenamiento con criterios de desempate oficiales SPT / FIP:
   // 1. Puntos totales
   // 2. Head-to-Head (si empatan exactamente 2 parejas en puntos)

@@ -54,6 +54,15 @@ import {
 } from "./rankings";
 
 import {
+  formatZoneDisplayName,
+  resolveMatchZone,
+  getMatchZoneDisplayName,
+  generateZoneMatches,
+  propagateZoneMatches,
+  getZone4MatchInfo,
+} from "./zones";
+
+import {
   getAssignedPlayerIdsInTournament,
   getAvailablePlayersForTournament,
   validateCoupleFormation,
@@ -1708,6 +1717,146 @@ export function runTournamentBusinessLogicTests(): TestResult {
   const isP2Loser = clickedWinningPairId !== semi0.pair2 && semi0.pair2 !== "BYE";
   assert(isP1Winner === true, "Pareja ganadora c_A1 se identifica para pintar de verde");
   assert(isP2Loser === true, "Pareja perdedora c_B2 se identifica para pintar de rojo");
+
+  // TEST 13: Visualización de Zonas en Programación de Partidos (resolveMatchZone y formatZoneDisplayName)
+  const dummyZones = [
+    { id: "z1", tournament_id: "t1", name: "Zona A", zone_number: 1, created_at: "" },
+    { id: "z2", tournament_id: "t1", name: "B", zone_number: 2, created_at: "" },
+    { id: "z3", tournament_id: "t1", name: "", zone_number: 3, created_at: "" },
+  ];
+
+  assert(formatZoneDisplayName("Zona A", 1) === "Zona A", "formatZoneDisplayName respeta Zona A");
+  assert(formatZoneDisplayName("B", 2) === "Zona B", "formatZoneDisplayName antepone Zona a B");
+  assert(formatZoneDisplayName("", 3) === "Zona 3", "formatZoneDisplayName usa número si name vacío");
+  assert(formatZoneDisplayName(null, 4) === "Zona 4", "formatZoneDisplayName usa número si name null");
+
+  const matchWithDirectZone = {
+    stage: "zone",
+    zone_id: "z1",
+    couple1_id: "c1",
+    couple2_id: "c2",
+  };
+  assert(getMatchZoneDisplayName(matchWithDirectZone, dummyZones) === "Zona A", "Resuelve Zona A por zone_id directo");
+
+  const matchWithoutDirectZone = {
+    stage: "zone",
+    zone_id: null,
+    couple1_id: "c_b1",
+    couple2_id: "c_b2",
+  };
+  const dummyCouples = [
+    { id: "c_b1", tournament_id: "t1", player1_id: "p1", player2_id: "p2", created_at: "", zone_id: "z2" },
+  ];
+  assert(getMatchZoneDisplayName(matchWithoutDirectZone, dummyZones, dummyCouples) === "Zona B", "Resuelve Zona B por couple1.zone_id");
+
+  const matchViaMap = {
+    stage: "zone",
+    zone_id: null,
+    couple1_id: "c_c1",
+    couple2_id: "c_c2",
+  };
+  const dummyZoneCouplesMap = { z3: ["c_c1", "c_c2"] };
+  assert(getMatchZoneDisplayName(matchViaMap, dummyZones, [], dummyZoneCouplesMap) === "Zona 3", "Resuelve Zona 3 por zoneCouplesMap");
+
+  const playoffMatch = {
+    stage: "quarter",
+    zone_id: "z1",
+    couple1_id: "c1",
+    couple2_id: "c2",
+  };
+  assert(getMatchZoneDisplayName(playoffMatch, dummyZones) === null, "Partidos de playoffs no retornan zona");
+
+  // TEST 14: Regla SPT Zona de 4 Parejas (Orden: P1 vs P4, P2 vs P3, Ganador vs Ganador, Perdedor vs Perdedor)
+  const zone4Couples = ["c_p1", "c_p2", "c_p3", "c_p4"];
+  const generated4 = generateZoneMatches(zone4Couples);
+
+  assert(generated4.length === 4, "Zona de 4 parejas genera exactamente 4 partidos");
+  assert(
+    generated4[0].couple1Id === "c_p1" && generated4[0].couple2Id === "c_p4",
+    "Partido 1 de zona de 4 es Pareja 1 vs Pareja 4"
+  );
+  assert(
+    generated4[1].couple1Id === "c_p2" && generated4[1].couple2Id === "c_p3",
+    "Partido 2 de zona de 4 es Pareja 2 vs Pareja 3"
+  );
+  assert(
+    generated4[2].couple1Id === null && generated4[2].couple2Id === null,
+    "Partido 3 (Ganador vs Ganador) inicia sin parejas asignadas"
+  );
+  assert(
+    generated4[3].couple1Id === null && generated4[3].couple2Id === null,
+    "Partido 4 (Perdedor vs Perdedor) inicia sin parejas asignadas"
+  );
+
+  // Verificación de badges e info contextual para zona de 4
+  const mock4Matches: Match[] = [
+    { id: "m1", tournament_id: "t1", stage: "zone", zone_id: "z4", match_number: 1, couple1_id: "c_p1", couple2_id: "c_p4", status: "scheduled", created_at: "" },
+    { id: "m2", tournament_id: "t1", stage: "zone", zone_id: "z4", match_number: 2, couple1_id: "c_p2", couple2_id: "c_p3", status: "scheduled", created_at: "" },
+    { id: "m3", tournament_id: "t1", stage: "zone", zone_id: "z4", match_number: 3, couple1_id: null, couple2_id: null, status: "scheduled", created_at: "" },
+    { id: "m4", tournament_id: "t1", stage: "zone", zone_id: "z4", match_number: 4, couple1_id: null, couple2_id: null, status: "scheduled", created_at: "" },
+  ];
+
+  const m1Info = getZone4MatchInfo(mock4Matches[0], mock4Matches);
+  const m2Info = getZone4MatchInfo(mock4Matches[1], mock4Matches);
+  const m3Info = getZone4MatchInfo(mock4Matches[2], mock4Matches);
+  const m4Info = getZone4MatchInfo(mock4Matches[3], mock4Matches);
+
+  assert(m1Info.roundBadge === "Ronda 1 (P1 vs P4)", "m1Info badge correcto");
+  assert(m2Info.roundBadge === "Ronda 1 (P2 vs P3)", "m2Info badge correcto");
+  assert(m3Info.roundBadge === "Ganador vs Ganador", "m3Info badge correcto (G vs G)");
+  assert(m4Info.roundBadge === "Perdedor vs Perdedor", "m4Info badge correcto (P vs P)");
+  assert(m3Info.couple1Placeholder === "Ganador P1 vs P4", "m3Info placeholder c1 correcto");
+  assert(m3Info.couple2Placeholder === "Ganador P2 vs P3", "m3Info placeholder c2 correcto");
+  assert(m4Info.couple1Placeholder === "Perdedor P1 vs P4", "m4Info placeholder c1 correcto");
+  assert(m4Info.couple2Placeholder === "Perdedor P2 vs P3", "m4Info placeholder c2 correcto");
+
+  // Propagación reactiva al completarse partidos 1 y 2
+  // Partido 1: c_p1 vence a c_p4
+  mock4Matches[0].status = "completed";
+  mock4Matches[0].winner_couple_id = "c_p1";
+  mock4Matches[0].score_set1 = "9-4";
+
+  // Partido 2: c_p2 vence a c_p3
+  mock4Matches[1].status = "completed";
+  mock4Matches[1].winner_couple_id = "c_p2";
+  mock4Matches[1].score_set1 = "9-6";
+
+  const { updatedMatches: propagated } = propagateZoneMatches(mock4Matches);
+  const propagatedM3 = propagated.find((m) => m.id === "m3");
+  const propagatedM4 = propagated.find((m) => m.id === "m4");
+
+  assert(
+    propagatedM3?.couple1_id === "c_p1" && propagatedM3?.couple2_id === "c_p2",
+    "Propagación Partido 3: Ganador M1 (c_p1) vs Ganador M2 (c_p2)"
+  );
+  assert(
+    propagatedM4?.couple1_id === "c_p4" && propagatedM4?.couple2_id === "c_p3",
+    "Propagación Partido 4: Perdedor M1 (c_p4) vs Perdedor M2 (c_p3)"
+  );
+
+  // Completar partidos 3 y 4 y validar cálculo de tabla de posiciones
+  // Partido 3 (Ganador vs Ganador): c_p1 vence a c_p2 -> c_p1 es 1°, c_p2 es 2°
+  propagatedM3!.status = "completed";
+  propagatedM3!.winner_couple_id = "c_p1";
+  propagatedM3!.score_set1 = "9-7";
+
+  // Partido 4 (Perdedor vs Perdedor): c_p3 vence a c_p4 -> c_p3 es 3°, c_p4 es 4°
+  propagatedM4!.status = "completed";
+  propagatedM4!.winner_couple_id = "c_p3";
+  propagatedM4!.score_set1 = "9-5";
+
+  const standingsZone4GSL = calculateRoundRobinStandings(propagated, zone4Couples);
+
+  assert(standingsZone4GSL[0].pair_id === "c_p1", "1° Lugar: c_p1 (ganó M1 y ganó M3 - Ganador de Zona)");
+  assert(standingsZone4GSL[1].pair_id === "c_p2", "2° Lugar: c_p2 (ganó M2 y perdió M3 - Clasificado como 2°)");
+  assert(standingsZone4GSL[2].pair_id === "c_p3", "3° Lugar: c_p3 (perdió M2 y ganó M4 - 3° puesto)");
+  assert(standingsZone4GSL[3].pair_id === "c_p4", "4° Lugar: c_p4 (perdió M1 y perdió M4 - 4° puesto eliminado)");
+
+  const qualifiedGSL = getQualifiedPairs(standingsZone4GSL);
+  const eliminatedGSL = getEliminatedPair(standingsZone4GSL);
+  assert(qualifiedGSL.length === 3, "Clasifican 3 parejas en zona de 4");
+  assert(qualifiedGSL[0].pair_id === "c_p1" && qualifiedGSL[1].pair_id === "c_p2", "Top 2 clasificados son c_p1 y c_p2");
+  assert(eliminatedGSL?.pair_id === "c_p4", "La 4ta pareja (c_p4) queda estrictamente eliminada");
 
   return {
     passed,

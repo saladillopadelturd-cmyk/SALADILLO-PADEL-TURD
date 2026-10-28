@@ -10,6 +10,8 @@
  * - El administrador confirma manualmente cuántas parejas por zona tendrá el torneo.
  */
 
+import type { Zone, Couple, Match, MatchStage } from "@/types/tournament";
+
 export interface ZoneDistribution {
   numZones: number;
   zoneSize: number;
@@ -445,4 +447,383 @@ export function calculateOptimalZones(
     missingPlayers,
     warningMessage,
   };
+}
+
+/**
+ * Da formato uniforme y legible al nombre de una zona.
+ * Ejemplos:
+ * - "Zona A", 1 -> "Zona A"
+ * - "A", 1 -> "Zona A"
+ * - null, 1 -> "Zona 1"
+ * - null, null -> "Zona"
+ */
+export function formatZoneDisplayName(
+  zoneName?: string | null,
+  zoneNumber?: number | null
+): string {
+  if (zoneName && zoneName.trim()) {
+    const trimmed = zoneName.trim();
+    if (/^zona\b/i.test(trimmed)) {
+      return trimmed;
+    }
+    return `Zona ${trimmed}`;
+  }
+  if (zoneNumber !== undefined && zoneNumber !== null) {
+    return `Zona ${zoneNumber}`;
+  }
+  return "Zona";
+}
+
+/**
+ * Resuelve a qué zona pertenece un partido, evaluando:
+ * 1. Propiedad `zone` ya poblada en el match.
+ * 2. `zone_id` directo en el match.
+ * 3. Asignación de parejas en `zoneCouplesMap`.
+ * 4. Propiedad `zone_id` en las parejas que disputan el partido.
+ */
+export function resolveMatchZone(
+  match: {
+    stage?: string;
+    zone_id?: string | null;
+    zone?: Zone;
+    couple1_id?: string | null;
+    couple2_id?: string | null;
+    couple1?: { id: string; zone_id?: string | null };
+    couple2?: { id: string; zone_id?: string | null };
+  },
+  zones: Zone[],
+  couples?: Couple[],
+  zoneCouplesMap?: Record<string, string[]>
+): Zone | null {
+  if (match.stage !== "zone") return null;
+
+  // 1. Relación zone ya presente
+  if (match.zone) return match.zone;
+
+  const zoneMap = new Map(zones.map((z) => [z.id, z]));
+
+  // 2. zone_id directo
+  if (match.zone_id && zoneMap.has(match.zone_id)) {
+    return zoneMap.get(match.zone_id)!;
+  }
+
+  const c1Id = match.couple1_id || match.couple1?.id;
+  const c2Id = match.couple2_id || match.couple2?.id;
+
+  // 3. Lookup en zoneCouplesMap
+  if (zoneCouplesMap && (c1Id || c2Id)) {
+    for (const [zId, cIds] of Object.entries(zoneCouplesMap)) {
+      if ((c1Id && cIds.includes(c1Id)) || (c2Id && cIds.includes(c2Id))) {
+        const z = zoneMap.get(zId);
+        if (z) return z;
+      }
+    }
+  }
+
+  // 4. Lookup en parejas (couple1 / couple2)
+  if (couples && couples.length > 0) {
+    if (c1Id) {
+      const c1 = couples.find((c) => c.id === c1Id);
+      if (c1?.zone_id && zoneMap.has(c1.zone_id)) {
+        return zoneMap.get(c1.zone_id)!;
+      }
+    }
+    if (c2Id) {
+      const c2 = couples.find((c) => c.id === c2Id);
+      if (c2?.zone_id && zoneMap.has(c2.zone_id)) {
+        return zoneMap.get(c2.zone_id)!;
+      }
+    }
+  }
+
+  // 5. Fallback por si couple1 o couple2 en el objeto tienen zone_id
+  if (match.couple1?.zone_id && zoneMap.has(match.couple1.zone_id)) {
+    return zoneMap.get(match.couple1.zone_id)!;
+  }
+  if (match.couple2?.zone_id && zoneMap.has(match.couple2.zone_id)) {
+    return zoneMap.get(match.couple2.zone_id)!;
+  }
+
+  return null;
+}
+
+/**
+ * Obtiene el nombre formateado de la zona a la que pertenece un partido.
+ * Retorna null si no es un partido de zona o si no se pudo determinar la zona.
+ */
+export function getMatchZoneDisplayName(
+  match: Parameters<typeof resolveMatchZone>[0],
+  zones: Zone[],
+  couples?: Couple[],
+  zoneCouplesMap?: Record<string, string[]>
+): string | null {
+  const zone = resolveMatchZone(match, zones, couples, zoneCouplesMap);
+  if (!zone) return null;
+  return formatZoneDisplayName(zone.name, zone.zone_number);
+}
+
+/**
+ * Genera los cruces de partidos para una zona según la cantidad de parejas.
+ * 
+ * Regla Oficial SPT para zona de 4 parejas:
+ * Los partidos se jugarán en el siguiente orden:
+ * 1. Pareja 1 vs Pareja 4
+ * 2. Pareja 2 vs Pareja 3
+ * 3. Ganador vs Ganador (se define tras finalizar partidos 1 y 2)
+ * 4. Perdedor vs Perdedor (se define tras finalizar partidos 1 y 2)
+ * 
+ * Para zonas de 3 parejas (o de otra cantidad): Round-Robin todos contra todos.
+ */
+export function generateZoneMatches(coupleIds: string[]): {
+  couple1Id: string | null;
+  couple2Id: string | null;
+}[] {
+  if (coupleIds.length === 4) {
+    return [
+      { couple1Id: coupleIds[0], couple2Id: coupleIds[3] },
+      { couple1Id: coupleIds[1], couple2Id: coupleIds[2] },
+      { couple1Id: null, couple2Id: null },
+      { couple1Id: null, couple2Id: null },
+    ];
+  }
+
+  const matches: { couple1Id: string | null; couple2Id: string | null }[] = [];
+  for (let i = 0; i < coupleIds.length; i++) {
+    for (let j = i + 1; j < coupleIds.length; j++) {
+      matches.push({
+        couple1Id: coupleIds[i],
+        couple2Id: coupleIds[j],
+      });
+    }
+  }
+  return matches;
+}
+
+export interface ZoneSlotUpdate {
+  matchId: string;
+  couple1_id?: string | null;
+  couple2_id?: string | null;
+  resetScore?: boolean;
+}
+
+/**
+ * Propaga automáticamente los clasificados a los partidos de Ganador vs Ganador
+ * y Perdedor vs Perdedor en zonas de 4 parejas cuando concluyen los cruces iniciales.
+ */
+export function propagateZoneMatches<
+  T extends {
+    id: string;
+    stage: MatchStage | string;
+    zone_id?: string | null;
+    match_number?: number | null;
+    couple1_id?: string | null;
+    couple2_id?: string | null;
+    winner_couple_id?: string | null;
+    status?: string | null;
+    score_set1?: string | null;
+    score_set2?: string | null;
+    score_super_tb?: string | null;
+    created_at?: string;
+  }
+>(
+  tournamentMatches: T[]
+): {
+  updatedMatches: T[];
+  updatesToPersist: ZoneSlotUpdate[];
+} {
+  const clonedMatches = tournamentMatches.map((m) => ({ ...m }));
+  const updatesMap = new Map<string, ZoneSlotUpdate>();
+
+  // Agrupar partidos de zona por zone_id
+  const zoneGroups = new Map<string, T[]>();
+  for (const m of clonedMatches) {
+    if (m.stage === "zone" && m.zone_id) {
+      if (!zoneGroups.has(m.zone_id)) zoneGroups.set(m.zone_id, []);
+      zoneGroups.get(m.zone_id)!.push(m);
+    }
+  }
+
+  for (const [, zMatches] of zoneGroups) {
+    // Aplica a zonas con exactamente 4 partidos generados
+    if (zMatches.length === 4) {
+      const sorted = [...zMatches].sort((a, b) => {
+        if (a.match_number != null && b.match_number != null && a.match_number !== b.match_number) {
+          return a.match_number - b.match_number;
+        }
+        if (a.created_at && b.created_at && a.created_at !== b.created_at) {
+          return a.created_at.localeCompare(b.created_at);
+        }
+        return (a.id || "").localeCompare(b.id || "");
+      });
+
+      const m1 = sorted[0]; // Cruce 1: P1 vs P4
+      const m2 = sorted[1]; // Cruce 2: P2 vs P3
+      const mWinners = sorted[2]; // Ganador vs Ganador
+      const mLosers = sorted[3];  // Perdedor vs Perdedor
+
+      // Determinar ganador y perdedor de m1
+      let winner1: string | null = null;
+      let loser1: string | null = null;
+      if (m1.status === "completed" && m1.winner_couple_id) {
+        winner1 = m1.winner_couple_id;
+        loser1 = winner1 === m1.couple1_id ? (m1.couple2_id || null) : (m1.couple1_id || null);
+      }
+
+      // Determinar ganador y perdedor de m2
+      let winner2: string | null = null;
+      let loser2: string | null = null;
+      if (m2.status === "completed" && m2.winner_couple_id) {
+        winner2 = m2.winner_couple_id;
+        loser2 = winner2 === m2.couple1_id ? (m2.couple2_id || null) : (m2.couple1_id || null);
+      }
+
+      // Actualizar mWinners (Ganador 1 vs Ganador 2)
+      let winnersNeedsUpdate = false;
+      const winnersUpdate: ZoneSlotUpdate = { matchId: mWinners.id };
+
+      if (mWinners.couple1_id !== winner1) {
+        mWinners.couple1_id = winner1;
+        winnersUpdate.couple1_id = winner1;
+        winnersNeedsUpdate = true;
+      }
+      if (mWinners.couple2_id !== winner2) {
+        mWinners.couple2_id = winner2;
+        winnersUpdate.couple2_id = winner2;
+        winnersNeedsUpdate = true;
+      }
+
+      if (
+        mWinners.winner_couple_id &&
+        mWinners.winner_couple_id !== mWinners.couple1_id &&
+        mWinners.winner_couple_id !== mWinners.couple2_id
+      ) {
+        mWinners.winner_couple_id = null;
+        mWinners.status = "pending";
+        mWinners.score_set1 = null;
+        mWinners.score_set2 = null;
+        mWinners.score_super_tb = null;
+        winnersUpdate.resetScore = true;
+        winnersNeedsUpdate = true;
+      }
+
+      if (winnersNeedsUpdate) {
+        updatesMap.set(mWinners.id, winnersUpdate);
+      }
+
+      // Actualizar mLosers (Perdedor 1 vs Perdedor 2)
+      let losersNeedsUpdate = false;
+      const losersUpdate: ZoneSlotUpdate = { matchId: mLosers.id };
+
+      if (mLosers.couple1_id !== loser1) {
+        mLosers.couple1_id = loser1;
+        losersUpdate.couple1_id = loser1;
+        losersNeedsUpdate = true;
+      }
+      if (mLosers.couple2_id !== loser2) {
+        mLosers.couple2_id = loser2;
+        losersUpdate.couple2_id = loser2;
+        losersNeedsUpdate = true;
+      }
+
+      if (
+        mLosers.winner_couple_id &&
+        mLosers.winner_couple_id !== mLosers.couple1_id &&
+        mLosers.winner_couple_id !== mLosers.couple2_id
+      ) {
+        mLosers.winner_couple_id = null;
+        mLosers.status = "pending";
+        mLosers.score_set1 = null;
+        mLosers.score_set2 = null;
+        mLosers.score_super_tb = null;
+        losersUpdate.resetScore = true;
+        losersNeedsUpdate = true;
+      }
+
+      if (losersNeedsUpdate) {
+        updatesMap.set(mLosers.id, losersUpdate);
+      }
+    }
+  }
+
+  return {
+    updatedMatches: clonedMatches,
+    updatesToPersist: Array.from(updatesMap.values()),
+  };
+}
+
+export type Zone4MatchRole = "initial_1_4" | "initial_2_3" | "winners" | "losers";
+
+/**
+ * Identifica el rol y etiquetas descriptivas de un partido dentro de una zona de 4 parejas.
+ */
+export function getZone4MatchInfo(
+  match: { id: string; stage?: string; zone_id?: string | null; match_number?: number | null; created_at?: string },
+  allMatches: { id: string; stage?: string; zone_id?: string | null; match_number?: number | null; created_at?: string }[]
+): {
+  isZone4: boolean;
+  role?: Zone4MatchRole;
+  roundBadge?: string;
+  roundName?: string;
+  couple1Placeholder?: string;
+  couple2Placeholder?: string;
+} {
+  if (match.stage !== "zone" || !match.zone_id) {
+    return { isZone4: false };
+  }
+
+  const zoneMatches = allMatches
+    .filter((m) => m.stage === "zone" && m.zone_id === match.zone_id)
+    .sort((a, b) => {
+      if (a.match_number != null && b.match_number != null && a.match_number !== b.match_number) {
+        return a.match_number - b.match_number;
+      }
+      if (a.created_at && b.created_at && a.created_at !== b.created_at) {
+        return a.created_at.localeCompare(b.created_at);
+      }
+      return (a.id || "").localeCompare(b.id || "");
+    });
+
+  if (zoneMatches.length !== 4) {
+    return { isZone4: false };
+  }
+
+  const index = zoneMatches.findIndex((m) => m.id === match.id);
+  if (index === 0) {
+    return {
+      isZone4: true,
+      role: "initial_1_4",
+      roundBadge: "Ronda 1 (P1 vs P4)",
+      roundName: "Ronda 1 • Pareja 1 vs Pareja 4",
+    };
+  }
+  if (index === 1) {
+    return {
+      isZone4: true,
+      role: "initial_2_3",
+      roundBadge: "Ronda 1 (P2 vs P3)",
+      roundName: "Ronda 1 • Pareja 2 vs Pareja 3",
+    };
+  }
+  if (index === 2) {
+    return {
+      isZone4: true,
+      role: "winners",
+      roundBadge: "Ganador vs Ganador",
+      roundName: "Ronda 2 • Ganador vs Ganador",
+      couple1Placeholder: "Ganador P1 vs P4",
+      couple2Placeholder: "Ganador P2 vs P3",
+    };
+  }
+  if (index === 3) {
+    return {
+      isZone4: true,
+      role: "losers",
+      roundBadge: "Perdedor vs Perdedor",
+      roundName: "Ronda 2 • Perdedor vs Perdedor",
+      couple1Placeholder: "Perdedor P1 vs P4",
+      couple2Placeholder: "Perdedor P2 vs P3",
+    };
+  }
+
+  return { isZone4: false };
 }

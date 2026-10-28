@@ -117,6 +117,7 @@ export interface Match {
   couple1?: Couple;
   couple2?: Couple;
   winner_couple?: Couple;
+  zone?: Zone;
   pair1?: Couple;
   pair2?: Couple;
   pair1_id?: string;

@@ -11,6 +11,7 @@ interface MatchCardProps {
   match: Match;
   pair1?: Pair;
   pair2?: Pair;
+  zoneName?: string;
   hasGoldenPoint?: boolean;
   onEdit?: (match: Match) => void;
 }
@@ -19,6 +20,7 @@ export default function MatchCard({
   match,
   pair1,
   pair2,
+  zoneName,
   hasGoldenPoint = true,
   onEdit,
 }: MatchCardProps) {
@@ -108,6 +110,12 @@ export default function MatchCard({
           ) : (
             <Badge variant="info" size="sm">
               Programado
+            </Badge>
+          )}
+
+          {zoneName && (
+            <Badge variant="warning" size="sm" className="font-bold">
+              {zoneName}
             </Badge>
           )}
 
