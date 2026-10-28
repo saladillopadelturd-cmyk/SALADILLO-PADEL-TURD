@@ -907,6 +907,10 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                       ⭐ Punto de Oro (40-40)
                     </span>
                   )}
+                  <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-amber-400/15 text-amber-300 border border-amber-400/30 flex items-center gap-1 shadow-sm">
+                    <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                    {tournament.points_awarded ?? 1000} Pts Oficiales
+                  </span>
                 </div>
                 <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
                   {tournament.name}
@@ -996,7 +1000,71 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                       {tournament.golden_point ? "Activo permanente (Golden Point)" : "Inactivo"}
                     </p>
                   </div>
+                  <div>
+                    <label className="block text-dark-400 mb-1">Puntos que Otorga</label>
+                    <p className="text-amber-300 font-bold text-base flex items-center gap-1.5">
+                      <Trophy className="w-4 h-4 text-amber-400" />
+                      {tournament.points_awarded ?? 1000} Puntos Totales (P)
+                    </p>
+                  </div>
                 </div>
+
+                {/* Desglose de Puntos que Otorga el Torneo */}
+                {(() => {
+                  const pVal = tournament.points_awarded ?? 1000;
+                  return (
+                    <div className="mt-6 p-5 bg-dark-900/80 rounded-2xl border border-amber-500/25 space-y-3.5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <h4 className="text-sm font-black text-amber-300 uppercase tracking-wider flex items-center gap-2">
+                          <Trophy className="w-4 h-4 text-amber-400" />
+                          Escala Oficial de Puntos del Torneo ({pVal.toLocaleString("es-AR")} pts)
+                        </h4>
+                        <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-400/10 text-amber-300 border border-amber-400/30 font-semibold self-start sm:self-auto">
+                          100% individual a cada jugador
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-dark-300 leading-relaxed">
+                        Los puntos totales (<b className="text-white">P = {pVal}</b>) se distribuyen de forma individual a cada jugador según la instancia alcanzada por la pareja. Las parejas eliminadas en zona suman la Base de Participación (3%) más un bonus del 2% por cada partido ganado en su grupo.
+                      </p>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                        <div className="bg-dark-950/80 p-3 rounded-xl border border-amber-500/30">
+                          <span className="text-dark-400 block text-[11px]">Campeones (100%)</span>
+                          <span className="text-amber-300 font-black text-base">{Math.round(pVal * 1.0)} pts</span>
+                        </div>
+                        <div className="bg-dark-950/80 p-3 rounded-xl border border-dark-800">
+                          <span className="text-dark-400 block text-[11px]">Subcampeones (60%)</span>
+                          <span className="text-white font-bold">{Math.round(pVal * 0.6)} pts</span>
+                        </div>
+                        <div className="bg-dark-950/80 p-3 rounded-xl border border-dark-800">
+                          <span className="text-dark-400 block text-[11px]">Semifinalistas (35%)</span>
+                          <span className="text-white font-bold">{Math.round(pVal * 0.35)} pts</span>
+                        </div>
+                        <div className="bg-dark-950/80 p-3 rounded-xl border border-dark-800">
+                          <span className="text-dark-400 block text-[11px]">Cuartos de final (20%)</span>
+                          <span className="text-white font-bold">{Math.round(pVal * 0.2)} pts</span>
+                        </div>
+                        <div className="bg-dark-950/80 p-3 rounded-xl border border-dark-800">
+                          <span className="text-dark-400 block text-[11px]">Octavos de final (12%)</span>
+                          <span className="text-white font-bold">{Math.round(pVal * 0.12)} pts</span>
+                        </div>
+                        <div className="bg-dark-950/80 p-3 rounded-xl border border-dark-800">
+                          <span className="text-dark-400 block text-[11px]">16avos de final (7%)</span>
+                          <span className="text-white font-bold">{Math.round(pVal * 0.07)} pts</span>
+                        </div>
+                        <div className="bg-dark-950/80 p-3 rounded-xl border border-emerald-500/25">
+                          <span className="text-emerald-400/80 block text-[11px]">Base Participación (3%)</span>
+                          <span className="text-emerald-400 font-bold">{Math.round(pVal * 0.03)} pts</span>
+                        </div>
+                        <div className="bg-dark-950/80 p-3 rounded-xl border border-sky-500/25">
+                          <span className="text-sky-400/80 block text-[11px]">Bonus Zona (+2% c/victoria)</span>
+                          <span className="text-sky-400 font-bold">+{Math.round(pVal * 0.02)} pts c/u</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Sección Parejas del Torneo en la Ficha Técnica */}
                 <div className="mt-8 pt-6 border-t border-dark-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-dark-900/60 p-5 rounded-2xl border border-dark-750">

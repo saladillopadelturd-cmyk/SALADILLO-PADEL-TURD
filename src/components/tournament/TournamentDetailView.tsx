@@ -1124,6 +1124,10 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                   ⭐ Punto de Oro (40-40)
                 </span>
               )}
+              <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-amber-400/15 text-amber-300 border border-amber-400/35 flex items-center gap-1 shadow-sm shadow-amber-400/10">
+                <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                Torneo {tournament.points_awarded ?? 1000} Puntos
+              </span>
             </div>
             <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
               {tournament.name}

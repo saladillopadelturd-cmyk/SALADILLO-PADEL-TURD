@@ -112,6 +112,7 @@ export default function AdminTorneosPage() {
   const [formModalidad, setFormModalidad] = useState("american_9games");
   const [formParejasZona, setFormParejasZona] = useState("4");
   const [formNumZonas, setFormNumZonas] = useState("2");
+  const [formPuntosOtorga, setFormPuntosOtorga] = useState<string>("1000");
   const [simulatedCouplesCount, setSimulatedCouplesCount] = useState<number>(12);
   const [customZonesEnabled, setCustomZonesEnabled] = useState<boolean>(false);
 
@@ -153,6 +154,7 @@ export default function AdminTorneosPage() {
     setFormModalidad("american_9games");
     setFormParejasZona("4");
     setFormNumZonas("2");
+    setFormPuntosOtorga("1000");
     setCustomZonesEnabled(false);
     setSimulatedCouplesCount(12);
     setShowCreate(true);
@@ -167,6 +169,7 @@ export default function AdminTorneosPage() {
     setFormModalidad(t.game_mode);
     setFormParejasZona(String(t.zone_size));
     setFormNumZonas(String(t.num_zones));
+    setFormPuntosOtorga(String(t.points_awarded ?? 1000));
     setEditing(t);
   };
 
@@ -190,6 +193,7 @@ export default function AdminTorneosPage() {
           game_mode: formModalidad,
           zone_size: Number(formParejasZona),
           num_zones: Number(formNumZonas),
+          points_awarded: Math.max(1, Number(formPuntosOtorga) || 1000),
           status: "draft",
         };
 
@@ -199,6 +203,17 @@ export default function AdminTorneosPage() {
           .insert(currentPayload)
           .select()
           .single();
+
+        // Resiliencia 0: si la columna 'points_awarded' no fue migrada aún en Supabase remoto
+        if (result.error && (result.error.message.includes("points_awarded") || result.error.code === "PGRST204")) {
+          console.warn("Columna points_awarded aún no migrada en Supabase, reintentando sin ella:", result.error);
+          delete currentPayload.points_awarded;
+          result = await supabase
+            .from("tournaments")
+            .insert(currentPayload)
+            .select()
+            .single();
+        }
 
         // Resiliencia 1: si la columna 'gender' no fue migrada aún en Supabase remoto
         if (result.error && (result.error.message.includes("gender") || result.error.code === "PGRST204")) {
@@ -229,6 +244,7 @@ export default function AdminTorneosPage() {
             gender: formSexo,
             category: formCategoria,
             game_mode: formModalidad as Tournament["game_mode"],
+            points_awarded: Math.max(1, Number(formPuntosOtorga) || 1000),
           };
           setTournaments((prev) => [localData, ...prev]);
           setShowCreate(false);
@@ -273,6 +289,7 @@ export default function AdminTorneosPage() {
           game_mode: formModalidad as Tournament["game_mode"],
           zone_size: Number(formParejasZona),
           num_zones: Number(formNumZonas),
+          points_awarded: Math.max(1, Number(formPuntosOtorga) || 1000),
         };
 
         let currentPayload: Record<string, any> = { ...payload };
@@ -282,6 +299,18 @@ export default function AdminTorneosPage() {
           .eq("id", editing.id)
           .select()
           .single();
+
+        // Resiliencia 0: si la columna 'points_awarded' no fue migrada aún en Supabase remoto
+        if (result.error && (result.error.message.includes("points_awarded") || result.error.code === "PGRST204")) {
+          console.warn("Columna points_awarded aún no migrada en Supabase, reintentando sin ella:", result.error);
+          delete currentPayload.points_awarded;
+          result = await supabase
+            .from("tournaments")
+            .update(currentPayload)
+            .eq("id", editing.id)
+            .select()
+            .single();
+        }
 
         // Resiliencia 1: si la columna 'gender' no existe aún en Supabase remoto
         if (result.error && (result.error.message.includes("gender") || result.error.code === "PGRST204")) {
@@ -314,6 +343,7 @@ export default function AdminTorneosPage() {
             gender: formSexo,
             category: formCategoria,
             game_mode: formModalidad as Tournament["game_mode"],
+            points_awarded: Math.max(1, Number(formPuntosOtorga) || 1000),
           };
           setTournaments((prev) =>
             prev.map((t) => (t.id === editing.id ? localData : t))
@@ -461,6 +491,10 @@ export default function AdminTorneosPage() {
                         Cat. {tournament.category || "5ta"}
                       </span>
                     )}
+                    <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-amber-400/10 text-amber-300 border border-amber-400/30 flex items-center gap-1">
+                      <Trophy className="w-3 h-3 text-amber-400" />
+                      {tournament.points_awarded ?? 1000} pts
+                    </span>
                   </div>
                 </div>
                 <div className="self-start md:self-center">
@@ -581,6 +615,93 @@ export default function AdminTorneosPage() {
               onChange={(e) => setFormCategoria(e.target.value)}
               options={CATEGORY_OPTIONS}
             />
+          </div>
+
+          {/* Campo PUNTOS QUE OTORGA */}
+          <div className="p-3.5 bg-dark-900/90 rounded-2xl border border-amber-500/35 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <label className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Trophy className="w-4 h-4 text-amber-400" />
+                PUNTOS QUE OTORGA
+              </label>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] text-dark-400 font-medium">Presets:</span>
+                {[1000, 500, 250, 100].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setFormPuntosOtorga(String(preset))}
+                    className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold transition-all ${
+                      formPuntosOtorga === String(preset)
+                        ? "bg-amber-400 text-dark-950 shadow-sm"
+                        : "bg-dark-800 text-dark-300 hover:text-white border border-dark-700"
+                    }`}
+                  >
+                    {preset} pts
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+              <Input
+                label="Puntos Totales (P)"
+                type="number"
+                min={1}
+                value={formPuntosOtorga}
+                onChange={(e) => setFormPuntosOtorga(e.target.value)}
+                placeholder="Ej: 1000"
+              />
+              <p className="text-[11px] text-dark-300 leading-relaxed">
+                Cada jugador suma individualmente el <b className="text-white">100% de los puntos</b> que obtiene su pareja en el torneo.
+              </p>
+            </div>
+
+            {/* Previsualización dinámica de la escala porcentual */}
+            {(() => {
+              const pVal = Math.max(1, Number(formPuntosOtorga) || 1000);
+              return (
+                <div className="pt-2 border-t border-dark-800 space-y-1.5">
+                  <span className="text-[10px] text-dark-400 uppercase tracking-wider font-bold block">
+                    Distribución porcentual sobre {pVal.toLocaleString("es-AR")} pts:
+                  </span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                    <div className="bg-dark-950/80 p-2 rounded-xl border border-amber-500/20">
+                      <span className="text-dark-400 block text-[10px]">Campeones (100%)</span>
+                      <span className="text-amber-300 font-black text-sm">{Math.round(pVal * 1.0)} pts</span>
+                    </div>
+                    <div className="bg-dark-950/80 p-2 rounded-xl border border-dark-800">
+                      <span className="text-dark-400 block text-[10px]">Subcampeones (60%)</span>
+                      <span className="text-slate-200 font-bold">{Math.round(pVal * 0.6)} pts</span>
+                    </div>
+                    <div className="bg-dark-950/80 p-2 rounded-xl border border-dark-800">
+                      <span className="text-dark-400 block text-[10px]">Semifinalistas (35%)</span>
+                      <span className="text-slate-200 font-bold">{Math.round(pVal * 0.35)} pts</span>
+                    </div>
+                    <div className="bg-dark-950/80 p-2 rounded-xl border border-dark-800">
+                      <span className="text-dark-400 block text-[10px]">Cuartos de final (20%)</span>
+                      <span className="text-slate-200 font-bold">{Math.round(pVal * 0.2)} pts</span>
+                    </div>
+                    <div className="bg-dark-950/80 p-2 rounded-xl border border-dark-800">
+                      <span className="text-dark-400 block text-[10px]">Octavos de final (12%)</span>
+                      <span className="text-slate-200 font-bold">{Math.round(pVal * 0.12)} pts</span>
+                    </div>
+                    <div className="bg-dark-950/80 p-2 rounded-xl border border-dark-800">
+                      <span className="text-dark-400 block text-[10px]">16avos de final (7%)</span>
+                      <span className="text-slate-200 font-bold">{Math.round(pVal * 0.07)} pts</span>
+                    </div>
+                    <div className="bg-dark-950/80 p-2 rounded-xl border border-emerald-500/20">
+                      <span className="text-emerald-400/80 block text-[10px]">Base Participación (3%)</span>
+                      <span className="text-emerald-400 font-bold">{Math.round(pVal * 0.03)} pts</span>
+                    </div>
+                    <div className="bg-dark-950/80 p-2 rounded-xl border border-sky-500/20">
+                      <span className="text-sky-400/80 block text-[10px]">Bonus Zona (+2% c/victoria)</span>
+                      <span className="text-sky-400 font-bold">+{Math.round(pVal * 0.02)} pts c/u</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           <Input
@@ -777,6 +898,93 @@ export default function AdminTorneosPage() {
               onChange={(e) => setFormCategoria(e.target.value)}
               options={CATEGORY_OPTIONS}
             />
+          </div>
+
+          {/* Campo PUNTOS QUE OTORGA */}
+          <div className="p-3.5 bg-dark-900/90 rounded-2xl border border-amber-500/35 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <label className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Trophy className="w-4 h-4 text-amber-400" />
+                PUNTOS QUE OTORGA
+              </label>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] text-dark-400 font-medium">Presets:</span>
+                {[1000, 500, 250, 100].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setFormPuntosOtorga(String(preset))}
+                    className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold transition-all ${
+                      formPuntosOtorga === String(preset)
+                        ? "bg-amber-400 text-dark-950 shadow-sm"
+                        : "bg-dark-800 text-dark-300 hover:text-white border border-dark-700"
+                    }`}
+                  >
+                    {preset} pts
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+              <Input
+                label="Puntos Totales (P)"
+                type="number"
+                min={1}
+                value={formPuntosOtorga}
+                onChange={(e) => setFormPuntosOtorga(e.target.value)}
+                placeholder="Ej: 1000"
+              />
+              <p className="text-[11px] text-dark-300 leading-relaxed">
+                Cada jugador suma individualmente el <b className="text-white">100% de los puntos</b> que obtiene su pareja en el torneo.
+              </p>
+            </div>
+
+            {/* Previsualización dinámica de la escala porcentual */}
+            {(() => {
+              const pVal = Math.max(1, Number(formPuntosOtorga) || 1000);
+              return (
+                <div className="pt-2 border-t border-dark-800 space-y-1.5">
+                  <span className="text-[10px] text-dark-400 uppercase tracking-wider font-bold block">
+                    Distribución porcentual sobre {pVal.toLocaleString("es-AR")} pts:
+                  </span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                    <div className="bg-dark-950/80 p-2 rounded-xl border border-amber-500/20">
+                      <span className="text-dark-400 block text-[10px]">Campeones (100%)</span>
+                      <span className="text-amber-300 font-black text-sm">{Math.round(pVal * 1.0)} pts</span>
+                    </div>
+                    <div className="bg-dark-950/80 p-2 rounded-xl border border-dark-800">
+                      <span className="text-dark-400 block text-[10px]">Subcampeones (60%)</span>
+                      <span className="text-slate-200 font-bold">{Math.round(pVal * 0.6)} pts</span>
+                    </div>
+                    <div className="bg-dark-950/80 p-2 rounded-xl border border-dark-800">
+                      <span className="text-dark-400 block text-[10px]">Semifinalistas (35%)</span>
+                      <span className="text-slate-200 font-bold">{Math.round(pVal * 0.35)} pts</span>
+                    </div>
+                    <div className="bg-dark-950/80 p-2 rounded-xl border border-dark-800">
+                      <span className="text-dark-400 block text-[10px]">Cuartos de final (20%)</span>
+                      <span className="text-slate-200 font-bold">{Math.round(pVal * 0.2)} pts</span>
+                    </div>
+                    <div className="bg-dark-950/80 p-2 rounded-xl border border-dark-800">
+                      <span className="text-dark-400 block text-[10px]">Octavos de final (12%)</span>
+                      <span className="text-slate-200 font-bold">{Math.round(pVal * 0.12)} pts</span>
+                    </div>
+                    <div className="bg-dark-950/80 p-2 rounded-xl border border-dark-800">
+                      <span className="text-dark-400 block text-[10px]">16avos de final (7%)</span>
+                      <span className="text-slate-200 font-bold">{Math.round(pVal * 0.07)} pts</span>
+                    </div>
+                    <div className="bg-dark-950/80 p-2 rounded-xl border border-emerald-500/20">
+                      <span className="text-emerald-400/80 block text-[10px]">Base Participación (3%)</span>
+                      <span className="text-emerald-400 font-bold">{Math.round(pVal * 0.03)} pts</span>
+                    </div>
+                    <div className="bg-dark-950/80 p-2 rounded-xl border border-sky-500/20">
+                      <span className="text-sky-400/80 block text-[10px]">Bonus Zona (+2% c/victoria)</span>
+                      <span className="text-sky-400 font-bold">+{Math.round(pVal * 0.02)} pts c/u</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           <Input

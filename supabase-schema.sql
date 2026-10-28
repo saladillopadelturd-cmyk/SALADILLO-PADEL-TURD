@@ -86,11 +86,14 @@ CREATE TABLE public.tournaments (
   zone_size INT NOT NULL DEFAULT 3 CHECK (zone_size IN (3, 4)),
   num_zones INT NOT NULL DEFAULT 2 CHECK (num_zones >= 1 AND num_zones <= 32),
   golden_point BOOLEAN NOT NULL DEFAULT TRUE, -- Siempre punto de oro en 40-40
+  points_awarded INT NOT NULL DEFAULT 1000 CHECK (points_awarded > 0), -- Puntos totales (P) que otorga el torneo
   location TEXT,
   created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS points_awarded INT NOT NULL DEFAULT 1000;
 
 -- ==============================================================================
 -- 5. TABLE: couples (parejas inscritas por torneo)

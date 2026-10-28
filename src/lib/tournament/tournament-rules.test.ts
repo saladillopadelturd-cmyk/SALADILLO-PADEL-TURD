@@ -45,6 +45,7 @@ import {
 
 import {
   SPT_POINTS_SCALE,
+  SPT_DISTRIBUTION_PERCENTAGES,
   getCoupleKey,
   calculateTournamentStageStats,
   processDoubleRankingUpdate,
@@ -502,23 +503,103 @@ export function runTournamentBusinessLogicTests(): TestResult {
   // ==========================================================================
   // 6. SISTEMA DE DOBLE RANKING (PAREJA vs INDIVIDUAL)
   // ==========================================================================
-  // Escala de puntos oficial SPT
-  assert(SPT_POINTS_SCALE.champion === 100, "Campeón = 100 pts");
-  assert(SPT_POINTS_SCALE.runner_up === 70, "Subcampeón = 70 pts");
-  assert(SPT_POINTS_SCALE.semifinalist === 50, "Semifinalista = 50 pts");
-  assert(SPT_POINTS_SCALE.quarterfinalist === 30, "Cuartofinalista = 30 pts");
-  assert(SPT_POINTS_SCALE.round_of_16 === 15, "Octavofinalista = 15 pts");
-  assert(SPT_POINTS_SCALE.group_stage === 10, "Fase de grupos = 10 pts");
+  // 6. SISTEMA OFICIAL DE PUNTOS Y DOBLE RANKING SPT
+  // ==========================================================================
+  // A) Verificación de la Estructura de Distribución Porcentual Oficial
+  assert(SPT_DISTRIBUTION_PERCENTAGES.champion === 1.0, "Campeón = 100% de P");
+  assert(SPT_DISTRIBUTION_PERCENTAGES.runner_up === 0.6, "Subcampeón = 60% de P");
+  assert(SPT_DISTRIBUTION_PERCENTAGES.semifinalist === 0.35, "Semifinalistas = 35% de P");
+  assert(SPT_DISTRIBUTION_PERCENTAGES.quarterfinalist === 0.2, "Cuartos de final = 20% de P");
+  assert(SPT_DISTRIBUTION_PERCENTAGES.round_of_16 === 0.12, "Octavos de final = 12% de P");
+  assert(SPT_DISTRIBUTION_PERCENTAGES.round_of_32 === 0.07, "16avos de final = 7% de P");
+  assert(SPT_DISTRIBUTION_PERCENTAGES.base_participation === 0.03, "Base de Participación = 3% de P");
+  assert(SPT_DISTRIBUTION_PERCENTAGES.zone_win_bonus === 0.02, "Bonus victoria zona eliminadas = 2% de P");
+
+  // B) Validación con Ejemplo Oficial: Torneo 1000 (P = 1000)
+  const t1000Couples = [
+    { id: "c_champ", player1_id: "p1", player2_id: "p2" },
+    { id: "c_runner", player1_id: "p3", player2_id: "p4" },
+    { id: "c_semi1", player1_id: "p5", player2_id: "p6" },
+    { id: "c_semi2", player1_id: "p7", player2_id: "p8" },
+    { id: "c_qf", player1_id: "p9", player2_id: "p10" },
+    { id: "c_r16", player1_id: "p11", player2_id: "p12" },
+    { id: "c_r32", player1_id: "p13", player2_id: "p14" },
+  ];
+  const t1000Matches: Match[] = [
+    // 16avos: c_r32 vs c_r16 (gana c_r16)
+    { id: "m_r32", tournament_id: "t1000", stage: "round_of_32", couple1_id: "c_r32", couple2_id: "c_r16", winner_couple_id: "c_r16", status: "completed", created_at: "" },
+    // Octavos: c_r16 vs c_qf (gana c_qf)
+    { id: "m_r16", tournament_id: "t1000", stage: "round_of_16", couple1_id: "c_r16", couple2_id: "c_qf", winner_couple_id: "c_qf", status: "completed", created_at: "" },
+    // Cuartos: c_qf vs c_semi1 (gana c_semi1)
+    { id: "m_qf", tournament_id: "t1000", stage: "quarter", couple1_id: "c_qf", couple2_id: "c_semi1", winner_couple_id: "c_semi1", status: "completed", created_at: "" },
+    // Semifinales
+    { id: "m_s1", tournament_id: "t1000", stage: "semi", couple1_id: "c_semi1", couple2_id: "c_champ", winner_couple_id: "c_champ", status: "completed", created_at: "" },
+    { id: "m_s2", tournament_id: "t1000", stage: "semi", couple1_id: "c_semi2", couple2_id: "c_runner", winner_couple_id: "c_runner", status: "completed", created_at: "" },
+    // Final
+    { id: "m_f", tournament_id: "t1000", stage: "final", couple1_id: "c_champ", couple2_id: "c_runner", winner_couple_id: "c_champ", status: "completed", created_at: "" },
+  ];
+
+  const stats1000 = calculateTournamentStageStats(t1000Matches, t1000Couples, 1000);
+  assert(stats1000["c_champ"].pointsEarned === 1000, "Torneo 1000: Campeones = 1.000 pts (100%)");
+  assert(stats1000["c_runner"].pointsEarned === 600, "Torneo 1000: Subcampeones = 600 pts (60%)");
+  assert(stats1000["c_semi1"].pointsEarned === 350, "Torneo 1000: Semifinalista 1 = 350 pts (35%)");
+  assert(stats1000["c_semi2"].pointsEarned === 350, "Torneo 1000: Semifinalista 2 = 350 pts (35%)");
+  assert(stats1000["c_qf"].pointsEarned === 200, "Torneo 1000: Cuartos de final = 200 pts (20%)");
+  assert(stats1000["c_r16"].pointsEarned === 120, "Torneo 1000: Octavos de final = 120 pts (12%)");
+  assert(stats1000["c_r32"].pointsEarned === 70, "Torneo 1000: 16avos de final = 70 pts (7%)");
+
+  // C) Validación con Ejemplo Oficial: Torneo 500 (P = 500)
+  const stats500 = calculateTournamentStageStats(t1000Matches, t1000Couples, 500);
+  assert(stats500["c_champ"].pointsEarned === 500, "Torneo 500: Campeones = 500 pts (100%)");
+  assert(stats500["c_runner"].pointsEarned === 300, "Torneo 500: Subcampeones = 300 pts (60%)");
+  assert(stats500["c_semi1"].pointsEarned === 175, "Torneo 500: Semifinalistas = 175 pts (35%)");
+  assert(stats500["c_qf"].pointsEarned === 100, "Torneo 500: Cuartos de final = 100 pts (20%)");
+  assert(stats500["c_r16"].pointsEarned === 60, "Torneo 500: Octavos de final = 60 pts (12%)");
+  assert(stats500["c_r32"].pointsEarned === 35, "Torneo 500: 16avos de final = 35 pts (7%)");
+
+  // D) Tratamiento de Fase de Grupos (Zonas) y Parejas Eliminadas
+  const zoneTournamentCouples = [
+    { id: "c_elim0", player1_id: "e1", player2_id: "e2" }, // 0 partidos ganados en zona
+    { id: "c_elim1", player1_id: "e3", player2_id: "e4" }, // 1 partido ganado en zona
+    { id: "c_elim2", player1_id: "e5", player2_id: "e6" }, // 2 partidos ganados en zona
+    { id: "c_clas1", player1_id: "k1", player2_id: "k2" }, // Clasificada 1°
+    { id: "c_clas2", player1_id: "k3", player2_id: "k4" }, // Clasificada 2°
+  ];
+
+  const zoneMatches: Match[] = [
+    // Partidos en fase de grupos
+    { id: "zm1", tournament_id: "tz", stage: "zone", couple1_id: "c_elim1", couple2_id: "c_elim0", winner_couple_id: "c_elim1", status: "completed", created_at: "" },
+    { id: "zm2", tournament_id: "tz", stage: "zone", couple1_id: "c_elim2", couple2_id: "c_elim0", winner_couple_id: "c_elim2", status: "completed", created_at: "" },
+    { id: "zm3", tournament_id: "tz", stage: "zone", couple1_id: "c_elim2", couple2_id: "c_elim1", winner_couple_id: "c_elim2", status: "completed", created_at: "" },
+    // Cuadro eliminatorio (solo ingresan clas1 y clas2)
+    { id: "pm1", tournament_id: "tz", stage: "quarter", couple1_id: "c_clas1", couple2_id: "c_clas2", winner_couple_id: "c_clas1", status: "completed", created_at: "" },
+  ];
+
+  // En Torneo 1000:
+  const zoneStats1000 = calculateTournamentStageStats(zoneMatches, zoneTournamentCouples, 1000);
+  assert(zoneStats1000["c_elim0"].pointsEarned === 30, "Zona Torneo 1000: Eliminada con 0 PG = 30 pts (3% base)");
+  assert(zoneStats1000["c_elim1"].pointsEarned === 50, "Zona Torneo 1000: Eliminada con 1 PG = 50 pts (3% base + 2% bonus)");
+  assert(zoneStats1000["c_elim2"].pointsEarned === 70, "Zona Torneo 1000: Eliminada con 2 PG = 70 pts (3% base + 4% bonus)");
+  assert(zoneStats1000["c_clas2"].pointsEarned === 200, "Zona Torneo 1000: Clasificada adopta Cuartos (20% = 200 pts)");
+  assert(zoneStats1000["c_clas1"].pointsEarned === 350, "Zona Torneo 1000: Ganadora de Cuartos avanza a Semis (35% = 350 pts)");
+
+  // En Torneo 500:
+  const zoneStats500 = calculateTournamentStageStats(zoneMatches, zoneTournamentCouples, 500);
+  assert(zoneStats500["c_elim0"].pointsEarned === 15, "Zona Torneo 500: Eliminada con 0 PG = 15 pts (3% base)");
+  assert(zoneStats500["c_elim1"].pointsEarned === 25, "Zona Torneo 500: Eliminada con 1 PG = 25 pts (3% base + 2% bonus)");
+  assert(zoneStats500["c_elim2"].pointsEarned === 35, "Zona Torneo 500: Eliminada con 2 PG = 35 pts (3% base + 4% bonus)");
+  assert(zoneStats500["c_clas2"].pointsEarned === 100, "Zona Torneo 500: Clasificada adopta Cuartos (20% = 100 pts)");
+  assert(zoneStats500["c_clas1"].pointsEarned === 175, "Zona Torneo 500: Ganadora de Cuartos avanza a Semis (35% = 175 pts)");
 
   // Clave canónica de parejas
   assert(getCoupleKey("p1", "p2") === "p1_p2", "getCoupleKey('p1', 'p2') es 'p1_p2'");
   assert(getCoupleKey("p2", "p1") === "p1_p2", "getCoupleKey('p2', 'p1') es simétrico e invariante al orden");
 
-  // Simulación de 2 torneos sucesivos con diferentes parejas:
-  // Torneo 1:
-  // Pareja C1: Jugador A (jA) + Jugador B (jB) -> CAMPEONES (100 pts)
-  // Pareja C2: Jugador C (jC) + Jugador D (jD) -> SUBCAMPEONES (70 pts)
-  // Pareja C3: Jugador E (jE) + Jugador F (jF) -> SEMIS (50 pts)
+  // E) Simulación de Doble Ranking acumulado (100% individual a cada jugador)
+  // Torneo 1 (1000 pts):
+  // C1: jA + jB -> CAMPEONES (1000 pts)
+  // C2: jC + jD -> SUBCAMPEONES (600 pts)
+  // C3: jE + jF -> SEMIS (350 pts)
   const tournament1Couples = [
     { id: "c1", player1_id: "jA", player2_id: "jB" },
     { id: "c2", player1_id: "jC", player2_id: "jD" },
@@ -529,10 +610,10 @@ export function runTournamentBusinessLogicTests(): TestResult {
     { id: "m_final", tournament_id: "t1", stage: "final", couple1_id: "c1", couple2_id: "c2", winner_couple_id: "c1", score_set1: "9-5", status: "completed", created_at: "" },
   ];
 
-  const t1Stats = calculateTournamentStageStats(tournament1Matches, tournament1Couples);
-  assert(t1Stats["c1"].pointsEarned === 100, "C1 campeón obtiene 100 pts");
-  assert(t1Stats["c2"].pointsEarned === 70, "C2 subcampeón obtiene 70 pts");
-  assert(t1Stats["c3"].pointsEarned === 50, "C3 semifinalista obtiene 50 pts");
+  const t1Stats = calculateTournamentStageStats(tournament1Matches, tournament1Couples, 1000);
+  assert(t1Stats["c1"].pointsEarned === 1000, "C1 campeón obtiene 1.000 pts");
+  assert(t1Stats["c2"].pointsEarned === 600, "C2 subcampeón obtiene 600 pts");
+  assert(t1Stats["c3"].pointsEarned === 350, "C3 semifinalista obtiene 350 pts");
 
   let coupleRankings = new Map<string, CoupleRankingRecord>();
   let indivRankings = new Map<string, IndividualRankingRecord>();
@@ -546,16 +627,16 @@ export function runTournamentBusinessLogicTests(): TestResult {
   coupleRankings = update1.updatedCoupleRankings;
   indivRankings = update1.updatedIndividualRankings;
 
-  // Verificar estado post Torneo 1
+  // Cada jugador suma el 100% individualmente
   const c1Key = getCoupleKey("jA", "jB");
-  assert(coupleRankings.get(c1Key)?.points === 100, "Ranking Pareja [jA-jB] = 100 pts");
-  assert(indivRankings.get("jA")?.points === 100, "Ranking Individual jA = 100 pts");
-  assert(indivRankings.get("jB")?.points === 100, "Ranking Individual jB = 100 pts");
+  assert(coupleRankings.get(c1Key)?.points === 1000, "Ranking Pareja [jA-jB] = 1.000 pts");
+  assert(indivRankings.get("jA")?.points === 1000, "Ranking Individual jA = 1.000 pts (100%)");
+  assert(indivRankings.get("jB")?.points === 1000, "Ranking Individual jB = 1.000 pts (100%)");
 
-  // Torneo 2:
-  // jA juega ahora con jC (nueva dupla) y quedan SUBCAMPEONES (70 pts).
-  // jB juega con jE (nueva dupla) y caen en SEMIS (50 pts).
-  // jD juega con jF y ganan el torneo (100 pts).
+  // Torneo 2 (1000 pts):
+  // jA juega ahora con jC -> SUBCAMPEONES (600 pts).
+  // jB juega con jE -> SEMIS (350 pts).
+  // jD juega con jF -> CAMPEONES (1000 pts).
   const tournament2Couples = [
     { id: "c_AC", player1_id: "jA", player2_id: "jC" },
     { id: "c_BE", player1_id: "jB", player2_id: "jE" },
@@ -566,7 +647,7 @@ export function runTournamentBusinessLogicTests(): TestResult {
     { id: "m2_final", tournament_id: "t2", stage: "final", couple1_id: "c_DF", couple2_id: "c_AC", winner_couple_id: "c_DF", score_set1: "9-7", status: "completed", created_at: "" },
   ];
 
-  const t2Stats = calculateTournamentStageStats(tournament2Matches, tournament2Couples);
+  const t2Stats = calculateTournamentStageStats(tournament2Matches, tournament2Couples, 1000);
   const update2 = processDoubleRankingUpdate({
     existingCoupleRankings: coupleRankings,
     existingIndividualRankings: indivRankings,
@@ -576,31 +657,20 @@ export function runTournamentBusinessLogicTests(): TestResult {
   coupleRankings = update2.updatedCoupleRankings;
   indivRankings = update2.updatedIndividualRankings;
 
-  // Verificaciones del Sistema de Doble Ranking SPT:
-  // 1. Ranking de la Pareja original [jA-jB]:
-  // NO jugó en Torneo 2 -> Sus puntos se mantienen intactos en 100 pts
-  assert(coupleRankings.get(c1Key)?.points === 100, "Ranking Pareja [jA-jB] se conserva intacto en 100 pts al no competir junta");
-  assert(coupleRankings.get(c1Key)?.tournamentsPlayed === 1, "Ranking Pareja [jA-jB] registra 1 torneo jugado");
-
-  // 2. Ranking de la nueva pareja [jA-jC]:
+  // Verificaciones del Sistema de Doble Ranking:
+  assert(coupleRankings.get(c1Key)?.points === 1000, "Ranking Pareja [jA-jB] intacto en 1.000 pts al no competir junta");
   const keyAC = getCoupleKey("jA", "jC");
-  assert(coupleRankings.get(keyAC)?.points === 70, "Ranking nueva Pareja [jA-jC] = 70 pts");
+  assert(coupleRankings.get(keyAC)?.points === 600, "Ranking nueva Pareja [jA-jC] = 600 pts");
 
-  // 3. Ranking Individual de jA:
-  // Ganó 100 pts en T1 con jB + 70 pts en T2 con jC = 170 pts en total
-  assert(indivRankings.get("jA")?.points === 170, "Ranking Individual jA acumuló 170 pts (100 + 70)");
-  assert(indivRankings.get("jA")?.tournamentsPlayed === 2, "Ranking Individual jA registra 2 torneos jugados");
+  // Ranking Individual:
+  // jA = 1000 + 600 = 1600 pts
+  assert(indivRankings.get("jA")?.points === 1600, "Ranking Individual jA acumuló 1.600 pts (1000 + 600)");
+  // jB = 1000 + 350 = 1350 pts
+  assert(indivRankings.get("jB")?.points === 1350, "Ranking Individual jB acumuló 1.350 pts (1000 + 350)");
+  // jC = 600 (T1) + 600 (T2) = 1200 pts
+  assert(indivRankings.get("jC")?.points === 1200, "Ranking Individual jC acumuló 1.200 pts (600 + 600)");
 
-  // 4. Ranking Individual de jB:
-  // Ganó 100 pts en T1 con jA + 50 pts en T2 con jE = 150 pts en total
-  assert(indivRankings.get("jB")?.points === 150, "Ranking Individual jB acumuló 150 pts (100 + 50)");
-  assert(indivRankings.get("jB")?.tournamentsPlayed === 2, "Ranking Individual jB registra 2 torneos jugados");
-
-  // 5. Ranking Individual de jC:
-  // Ganó 70 pts en T1 con jD + 70 pts en T2 con jA = 140 pts
-  assert(indivRankings.get("jC")?.points === 140, "Ranking Individual jC acumuló 140 pts (70 + 70)");
-
-  // 6. Torneo 3: La pareja original [jA-jB] vuelve a jugar junta y ganan (100 pts)
+  // 6. Torneo 3: La pareja original [jA-jB] vuelve a jugar junta y ganan (1000 pts)
   const tournament3Couples = [
     { id: "c_AB_3", player1_id: "jA", player2_id: "jB" },
     { id: "c_XY_3", player1_id: "jX", player2_id: "jY" },
@@ -608,7 +678,7 @@ export function runTournamentBusinessLogicTests(): TestResult {
   const tournament3Matches: Match[] = [
     { id: "m3_final", tournament_id: "t3", stage: "final", couple1_id: "c_AB_3", couple2_id: "c_XY_3", winner_couple_id: "c_AB_3", score_set1: "9-5", status: "completed", created_at: "" },
   ];
-  const t3Stats = calculateTournamentStageStats(tournament3Matches, tournament3Couples);
+  const t3Stats = calculateTournamentStageStats(tournament3Matches, tournament3Couples, 1000);
   const update3 = processDoubleRankingUpdate({
     existingCoupleRankings: coupleRankings,
     existingIndividualRankings: indivRankings,
@@ -618,11 +688,11 @@ export function runTournamentBusinessLogicTests(): TestResult {
   coupleRankings = update3.updatedCoupleRankings;
   indivRankings = update3.updatedIndividualRankings;
 
-  assert(coupleRankings.get(c1Key)?.points === 200, "Ranking Pareja [jA-jB] acumuló 200 pts en 2 torneos jugados juntos (100 + 100)");
+  assert(coupleRankings.get(c1Key)?.points === 2000, "Ranking Pareja [jA-jB] acumuló 2.000 pts en 2 torneos jugados juntos (1000 + 1000)");
   assert(coupleRankings.get(c1Key)?.tournamentsPlayed === 2, "Ranking Pareja [jA-jB] registra 2 torneos jugados");
-  assert(indivRankings.get("jA")?.points === 270, "Ranking Individual jA acumuló 270 pts sumando todos sus torneos (100 + 70 + 100)");
+  assert(indivRankings.get("jA")?.points === 2600, "Ranking Individual jA acumuló 2.600 pts sumando todos sus torneos (1000 + 600 + 1000)");
   assert(indivRankings.get("jA")?.tournamentsPlayed === 3, "Ranking Individual jA registra 3 torneos disputados");
-  assert(indivRankings.get("jB")?.points === 250, "Ranking Individual jB acumuló 250 pts sumando todos sus torneos (100 + 50 + 100)");
+  assert(indivRankings.get("jB")?.points === 2350, "Ranking Individual jB acumuló 2.350 pts sumando todos sus torneos (1000 + 350 + 1000)");
   assert(indivRankings.get("jB")?.tournamentsPlayed === 3, "Ranking Individual jB registra 3 torneos disputados");
 
   // 7. Verificación de cálculo de puntos acumulados en curso (hasta el momento de la consulta)
@@ -643,9 +713,9 @@ export function runTournamentBusinessLogicTests(): TestResult {
       created_at: "",
     },
   ];
-  const inProgStats = calculateTournamentStageStats(inProgressMatches, inProgressCouples);
-  assert(inProgStats["pair1"].pointsEarned === 30, "El ganador de octavos ya tiene garantizados al menos 30 pts (cuartofinalista)");
-  assert(inProgStats["pair2"].pointsEarned === 15, "El perdedor de octavos recibe 15 pts (octavofinalista)");
+  const inProgStats = calculateTournamentStageStats(inProgressMatches, inProgressCouples, 1000);
+  assert(inProgStats["pair1"].pointsEarned === 200, "El ganador de octavos ya tiene garantizados al menos 200 pts (cuartofinalista = 20%)");
+  assert(inProgStats["pair2"].pointsEarned === 120, "El perdedor de octavos recibe 120 pts (octavofinalista = 12%)");
   assert(inProgStats["pair1"].highestStage === "quarterfinalist", "pair1 avanzó a quarterfinalist");
   assert(inProgStats["pair2"].highestStage === "round_of_16", "pair2 finalizó en round_of_16");
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { SPT_POINTS_SCALE, getCoupleKey, syncAllTournamentsRankings } from "@/lib/tournament/rankings";
+import { SPT_POINTS_SCALE, getCoupleKey, syncAllTournamentsRankings, calculateTournamentStageStats } from "@/lib/tournament/rankings";
 import { formatPlayerFullName } from "@/lib/tournament/couples";
 import { getPlayerPhotosMap, enrichPlayerPhoto } from "@/lib/tournament/player-photos";
 
@@ -298,95 +298,19 @@ export async function POST(request: Request) {
     if (pairsData) tournamentCouples = pairsData;
   }
 
+  const tournamentPoints = tournament.points_awarded || 1000;
+
   // 5. Obtener todos los partidos del torneo para computar PG, PP y etapa final alcanzada
   const { data: allMatches } = await supabase
     .from("matches")
     .select("*")
-    .eq("tournament_id", tournamentId)
-    .eq("status", "completed");
+    .eq("tournament_id", tournamentId);
 
-  const coupleStatsMap: Record<
-    string,
-    { matchesWon: number; matchesLost: number; highestStage: string; points: number; position: number }
-  > = {};
-
-  tournamentCouples.forEach((c) => {
-    coupleStatsMap[c.id] = {
-      matchesWon: 0,
-      matchesLost: 0,
-      highestStage: "group_stage",
-      points: SPT_POINTS_SCALE.group_stage,
-      position: 16,
-    };
-  });
-
-  (allMatches ?? []).forEach((m) => {
-    const c1 = m.couple1_id || m.pair1_id;
-    const c2 = m.couple2_id || m.pair2_id;
-    const winner = m.winner_couple_id || m.winner_id;
-
-    if (c1 && coupleStatsMap[c1]) {
-      if (winner === c1) coupleStatsMap[c1].matchesWon++;
-      else if (winner === c2) coupleStatsMap[c1].matchesLost++;
-    }
-    if (c2 && coupleStatsMap[c2]) {
-      if (winner === c2) coupleStatsMap[c2].matchesWon++;
-      else if (winner === c1) coupleStatsMap[c2].matchesLost++;
-    }
-
-    // Registrar etapa alcanzada
-    if (m.stage === "round_of_16") {
-      if (c1 && coupleStatsMap[c1].points < SPT_POINTS_SCALE.round_of_16) {
-        coupleStatsMap[c1].highestStage = "round_of_16";
-        coupleStatsMap[c1].points = SPT_POINTS_SCALE.round_of_16;
-        coupleStatsMap[c1].position = 9;
-      }
-      if (c2 && coupleStatsMap[c2].points < SPT_POINTS_SCALE.round_of_16) {
-        coupleStatsMap[c2].highestStage = "round_of_16";
-        coupleStatsMap[c2].points = SPT_POINTS_SCALE.round_of_16;
-        coupleStatsMap[c2].position = 9;
-      }
-    }
-
-    if (m.stage === "quarter") {
-      if (c1 && coupleStatsMap[c1].points < SPT_POINTS_SCALE.quarterfinalist) {
-        coupleStatsMap[c1].highestStage = "quarter";
-        coupleStatsMap[c1].points = SPT_POINTS_SCALE.quarterfinalist;
-        coupleStatsMap[c1].position = 5;
-      }
-      if (c2 && coupleStatsMap[c2].points < SPT_POINTS_SCALE.quarterfinalist) {
-        coupleStatsMap[c2].highestStage = "quarter";
-        coupleStatsMap[c2].points = SPT_POINTS_SCALE.quarterfinalist;
-        coupleStatsMap[c2].position = 5;
-      }
-    }
-
-    if (m.stage === "semi") {
-      if (c1 && coupleStatsMap[c1].points < SPT_POINTS_SCALE.semifinalist) {
-        coupleStatsMap[c1].highestStage = "semi";
-        coupleStatsMap[c1].points = SPT_POINTS_SCALE.semifinalist;
-        coupleStatsMap[c1].position = 3;
-      }
-      if (c2 && coupleStatsMap[c2].points < SPT_POINTS_SCALE.semifinalist) {
-        coupleStatsMap[c2].highestStage = "semi";
-        coupleStatsMap[c2].points = SPT_POINTS_SCALE.semifinalist;
-        coupleStatsMap[c2].position = 3;
-      }
-    }
-  });
-
-  // Asignar puntos al Campeón y Subcampeón
-  if (championCoupleId && coupleStatsMap[championCoupleId]) {
-    coupleStatsMap[championCoupleId].highestStage = "final";
-    coupleStatsMap[championCoupleId].points = SPT_POINTS_SCALE.champion;
-    coupleStatsMap[championCoupleId].position = 1;
-  }
-
-  if (runnerUpCoupleId && coupleStatsMap[runnerUpCoupleId]) {
-    coupleStatsMap[runnerUpCoupleId].highestStage = "final";
-    coupleStatsMap[runnerUpCoupleId].points = SPT_POINTS_SCALE.runner_up;
-    coupleStatsMap[runnerUpCoupleId].position = 2;
-  }
+  const coupleStatsMap = calculateTournamentStageStats(
+    (allMatches || []) as any,
+    tournamentCouples as { id: string; player1_id: string; player2_id: string }[],
+    tournamentPoints
+  );
 
   const category = tournament.category || "General";
   const tournamentRankingsToInsert: {
@@ -405,7 +329,7 @@ export async function POST(request: Request) {
     const p1Id = couple.player1_id;
     const p2Id = couple.player2_id;
     if (!p1Id || !p2Id) continue;
-    const pointsAwarded = stats.points;
+    const pointsAwarded = stats.pointsEarned;
     const coupleKey = getCoupleKey(p1Id, p2Id);
 
     // Auditoría en tournament_rankings para cada jugador
@@ -416,7 +340,7 @@ export async function POST(request: Request) {
           pair_id: couple.id,
           player_id: pId,
           points_earned: pointsAwarded,
-          final_position: stats.position,
+          final_position: stats.finalPosition,
         });
       }
     }
@@ -556,7 +480,7 @@ export async function POST(request: Request) {
     processedCouples: tournamentCouples.length,
     pointsDistributed: tournamentCouples.map((c) => ({
       coupleId: c.id,
-      points: coupleStatsMap[c.id]?.points ?? 0,
+      points: coupleStatsMap[c.id]?.pointsEarned ?? 0,
       stage: coupleStatsMap[c.id]?.highestStage ?? "group_stage",
     })),
   });
