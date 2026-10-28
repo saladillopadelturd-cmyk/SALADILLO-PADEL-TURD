@@ -188,8 +188,9 @@ export async function POST(request: Request) {
     );
   }
 
-  // 5. Generar emparejamientos y cuadro de playoffs
-  const bracket = generateSeededPlayoffBracket(allQualified);
+  // 5. Generar emparejamientos y cuadro de playoffs con plantillas oficiales FAP
+  const totalTournamentCouples = allQualified.length + eliminatedPairs.length;
+  const bracket = generateSeededPlayoffBracket(allQualified, totalTournamentCouples);
   const initialStage = bracket.allStages[0];
 
   // 6. Eliminar partidos de playoffs previos si existían

@@ -1009,9 +1009,9 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
     }
 
     // 2. Si todavía no se confirmaron partidos de playoffs en la BD, DIBUJAR el cuadro proyectado
-    // enfrentando la mejor pareja de cada zona vs la peor pareja de otra zona
+    // según las plantillas oficiales FAP (LIBRO.pdf)
     if (allQualifiedPairs.length >= 2) {
-      const bracketData = generateSeededPlayoffBracket(allQualifiedPairs);
+      const bracketData = generateSeededPlayoffBracket(allQualifiedPairs, couples.length);
       const rounds: { round: string; matches: { id?: string; pair1: string; pair2: string; winner?: string; score?: string; status?: string }[] }[] = [];
 
       const initialStage = bracketData.allStages[0];

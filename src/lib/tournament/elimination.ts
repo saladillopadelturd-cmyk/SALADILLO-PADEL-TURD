@@ -1,4 +1,12 @@
 import type { MatchStage } from "@/types/tournament";
+import {
+  findFAPTemplate,
+  buildZoneLetterMap,
+  resolveFAPToken,
+  type FAPDrawTemplate,
+} from "./fap-draws";
+
+export { findFAPTemplate, buildZoneLetterMap, resolveFAPToken, type FAPDrawTemplate };
 
 export interface QualifiedPair {
   pairId: string;
@@ -47,6 +55,7 @@ export function getNextPowerOf2(n: number): number {
  * Traduce el número de slots a la etapa inicial correspondiente.
  */
 export function getInitialStage(totalSlots: number): MatchStage {
+  if (totalSlots >= 32) return "round_of_32";
   if (totalSlots >= 16) return "round_of_16";
   if (totalSlots >= 8) return "quarter";
   return "semi";
@@ -56,6 +65,7 @@ export function getInitialStage(totalSlots: number): MatchStage {
  * Devuelve las etapas sucesivas del cuadro según el tamaño.
  */
 export function getStagesSequence(totalSlots: number): MatchStage[] {
+  if (totalSlots >= 32) return ["round_of_32", "round_of_16", "quarter", "semi", "final"];
   if (totalSlots >= 16) return ["round_of_16", "quarter", "semi", "final"];
   if (totalSlots >= 8) return ["quarter", "semi", "final"];
   return ["semi", "final"];
@@ -334,7 +344,8 @@ export function propagatePlayoffWinners<
  * - Si hay BYEs (totalSlots > clasificados), los BYEs se asignan prioritariamente a los mejores 1°s.
  */
 export function generateSeededPlayoffBracket(
-  qualifiedPairs: QualifiedPair[]
+  qualifiedPairs: QualifiedPair[],
+  tournamentCouplesCount?: number
 ): {
   totalSlots: number;
   byesCount: number;
@@ -352,6 +363,79 @@ export function generateSeededPlayoffBracket(
     return { totalSlots: 2, byesCount: 0, firstRoundMatches: [], allStages: ["final"] };
   }
 
+  // INTENTO 1: Cuadro oficial de la Federación Argentina de Pádel (FAP, LIBRO.pdf páginas 122-148)
+  const uniqueZoneKeys = new Set(qualifiedPairs.map((p) => p.zoneId || p.zoneName));
+  const numZones = uniqueZoneKeys.size;
+  const fapTemplate = findFAPTemplate(numZones, count, tournamentCouplesCount);
+
+  if (fapTemplate) {
+    const zoneLetterMap = buildZoneLetterMap(qualifiedPairs);
+    const assignedPairIds = new Set<string>();
+    let validFAPMapping = true;
+
+    const fapMatches: {
+      couple1Id: string;
+      couple2Id: string;
+      isBye: boolean;
+      advancingPairId?: string;
+      description: string;
+    }[] = [];
+
+    for (const [token1, token2] of fapTemplate.matches) {
+      const isBye = token1 === "BYE" || token2 === "BYE";
+      const pair1 = resolveFAPToken(token1, qualifiedPairs, zoneLetterMap);
+      const pair2 = resolveFAPToken(token2, qualifiedPairs, zoneLetterMap);
+
+      if (token1 !== "BYE" && !pair1) {
+        validFAPMapping = false;
+        break;
+      }
+      if (token2 !== "BYE" && !pair2) {
+        validFAPMapping = false;
+        break;
+      }
+
+      if (pair1) {
+        if (assignedPairIds.has(pair1.pairId)) {
+          validFAPMapping = false;
+          break;
+        }
+        assignedPairIds.add(pair1.pairId);
+      }
+
+      if (pair2) {
+        if (assignedPairIds.has(pair2.pairId)) {
+          validFAPMapping = false;
+          break;
+        }
+        assignedPairIds.add(pair2.pairId);
+      }
+
+      const couple1Id = pair1 ? pair1.pairId : "BYE";
+      const couple2Id = pair2 ? pair2.pairId : "BYE";
+      const advancingPairId = isBye ? (pair1 ? pair1.pairId : pair2?.pairId) : undefined;
+
+      fapMatches.push({
+        couple1Id,
+        couple2Id,
+        isBye,
+        advancingPairId,
+        description: `${token1} vs ${token2}`,
+      });
+    }
+
+    // Si todas las parejas clasificadas fueron asignadas y el cuadro FAP es válido
+    if (validFAPMapping && assignedPairIds.size === count) {
+      return {
+        totalSlots: fapTemplate.totalSlots,
+        byesCount: fapTemplate.totalSlots - count,
+        firstRoundMatches: fapMatches,
+        allStages: getStagesSequence(fapTemplate.totalSlots),
+      };
+    }
+  }
+
+  // INTENTO 2 (Fallback algorítmico): Backtracking evitando cruces de misma zona
   const totalSlots = getNextPowerOf2(count);
   const byesCount = totalSlots - count;
   const allStages = getStagesSequence(totalSlots);

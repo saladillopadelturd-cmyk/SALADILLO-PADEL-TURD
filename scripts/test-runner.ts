@@ -6,6 +6,57 @@
 import { runTournamentBusinessLogicTests } from "../src/lib/tournament/tournament-rules.test";
 import { generateSeededPlayoffBracket, type QualifiedPair } from "../src/lib/tournament/elimination";
 import { runSchedulerTests } from "../src/lib/tournament/scheduler.test";
+import { FAP_DRAW_TEMPLATES } from "../src/lib/tournament/fap-draws";
+
+function runFAPDrawTemplatesSuite(): { passed: number; failed: number; errors: string[] } {
+  let passed = 0;
+  let failed = 0;
+  const errors: string[] = [];
+
+  for (let c = 6; c <= 32; c++) {
+    const t = FAP_DRAW_TEMPLATES[c];
+    if (!t) {
+      failed++;
+      errors.push(`Falta plantilla FAP para ${c} parejas`);
+      continue;
+    }
+    passed++;
+
+    // 1º A en match 0
+    if (!t.matches[0].includes("1º A")) {
+      failed++;
+      errors.push(`Plantilla ${c} parejas: 1º A debe estar en match 0`);
+    } else {
+      passed++;
+    }
+
+    // 1º B en último match
+    const lastM = t.matches[t.matches.length - 1];
+    if (!lastM.includes("1º B")) {
+      failed++;
+      errors.push(`Plantilla ${c} parejas: 1º B debe estar en el último match`);
+    } else {
+      passed++;
+    }
+
+    // Sin conflicto de misma zona en primera ronda
+    let conflict = false;
+    for (const [t1, t2] of t.matches) {
+      if (t1 !== "BYE" && t2 !== "BYE" && t1.slice(-1) === t2.slice(-1)) {
+        conflict = true;
+        break;
+      }
+    }
+    if (conflict) {
+      failed++;
+      errors.push(`Plantilla ${c} parejas tiene conflicto de misma zona`);
+    } else {
+      passed++;
+    }
+  }
+
+  return { passed, failed, errors };
+}
 
 function runPlayoffStressSuite(): { passed: number; failed: number; errors: string[] } {
   let passed = 0;
@@ -125,9 +176,21 @@ async function main() {
     schedulerResults.errors.forEach((e) => console.error(`  x ${e}`));
   }
 
+  // 4. Suite de Plantillas Oficiales FAP (LIBRO.pdf págs 122-148)
+  console.log("\n>> Ejecutando Suite de Plantillas Oficiales FAP (6 a 32 parejas)...");
+  const fapResults = runFAPDrawTemplatesSuite();
+  console.log(`Resultados Plantillas FAP:`);
+  console.log(`  - Validaciones Pasadas: ${fapResults.passed}`);
+  console.log(`  - Fallos Detectados:    ${fapResults.failed}`);
+
+  if (fapResults.errors.length > 0) {
+    console.error("\n[ERRORES EN PLANTILLAS FAP]:");
+    fapResults.errors.forEach((e) => console.error(`  x ${e}`));
+  }
+
   const elapsed = Date.now() - startTime;
-  const totalPassed = businessLogicResults.passed + playoffStress.passed + schedulerResults.passed;
-  const totalFailed = businessLogicResults.failed + playoffStress.failed + schedulerResults.failed;
+  const totalPassed = businessLogicResults.passed + playoffStress.passed + schedulerResults.passed + fapResults.passed;
+  const totalFailed = businessLogicResults.failed + playoffStress.failed + schedulerResults.failed + fapResults.failed;
 
   console.log("\n===============================================================");
   console.log("   RESUMEN FINAL DE TESTING Y CALIDAD (QA)");

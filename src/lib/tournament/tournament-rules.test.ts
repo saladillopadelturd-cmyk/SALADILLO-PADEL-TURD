@@ -439,9 +439,14 @@ export function runTournamentBusinessLogicTests(): TestResult {
   const seed2InM2 = m2.couple1Id === "1B" || m2.couple2Id === "1B";
   assert(seed1InM1 && seed2InM2, "Seed 1 (1A) y Seed 2 (1B) en semifinales opuestas para que solo choquen en la final");
 
-  // Regla SPT: Mejor pareja de una zona vs peor pareja de otra zona
-  assert(m1.couple1Id === "1A" && m1.couple2Id === "2B", "1A (mejor Zona A) enfrenta a 2B (peor Zona B)");
-  assert(m2.couple1Id === "1B" && m2.couple2Id === "2A", "1B (mejor Zona B) enfrenta a 2A (peor Zona A)");
+  // Regla Oficial FAP (LIBRO.pdf pág. 122):
+  // Semis 1 (P61): 1º A vs 2º B
+  // Semis 2 (P62): 2º A vs 1º B
+  assert(m1.couple1Id === "1A" && m1.couple2Id === "2B", "1A (1º Zona A) enfrenta a 2B (2º Zona B)");
+  assert(
+    (m2.couple1Id === "2A" && m2.couple2Id === "1B") || (m2.couple1Id === "1B" && m2.couple2Id === "2A"),
+    "Semis 2 enfrenta a 2A y 1B según FAP"
+  );
 
   // Cuadro de 8 con 6 clasificados (2 BYEs)
   const sixPairs: QualifiedPair[] = [
@@ -479,8 +484,15 @@ export function runTournamentBusinessLogicTests(): TestResult {
   ];
   const bracket8_4zones = generateSeededPlayoffBracket(eightPairs);
   assert(bracket8_4zones.firstRoundMatches.length === 4, "4 partidos de cuartos");
-  assert(bracket8_4zones.firstRoundMatches[0].couple1Id === "1A" && bracket8_4zones.firstRoundMatches[0].couple2Id === "2D", "1A (mejor Zona A) vs 2D (peor 2do, de Zona D)");
-  assert(bracket8_4zones.firstRoundMatches[3].couple1Id === "1B" && bracket8_4zones.firstRoundMatches[3].couple2Id === "2A", "1B (mejor Zona B) vs 2A (de Zona A)");
+  // Regla Oficial FAP (LIBRO.pdf pág. 128 - 12 Parejas):
+  // P57: 1º A vs 2º B
+  // P58: 2º C vs 1º D
+  // P59: 1º C vs 2º D
+  // P60: 2º A vs 1º B
+  assert(bracket8_4zones.firstRoundMatches[0].couple1Id === "1A" && bracket8_4zones.firstRoundMatches[0].couple2Id === "2B", "P57: 1A vs 2B (FAP oficial)");
+  assert(bracket8_4zones.firstRoundMatches[1].couple1Id === "2C" && bracket8_4zones.firstRoundMatches[1].couple2Id === "1D", "P58: 2C vs 1D (FAP oficial)");
+  assert(bracket8_4zones.firstRoundMatches[2].couple1Id === "1C" && bracket8_4zones.firstRoundMatches[2].couple2Id === "2D", "P59: 1C vs 2D (FAP oficial)");
+  assert(bracket8_4zones.firstRoundMatches[3].couple1Id === "2A" && bracket8_4zones.firstRoundMatches[3].couple2Id === "1B", "P60: 2A vs 1B (FAP oficial)");
 
   // Cuadro de 16 con 10 clasificados (6 BYEs)
   const tenPairs: QualifiedPair[] = Array.from({ length: 10 }, (_, i) => ({
@@ -1690,7 +1702,10 @@ export function runTournamentBusinessLogicTests(): TestResult {
   assert(semi0.id.startsWith("proj_semi_0"), "Match 0 proyectado tiene ID sintético válido");
   assert(semi1.id.startsWith("proj_semi_1"), "Match 1 proyectado tiene ID sintético válido");
   assert(semi0.pair1 === "c_A1" && semi0.pair2 === "c_B2", "Semis 0 cruza 1° de Zona A vs 2° de Zona B");
-  assert(semi1.pair1 === "c_B1" && semi1.pair2 === "c_A2", "Semis 1 cruza 1° de Zona B vs 2° de Zona A");
+  assert(
+    (semi1.pair1 === "c_A2" && semi1.pair2 === "c_B1") || (semi1.pair1 === "c_B1" && semi1.pair2 === "c_A2"),
+    "Semis 1 cruza 2° de Zona A vs 1° de Zona B según FAP"
+  );
 
   // Verificar la lógica de clickeabilidad:
   const canInteract = true;
