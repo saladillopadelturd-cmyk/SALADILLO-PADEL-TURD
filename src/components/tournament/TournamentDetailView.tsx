@@ -1018,29 +1018,75 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
 
     const roundsResult = stageSequence.map(({ stage, count }) => {
       const dbMatches = matchesByStage[stage] || [];
-      const stageMatches = [];
+      const baseNum =
+        stage === "round_of_32" || stage === "dieciseisavos"
+          ? 100
+          : stage === "round_of_16" || stage === "octavos"
+          ? 120
+          : stage === "quarter" || stage === "cuartos"
+          ? 140
+          : stage === "semi" || stage === "semifinal"
+          ? 150
+          : 160;
 
-      for (let i = 0; i < count; i++) {
-        if (i < dbMatches.length) {
-          const m = dbMatches[i];
+      // Ranuras fijas en el cuadro para esta ronda
+      const slotMatches: ({
+        id?: string;
+        pair1: string;
+        pair2: string;
+        winner?: string;
+        score?: string;
+        status?: string;
+      } | null)[] = new Array(count).fill(null);
+
+      const unassignedMatches: Match[] = [];
+
+      // 1. Asignar primero cada partido que coincida exactamente con su ranura fija (match_number = baseNum + slotIndex + 1)
+      dbMatches.forEach((m) => {
+        if (m.match_number != null) {
+          const slotIndex = m.match_number - baseNum - 1;
+          if (slotIndex >= 0 && slotIndex < count && !slotMatches[slotIndex]) {
+            const scoreStr = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
+            slotMatches[slotIndex] = {
+              id: m.id,
+              pair1: m.couple1_id ?? "Por definir",
+              pair2: m.couple2_id ?? (m.score_set1?.includes("BYE") ? "BYE" : "Por definir"),
+              winner: m.winner_couple_id ?? undefined,
+              score: scoreStr || undefined,
+              status: m.status,
+            };
+            return;
+          }
+        }
+        unassignedMatches.push(m);
+      });
+
+      // 2. Para partidos de plantillas FAP o secuenciales, ubicarlos ordenadamente en los slots libres
+      unassignedMatches.forEach((m) => {
+        const freeIdx = slotMatches.findIndex((s) => s === null);
+        if (freeIdx !== -1) {
           const scoreStr = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
-          stageMatches.push({
+          slotMatches[freeIdx] = {
             id: m.id,
             pair1: m.couple1_id ?? "Por definir",
             pair2: m.couple2_id ?? (m.score_set1?.includes("BYE") ? "BYE" : "Por definir"),
             winner: m.winner_couple_id ?? undefined,
             score: scoreStr || undefined,
             status: m.status,
-          });
-        } else {
-          stageMatches.push({
-            id: `slot_${stage}_${i}`,
-            pair1: "Por definir",
-            pair2: "Por definir",
-            status: "pending",
-          });
+          };
         }
-      }
+      });
+
+      // 3. Completar los slots vacíos como "Por definir" manteniéndolos fijos en su posición
+      const stageMatches = slotMatches.map((slotM, i) => {
+        if (slotM) return slotM;
+        return {
+          id: `slot_${stage}_${i}`,
+          pair1: "Por definir",
+          pair2: "Por definir",
+          status: "pending",
+        };
+      });
 
       return {
         round: stage,

@@ -420,29 +420,75 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
 
     const roundsResult = stageSequence.map(({ stage, count }) => {
       const dbMatches = matchesByStage[stage] || [];
-      const stageMatches = [];
+      const baseNum =
+        stage === "round_of_32" || stage === "dieciseisavos"
+          ? 100
+          : stage === "round_of_16" || stage === "octavos"
+          ? 120
+          : stage === "quarter" || stage === "cuartos"
+          ? 140
+          : stage === "semi" || stage === "semifinal"
+          ? 150
+          : 160;
 
-      for (let i = 0; i < count; i++) {
-        if (i < dbMatches.length) {
-          const m = dbMatches[i];
+      // Ranuras fijas en el cuadro para esta ronda
+      const slotMatches: ({
+        id?: string;
+        pair1: string;
+        pair2: string;
+        winner?: string;
+        score?: string;
+        status?: string;
+      } | null)[] = new Array(count).fill(null);
+
+      const unassignedMatches: Match[] = [];
+
+      // 1. Asignar primero cada partido que coincida exactamente con su ranura fija (match_number = baseNum + slotIndex + 1)
+      dbMatches.forEach((m) => {
+        if (m.match_number != null) {
+          const slotIndex = m.match_number - baseNum - 1;
+          if (slotIndex >= 0 && slotIndex < count && !slotMatches[slotIndex]) {
+            const scoreStr = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
+            slotMatches[slotIndex] = {
+              id: m.id,
+              pair1: m.couple1_id ?? "Por definir",
+              pair2: m.couple2_id ?? (m.score_set1?.includes("BYE") ? "BYE" : "Por definir"),
+              winner: m.winner_couple_id ?? undefined,
+              score: scoreStr || undefined,
+              status: m.status,
+            };
+            return;
+          }
+        }
+        unassignedMatches.push(m);
+      });
+
+      // 2. Para partidos de plantillas FAP o secuenciales, ubicarlos ordenadamente en los slots libres
+      unassignedMatches.forEach((m) => {
+        const freeIdx = slotMatches.findIndex((s) => s === null);
+        if (freeIdx !== -1) {
           const scoreStr = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
-          stageMatches.push({
+          slotMatches[freeIdx] = {
             id: m.id,
             pair1: m.couple1_id ?? "Por definir",
             pair2: m.couple2_id ?? (m.score_set1?.includes("BYE") ? "BYE" : "Por definir"),
             winner: m.winner_couple_id ?? undefined,
             score: scoreStr || undefined,
             status: m.status,
-          });
-        } else {
-          stageMatches.push({
-            id: `slot_${stage}_${i}`,
-            pair1: "Por definir",
-            pair2: "Por definir",
-            status: "pending",
-          });
+          };
         }
-      }
+      });
+
+      // 3. Completar los slots vacíos como "Por definir" manteniéndolos fijos en su posición
+      const stageMatches = slotMatches.map((slotM, i) => {
+        if (slotM) return slotM;
+        return {
+          id: `slot_${stage}_${i}`,
+          pair1: "Por definir",
+          pair2: "Por definir",
+          status: "pending",
+        };
+      });
 
       return {
         round: stage,
@@ -679,7 +725,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     setIsSlotPickerOpen(true);
   };
 
-  // Al elegir una pareja de la lista: queda definida en ese cuadro y se cierra el listado
+  // Al elegir una pareja de la lista: queda definida en ese cuadro fijo y se cierra el listado
   const handleSelectCoupleForSlot = async (selectedPairId: string) => {
     if (!activeSlotTarget || !tournamentId) return;
     const { match, stage, matchIndex, slot } = activeSlotTarget;
@@ -688,23 +734,33 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     setIsSlotPickerOpen(false);
     setActiveSlotTarget(null);
 
+    const baseNum =
+      stage === "round_of_32" || stage === "dieciseisavos"
+        ? 100
+        : stage === "round_of_16" || stage === "octavos"
+        ? 120
+        : stage === "quarter" || stage === "cuartos"
+        ? 140
+        : stage === "semi" || stage === "semifinal"
+        ? 150
+        : 160;
+    const targetMatchNumber = baseNum + matchIndex + 1;
+
     let existingMatch: Match | undefined;
     if (match.id && !match.id.startsWith("slot_") && !match.id.startsWith("proj_")) {
       existingMatch = matches.find((m) => m.id === match.id);
     }
     if (!existingMatch) {
       const stageNorm = stage;
-      const playoffMatchesThisStage = matches
-        .filter(
-          (m) =>
-            m.stage === stageNorm ||
+      existingMatch = matches.find(
+        (m) =>
+          (m.stage === stageNorm ||
             (stageNorm === "quarter" && (m.stage as string) === "cuartos") ||
             (stageNorm === "semi" && (m.stage as string) === "semifinal") ||
             (stageNorm === "round_of_16" && (m.stage as string) === "octavos") ||
-            (stageNorm === "round_of_32" && (m.stage as string) === "dieciseisavos")
-        )
-        .sort((a, b) => (a.match_number ?? 999) - (b.match_number ?? 999));
-      existingMatch = playoffMatchesThisStage[matchIndex];
+            (stageNorm === "round_of_32" && (m.stage as string) === "dieciseisavos")) &&
+          m.match_number === targetMatchNumber
+      );
     }
 
     const isBye = selectedPairId === "BYE";
@@ -725,6 +781,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
               action: "update_match",
               matchId: existingMatch.id,
               stage,
+              match_number: targetMatchNumber,
               couple1_id: c1,
               couple2_id: c2,
               isBye: matchIsBye,
@@ -739,17 +796,6 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
         } else {
           const c1 = slot === 1 ? pairIdToSave : null;
           const c2 = isBye ? null : (slot === 2 ? pairIdToSave : null);
-          const baseNum =
-            stage === "round_of_32" || stage === "dieciseisavos"
-              ? 100
-              : stage === "round_of_16" || stage === "octavos"
-              ? 120
-              : stage === "quarter" || stage === "cuartos"
-              ? 140
-              : stage === "semi" || stage === "semifinal"
-              ? 150
-              : 160;
-          const matchNumber = baseNum + matchIndex + 1;
 
           const res = await fetch("/api/playoffs", {
             method: "POST",
@@ -758,7 +804,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
               tournamentId,
               action: "create_match",
               stage,
-              match_number: matchNumber,
+              match_number: targetMatchNumber,
               couple1_id: c1,
               couple2_id: c2,
               isBye,
