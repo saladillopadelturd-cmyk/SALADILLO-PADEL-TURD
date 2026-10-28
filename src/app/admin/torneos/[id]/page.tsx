@@ -12,7 +12,7 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase/client";
 import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
-import { calculateRoundRobinStandings } from "@/lib/tournament/standings";
+import { calculateRoundRobinStandings, getQualifiedPairs, getEliminatedPair } from "@/lib/tournament/standings";
 import { calculateOptimalZones, getZoneSuggestions, getMatchZoneDisplayName, propagateZoneMatches, getZone4MatchInfo } from "@/lib/tournament/zones";
 import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel, isSumaCategory, formatScoreInput } from "@/lib/tournament/couples";
 import { findNextPlayoffMatchSlot, propagatePlayoffWinners, getStageName } from "@/lib/tournament/elimination";
@@ -44,6 +44,7 @@ import {
   ArrowRightLeft,
   X,
   RotateCcw,
+  Plus,
 } from "lucide-react";
 
 const GAME_MODE_LABELS: Record<string, string> = {
@@ -94,6 +95,17 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
   const [formScoreSet2, setFormScoreSet2] = useState("");
   const [formScoreSuperTb, setFormScoreSuperTb] = useState("");
   const [formWinnerCoupleId, setFormWinnerCoupleId] = useState("");
+
+  // Estados para Armado y Edición Manual de Partidos de Eliminación
+  const [isPlayoffMatchModalOpen, setIsPlayoffMatchModalOpen] = useState(false);
+  const [editingPlayoffMatch, setEditingPlayoffMatch] = useState<Match | null>(null);
+  const [playoffStage, setPlayoffStage] = useState<string>("quarter");
+  const [playoffMatchNumber, setPlayoffMatchNumber] = useState<string>("");
+  const [playoffCouple1Id, setPlayoffCouple1Id] = useState<string>("");
+  const [playoffCouple2Id, setPlayoffCouple2Id] = useState<string>("");
+  const [playoffIsBye, setPlayoffIsBye] = useState<boolean>(false);
+  const [isClearPlayoffsModalOpen, setIsClearPlayoffsModalOpen] = useState(false);
+  const [deletingPlayoffMatchId, setDeletingPlayoffMatchId] = useState<string | null>(null);
 
   const supabase = createClient();
 
@@ -244,6 +256,94 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     names["Por definir"] = "Por definir";
     return names;
   }, [coupleNamesMap]);
+
+  // Cálculo oficial de parejas clasificadas y eliminadas por zona:
+  // - En zonas de 4 parejas: clasifican las 3 mejores (1°, 2°, 3°). La 4ª queda eliminada.
+  // - En zonas de 3 parejas: clasifican las 2 mejores (1°, 2°). La 3ª queda eliminada.
+  const zoneQualifications = useMemo(() => {
+    const qualified: {
+      pairId: string;
+      coupleObj?: Couple;
+      zoneId: string;
+      zoneName: string;
+      zoneNumber: number;
+      zoneSize: number;
+      position: number;
+      points: number;
+      gameDifference: number;
+      gamesWon: number;
+      isAssigned: boolean;
+      assignedMatchNumber?: number;
+      assignedStage?: string;
+    }[] = [];
+
+    const eliminated: {
+      pairId: string;
+      coupleObj?: Couple;
+      zoneId: string;
+      zoneName: string;
+      zoneNumber: number;
+      zoneSize: number;
+      position: number;
+      points: number;
+    }[] = [];
+
+    const playoffMatches = matches.filter((m) => m.stage !== "zone");
+    const assignedCoupleMap = new Map<string, { matchNumber?: number; stage: string }>();
+    playoffMatches.forEach((m) => {
+      if (m.couple1_id) assignedCoupleMap.set(m.couple1_id, { matchNumber: m.match_number || undefined, stage: m.stage });
+      if (m.couple2_id) assignedCoupleMap.set(m.couple2_id, { matchNumber: m.match_number || undefined, stage: m.stage });
+    });
+
+    zones.forEach((zone) => {
+      const zoneCoupleIds = zoneCouplesMap[zone.id] ?? [];
+      if (zoneCoupleIds.length === 0) return;
+      const zoneMatches = matches.filter((m) => m.zone_id === zone.id);
+      const standings = calculateRoundRobinStandings(zoneMatches, zoneCoupleIds);
+
+      // Regla oficial SPT: 3 clasificados en zona de 4; 2 clasificados en zona de 3
+      const qualifiedStandings = getQualifiedPairs(standings);
+      const eliminatedStanding = getEliminatedPair(standings);
+
+      qualifiedStandings.forEach((s) => {
+        const pid = s.couple_id || s.pair_id || "";
+        const coupleObj = couples.find((c) => c.id === pid);
+        const assignedInfo = assignedCoupleMap.get(pid);
+        qualified.push({
+          pairId: pid,
+          coupleObj,
+          zoneId: zone.id,
+          zoneName: zone.name,
+          zoneNumber: zone.zone_number,
+          zoneSize: zoneCoupleIds.length,
+          position: s.position || 1,
+          points: s.points,
+          gameDifference: (s.games_won ?? 0) - (s.games_lost ?? 0),
+          gamesWon: s.games_won ?? 0,
+          isAssigned: !!assignedInfo,
+          assignedMatchNumber: assignedInfo?.matchNumber,
+          assignedStage: assignedInfo?.stage,
+        });
+      });
+
+      if (eliminatedStanding && standings.length > qualifiedStandings.length) {
+        const elimId = eliminatedStanding.couple_id || eliminatedStanding.pair_id || "";
+        const coupleObj = couples.find((c) => c.id === elimId);
+        eliminated.push({
+          pairId: elimId,
+          coupleObj,
+          zoneId: zone.id,
+          zoneName: zone.name,
+          zoneNumber: zone.zone_number,
+          zoneSize: zoneCoupleIds.length,
+          position: eliminatedStanding.position || standings.length,
+          points: eliminatedStanding.points,
+        });
+      }
+    });
+
+    return { qualified, eliminated };
+  }, [zones, zoneCouplesMap, matches, couples]);
 
   const bracketRounds = useMemo(() => {
     const STAGE_ORDER: Record<string, number> = {
@@ -431,30 +531,145 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     });
   };
 
-  // 3. Action: Generar Cuadro de Playoffs
-  const handleGeneratePlayoffs = async () => {
+  // 3. Actions: Gestión y Armado Manual de Cuadro de Eliminación Directa
+  const openCreatePlayoffMatchModal = () => {
+    setEditingPlayoffMatch(null);
+    const qCount = zoneQualifications.qualified.length;
+    let defaultStage = "quarter";
+    if (qCount > 16) defaultStage = "round_of_32";
+    else if (qCount > 8) defaultStage = "round_of_16";
+    else if (qCount <= 4) defaultStage = "semi";
+
+    setPlayoffStage(defaultStage);
+    const maxMatchNum = matches
+      .filter((m) => m.stage !== "zone")
+      .reduce((max, m) => Math.max(max, m.match_number || 100), 100);
+    setPlayoffMatchNumber(String(maxMatchNum + 1));
+    setPlayoffCouple1Id("");
+    setPlayoffCouple2Id("");
+    setPlayoffIsBye(false);
+    setIsPlayoffMatchModalOpen(true);
+  };
+
+  const openEditPlayoffMatchModal = (m: Match) => {
+    setEditingPlayoffMatch(m);
+    setPlayoffStage(m.stage);
+    setPlayoffMatchNumber(m.match_number ? String(m.match_number) : "");
+    setPlayoffCouple1Id(m.couple1_id || "");
+    setPlayoffCouple2Id(m.couple2_id || "");
+    setPlayoffIsBye(Boolean(m.score_set1?.includes("BYE") || (!m.couple2_id && m.status === "completed")));
+    setIsPlayoffMatchModalOpen(true);
+  };
+
+  const handleSavePlayoffMatch = async () => {
+    if (!tournamentId) return;
+    if (!playoffCouple1Id && !playoffIsBye) {
+      setNotification({ type: "error", text: "Debes seleccionar al menos una pareja para el partido." });
+      return;
+    }
+    if (!playoffIsBye && playoffCouple1Id && playoffCouple1Id === playoffCouple2Id) {
+      setNotification({ type: "error", text: "La Pareja 1 y la Pareja 2 no pueden ser la misma." });
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const isEdit = !!editingPlayoffMatch;
+        const res = await fetch("/api/playoffs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tournamentId,
+            action: isEdit ? "update_match" : "create_match",
+            matchId: editingPlayoffMatch?.id,
+            stage: playoffStage,
+            couple1_id: playoffCouple1Id || null,
+            couple2_id: playoffIsBye ? null : (playoffCouple2Id || null),
+            isBye: playoffIsBye,
+            match_number: playoffMatchNumber ? parseInt(playoffMatchNumber, 10) : undefined,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Error al guardar partido de playoffs");
+
+        setIsPlayoffMatchModalOpen(false);
+        setEditingPlayoffMatch(null);
+        await loadData();
+        setNotification({
+          type: "success",
+          text: isEdit ? "Partido de eliminación actualizado exitosamente." : "Partido de eliminación creado exitosamente.",
+        });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Error al guardar partido";
+        setNotification({ type: "error", text: msg });
+      }
+    });
+  };
+
+  const handleDeletePlayoffMatch = async (matchId: string) => {
+    startTransition(async () => {
+      try {
+        const res = await fetch(`/api/playoffs?tournamentId=${tournamentId}&matchId=${matchId}`, {
+          method: "DELETE",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Error al eliminar partido");
+
+        setDeletingPlayoffMatchId(null);
+        await loadData();
+        setNotification({ type: "success", text: "Partido de eliminación eliminado con éxito." });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Error al eliminar partido";
+        setNotification({ type: "error", text: msg });
+      }
+    });
+  };
+
+  const handleClearPlayoffs = async () => {
+    startTransition(async () => {
+      try {
+        const res = await fetch(`/api/playoffs?tournamentId=${tournamentId}`, {
+          method: "DELETE",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Error al vaciar cuadro");
+
+        setIsClearPlayoffsModalOpen(false);
+        await loadData();
+        setNotification({ type: "success", text: "Cuadro de eliminación vaciado exitosamente." });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Error al vaciar cuadro";
+        setNotification({ type: "error", text: msg });
+      }
+    });
+  };
+
+  // Carga opcional de sugerencia oficial FAP como base editable
+  const handleLoadFAPSuggestion = async () => {
     startTransition(async () => {
       try {
         const res = await fetch("/api/playoffs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tournamentId, force: true }),
+          body: JSON.stringify({ tournamentId, action: "generate_fap", force: true }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Error al generar playoffs");
+        if (!res.ok) throw new Error(data.error || "Error al generar cruces FAP");
 
         await loadData();
-        setActiveTab("fixture");
         setNotification({
           type: "success",
-          text: `Cuadro de eliminación directa generado con éxito (${data.matchesCount ?? 0} partidos creados).`,
+          text: `Cruces oficiales FAP cargados (${data.matchesCreated ?? 0} partidos). Podés modificarlos o agregar nuevos libremente.`,
         });
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Error al generar cuadro eliminatorio";
+        const msg = err instanceof Error ? err.message : "Error al sugerir cruces FAP";
         setNotification({ type: "error", text: msg });
       }
     });
   };
+
+  const handleGeneratePlayoffs = handleLoadFAPSuggestion;
 
   // Parejas disponibles para programar en un partido
   const availableCouplesForScheduling = useMemo(() => {
@@ -1859,44 +2074,209 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
 
             {/* TAB: CUADRO DE ELIMINACIÓN */}
             <TabsContent value="playoffs">
-              <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-dark-900/80 p-5 rounded-2xl border border-dark-700/80">
+              <div className="space-y-6">
+                {/* Cabecera y Botonera */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-dark-900/90 p-5 rounded-2xl border border-dark-700/80 shadow-lg">
                   <div>
                     <h3 className="text-xl font-bold text-white flex items-center gap-2">
                       <Trophy className="w-5 h-5 text-amber-400" />
                       Cuadro de Eliminación Directa
                     </h3>
-                    <p className="text-dark-400 text-xs mt-1">
-                      Hacé clic sobre la pareja ganadora para cargar el resultado. La ganadora se pintará de verde, la perdedora de rojo y avanzará automáticamente a la próxima instancia del cuadro.
+                    <p className="text-dark-300 text-xs mt-1.5 max-w-2xl leading-relaxed">
+                      <strong className="text-emerald-400">Regla Oficial:</strong> En zonas de 4 parejas clasifican las <span className="underline decoration-emerald-400">3 mejores</span> (1°, 2° y 3°). En zonas de 3 parejas clasifican las <span className="underline decoration-emerald-400">2 mejores</span> (1° y 2°). Como administrador podés armar cada partido manualmente seleccionando las parejas clasificadas.
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={openCreatePlayoffMatchModal}
+                      disabled={isPending || zoneQualifications.qualified.length === 0}
+                      className="flex items-center gap-1.5 font-bold bg-emerald-500 hover:bg-emerald-600 text-dark-950 shadow-md"
+                    >
+                      <Plus className="w-4 h-4 text-dark-950" />
+                      Armar Partido
+                    </Button>
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={handleGeneratePlayoffs}
-                      disabled={isPending || zones.length === 0}
-                      className="flex items-center gap-1.5"
+                      onClick={handleLoadFAPSuggestion}
+                      disabled={isPending || zoneQualifications.qualified.length < 2}
+                      title="Carga la plantilla oficial FAP de acuerdo a la cantidad de parejas del torneo como base editable"
+                      className="flex items-center gap-1.5 text-xs border-dark-700 hover:border-amber-400/50"
                     >
-                      <Sparkles className="w-4 h-4 text-amber-400" />
-                      {bracketRounds.length > 0 ? "Regenerar Cuadro" : "Generar Cuadro"}
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      Sugerir Cruces FAP
                     </Button>
+                    {matches.filter((m) => m.stage !== "zone").length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setIsClearPlayoffsModalOpen(true)}
+                        disabled={isPending}
+                        className="text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 flex items-center gap-1.5 text-xs"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Vaciar Cuadro
+                      </Button>
+                    )}
                   </div>
                 </div>
 
+                {/* Panel de Parejas Clasificadas y Eliminadas por Zona */}
+                <div className="bg-dark-900/60 p-5 rounded-2xl border border-dark-800 space-y-4">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        <Users className="w-4 h-4 text-emerald-400" />
+                        Parejas Clasificadas al Cuadro ({zoneQualifications.qualified.length} parejas)
+                      </h4>
+                      <p className="text-xs text-dark-400 mt-0.5">
+                        Estado de disponibilidad para conformar los partidos de eliminación directa
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="flex items-center gap-1.5 text-emerald-400">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                        Clasificada ({zoneQualifications.qualified.length})
+                      </span>
+                      <span className="flex items-center gap-1.5 text-rose-400">
+                        <span className="w-2 h-2 rounded-full bg-rose-400" />
+                        Eliminada ({zoneQualifications.eliminated.length})
+                      </span>
+                    </div>
+                  </div>
+
+                  {zones.length === 0 ? (
+                    <p className="text-xs text-dark-400 italic">No hay zonas configuradas en este torneo.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {zones.map((zone) => {
+                        const zoneQualified = zoneQualifications.qualified.filter((q) => q.zoneId === zone.id);
+                        const zoneElim = zoneQualifications.eliminated.find((e) => e.zoneId === zone.id);
+                        const totalInZone = zoneQualified.length + (zoneElim ? 1 : 0);
+
+                        return (
+                          <div
+                            key={zone.id}
+                            className="p-3.5 bg-dark-950/80 rounded-xl border border-dark-800 space-y-2.5 text-xs"
+                          >
+                            <div className="flex items-center justify-between pb-2 border-b border-dark-800/80">
+                              <span className="font-bold text-white flex items-center gap-1.5">
+                                <Badge variant="default" size="xs">
+                                  {zone.name}
+                                </Badge>
+                                <span className="text-[11px] text-dark-400">({totalInZone} parejas)</span>
+                              </span>
+                              <span className="text-[10px] text-emerald-400/90 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                                Clasifican {totalInZone === 4 ? 3 : 2}
+                              </span>
+                            </div>
+
+                            {/* Lista de Clasificadas de esta Zona */}
+                            <div className="space-y-1.5">
+                              {zoneQualified.map((q) => {
+                                const coupleLabel = getCoupleLabel(q.coupleObj);
+                                return (
+                                  <div
+                                    key={q.pairId}
+                                    className={`p-2 rounded-lg border flex items-center justify-between gap-2 transition-colors ${
+                                      q.isAssigned
+                                        ? "bg-sky-500/5 border-sky-500/30 text-sky-200"
+                                        : "bg-dark-900/90 border-emerald-500/30 text-white"
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span
+                                        className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] flex-shrink-0 ${
+                                          q.position === 1
+                                            ? "bg-amber-400/20 text-amber-300 border border-amber-400/40"
+                                            : q.position === 2
+                                            ? "bg-slate-300/20 text-slate-200 border border-slate-300/40"
+                                            : "bg-amber-700/20 text-amber-400 border border-amber-700/40"
+                                        }`}
+                                      >
+                                        {q.position}°
+                                      </span>
+                                      <span className="truncate font-medium">{coupleLabel}</span>
+                                    </div>
+                                    <span
+                                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-md flex-shrink-0 ${
+                                        q.isAssigned
+                                          ? "bg-sky-500/15 text-sky-300 border border-sky-500/30"
+                                          : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                                      }`}
+                                    >
+                                      {q.isAssigned
+                                        ? `En M#${q.assignedMatchNumber ?? ""}`
+                                        : "Disponible"}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+
+                              {/* Pareja Eliminada de esta Zona */}
+                              {zoneElim && (
+                                <div className="p-2 rounded-lg border border-rose-500/20 bg-rose-500/5 flex items-center justify-between gap-2 text-rose-300/80">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] flex-shrink-0 bg-rose-500/20 text-rose-400 border border-rose-500/40">
+                                      {zoneElim.position}°
+                                    </span>
+                                    <span className="truncate line-through opacity-75">
+                                      {getCoupleLabel(zoneElim.coupleObj)}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-400 border border-rose-500/30 flex-shrink-0">
+                                    Eliminada
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Cuadro Gráfico (Bracket) */}
                 {bracketRounds.length === 0 ? (
-                  <Card className="p-12 text-center text-dark-400">
+                  <Card className="p-10 text-center text-dark-400 border-dark-800 bg-dark-950/40">
                     <Trophy className="w-12 h-12 text-dark-600 mx-auto mb-3" />
-                    <h4 className="text-base font-bold text-white mb-2">Aún no se ha generado el cuadro de eliminación</h4>
-                    <p className="text-dark-400 text-sm max-w-md mx-auto mb-4">
-                      Para armar los cruces de playoffs, primero completa los partidos de zona o hacé clic en Generar Cuadro Playoffs.
+                    <h4 className="text-base font-bold text-white mb-2">Aún no hay partidos conformados en el cuadro</h4>
+                    <p className="text-dark-400 text-sm max-w-md mx-auto mb-5 leading-relaxed">
+                      El cuadro de eliminación no se genera automáticamente. Creá cada partido seleccionando qué parejas clasificadas se enfrentan, o cargá la sugerencia oficial FAP como punto de partida.
                     </p>
-                    <Button onClick={handleGeneratePlayoffs} disabled={isPending || zones.length === 0}>
-                      Generar Cuadro Playoffs
-                    </Button>
+                    <div className="flex items-center justify-center gap-3 flex-wrap">
+                      <Button
+                        onClick={openCreatePlayoffMatchModal}
+                        disabled={isPending || zoneQualifications.qualified.length === 0}
+                        className="bg-emerald-500 hover:bg-emerald-600 text-dark-950 font-bold"
+                      >
+                        <Plus className="w-4 h-4 mr-1.5" />
+                        Armar Primer Partido
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={handleLoadFAPSuggestion}
+                        disabled={isPending || zoneQualifications.qualified.length < 2}
+                      >
+                        <Sparkles className="w-4 h-4 text-amber-400 mr-1.5" />
+                        Sugerir Cruces FAP
+                      </Button>
+                    </div>
                   </Card>
                 ) : (
                   <Card className="p-6 overflow-x-auto border-dark-800 bg-dark-950/40">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <Trophy className="w-4 h-4 text-amber-400" />
+                        Esquema Visual de Llaves
+                      </h4>
+                      <span className="text-xs text-dark-400">
+                        Hacé clic en cualquier partido para cargar o modificar el marcador
+                      </span>
+                    </div>
                     <Bracket
                       rounds={bracketRounds}
                       pairNames={bracketPairNames}
@@ -1917,6 +2297,132 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                       }}
                     />
                   </Card>
+                )}
+
+                {/* Listado Detallado de Partidos del Cuadro de Eliminación */}
+                {matches.filter((m) => m.stage !== "zone").length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-sky-400" />
+                        Partidos de Eliminación Conformados ({matches.filter((m) => m.stage !== "zone").length})
+                      </h4>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={openCreatePlayoffMatchModal}
+                        className="text-xs text-emerald-400 hover:text-emerald-300"
+                      >
+                        <Plus className="w-3.5 h-3.5 mr-1" />
+                        Agregar otro partido
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3">
+                      {matches
+                        .filter((m) => m.stage !== "zone")
+                        .sort((a, b) => (a.match_number ?? 999) - (b.match_number ?? 999))
+                        .map((m) => {
+                          const isCompleted = m.status === "completed";
+                          const isBye = m.score_set1?.includes("BYE") || (!m.couple2_id && isCompleted);
+                          const scoreDisplay = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
+
+                          return (
+                            <div
+                              key={m.id}
+                              className="p-4 bg-dark-900/80 rounded-xl border border-dark-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors hover:border-dark-700"
+                            >
+                              <div className="space-y-2 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Badge variant="default" size="xs" className="font-bold">
+                                    Partido #{m.match_number ?? "-"}
+                                  </Badge>
+                                  <Badge variant="warning" size="xs" className="font-bold">
+                                    {STAGE_LABELS[m.stage] ?? getStageName(m.stage)}
+                                  </Badge>
+                                  {isBye ? (
+                                    <Badge variant="success" size="xs">
+                                      BYE (Pasa directo)
+                                    </Badge>
+                                  ) : isCompleted ? (
+                                    <Badge variant="success" size="xs">
+                                      Finalizado
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="default" size="xs">
+                                      Pendiente
+                                    </Badge>
+                                  )}
+                                </div>
+
+                                <div className="text-sm font-medium text-white flex items-center gap-2 flex-wrap">
+                                  <span
+                                    className={
+                                      m.winner_couple_id === m.couple1_id
+                                        ? "text-emerald-400 font-bold"
+                                        : ""
+                                    }
+                                  >
+                                    {getCoupleLabel(m.couple1, m.couple1_id, "Por definir")}
+                                  </span>
+                                  <span className="text-dark-500 font-bold text-xs">vs</span>
+                                  <span
+                                    className={
+                                      isBye
+                                        ? "text-dark-500 italic"
+                                        : m.winner_couple_id === m.couple2_id
+                                        ? "text-emerald-400 font-bold"
+                                        : ""
+                                    }
+                                  >
+                                    {isBye ? "BYE (Sin rival)" : getCoupleLabel(m.couple2, m.couple2_id, "Por definir")}
+                                  </span>
+                                </div>
+
+                                {scoreDisplay && !isBye && (
+                                  <div className="text-xs font-mono font-bold text-sky-400">
+                                    Resultado: {scoreDisplay}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                {!isBye && (
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={() => openScoreModal(m)}
+                                    title="Cargar o modificar resultado"
+                                    className="text-xs flex items-center gap-1.5"
+                                  >
+                                    <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                                    <span>Resultado</span>
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => openEditPlayoffMatchModal(m)}
+                                  title="Editar parejas o instancia"
+                                  className="text-xs text-sky-400 hover:text-sky-300"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setDeletingPlayoffMatchId(m.id)}
+                                  title="Eliminar este partido del cuadro"
+                                  className="text-xs text-rose-400 hover:text-rose-300"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
                 )}
               </div>
             </TabsContent>
@@ -2638,6 +3144,165 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
               </div>
             </div>
           </Modal>
+
+          {/* Modal: Armar o Editar Partido de Eliminación */}
+          <Modal
+            isOpen={isPlayoffMatchModalOpen}
+            onClose={() => {
+              setIsPlayoffMatchModalOpen(false);
+              setEditingPlayoffMatch(null);
+            }}
+            title={editingPlayoffMatch ? "Editar Cruce de Eliminación" : "Armar Partido de Eliminación"}
+          >
+            <div className="space-y-4">
+              <div className="p-3 bg-dark-900/90 rounded-xl border border-dark-800 text-xs text-dark-300">
+                <span className="font-bold text-emerald-400">Regla de Clasificación: </span>
+                En zonas de 4 parejas clasifican 3 (1°, 2° y 3°). En zonas de 3 parejas clasifican 2 (1° y 2°).
+              </div>
+
+              {/* Instancia / Ronda y Número de Partido */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-dark-300 uppercase tracking-wider mb-1.5">
+                    Instancia / Ronda
+                  </label>
+                  <select
+                    value={playoffStage}
+                    onChange={(e) => setPlayoffStage(e.target.value)}
+                    className="w-full bg-dark-950 border border-dark-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="round_of_32">16avos de Final (32 slots)</option>
+                    <option value="round_of_16">Octavos de Final (16 slots)</option>
+                    <option value="quarter">Cuartos de Final (8 slots)</option>
+                    <option value="semi">Semifinales (4 slots)</option>
+                    <option value="final">Gran Final</option>
+                    <option value="third_place">3° y 4° Puesto</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-dark-300 uppercase tracking-wider mb-1.5">
+                    N° de Partido
+                  </label>
+                  <input
+                    type="number"
+                    value={playoffMatchNumber}
+                    onChange={(e) => setPlayoffMatchNumber(e.target.value)}
+                    placeholder="Ej: 101"
+                    className="w-full bg-dark-950 border border-dark-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-emerald-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Selector Pareja 1 */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-emerald-400 uppercase tracking-wider">
+                  Pareja 1
+                </label>
+                <select
+                  value={playoffCouple1Id}
+                  onChange={(e) => setPlayoffCouple1Id(e.target.value)}
+                  className="w-full bg-dark-950 border border-dark-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="">-- Seleccionar Pareja 1 --</option>
+                  {zoneQualifications.qualified.map((q) => (
+                    <option key={q.pairId} value={q.pairId}>
+                      [{q.position}° {q.zoneName}] {getCoupleLabel(q.coupleObj)} {q.isAssigned && q.pairId !== editingPlayoffMatch?.couple1_id ? `(Ya en M#${q.assignedMatchNumber ?? ""})` : ""}
+                    </option>
+                  ))}
+                  <option value="Por definir">Por definir (esperando fase previa)</option>
+                </select>
+              </div>
+
+              {/* Checkbox BYE */}
+              <div className="p-3 bg-dark-950/80 rounded-xl border border-dark-800 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-white block">¿Tiene BYE (Pasa directo de ronda)?</span>
+                  <span className="text-[11px] text-dark-400">La Pareja 1 avanzará directamente a la próxima fase sin rival.</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={playoffIsBye}
+                  onChange={(e) => setPlayoffIsBye(e.target.checked)}
+                  className="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-500 border-dark-700 bg-dark-900 cursor-pointer"
+                />
+              </div>
+
+              {/* Selector Pareja 2 (si no es BYE) */}
+              {!playoffIsBye && (
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-sky-400 uppercase tracking-wider">
+                    Pareja 2 (Rival)
+                  </label>
+                  <select
+                    value={playoffCouple2Id}
+                    onChange={(e) => setPlayoffCouple2Id(e.target.value)}
+                    className="w-full bg-dark-950 border border-dark-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="">-- Seleccionar Pareja 2 --</option>
+                    {zoneQualifications.qualified.map((q) => (
+                      <option key={q.pairId} value={q.pairId}>
+                        [{q.position}° {q.zoneName}] {getCoupleLabel(q.coupleObj)} {q.isAssigned && q.pairId !== editingPlayoffMatch?.couple2_id ? `(Ya en M#${q.assignedMatchNumber ?? ""})` : ""}
+                      </option>
+                    ))}
+                    <option value="Por definir">Por definir (esperando fase previa)</option>
+                  </select>
+                </div>
+              )}
+
+              {/* Botones de acción */}
+              <div className="flex justify-end gap-2 pt-3 border-t border-dark-800">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setIsPlayoffMatchModalOpen(false);
+                    setEditingPlayoffMatch(null);
+                  }}
+                  disabled={isPending}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleSavePlayoffMatch}
+                  disabled={isPending}
+                  className="bg-emerald-500 hover:bg-emerald-600 text-dark-950 font-bold"
+                >
+                  {isPending ? "Guardando..." : editingPlayoffMatch ? "Guardar Cambios" : "Crear Partido"}
+                </Button>
+              </div>
+            </div>
+          </Modal>
+
+          {/* ConfirmModal: Vaciar Cuadro de Eliminación */}
+          <ConfirmModal
+            isOpen={isClearPlayoffsModalOpen}
+            onClose={() => setIsClearPlayoffsModalOpen(false)}
+            onConfirm={handleClearPlayoffs}
+            title="¿Vaciar Cuadro de Eliminación?"
+            message="Esta acción eliminará todos los partidos conformados del cuadro de eliminación directa de este torneo para que puedas armarlo desde cero. Los resultados y partidos de la fase de zonas no se modificarán."
+            confirmLabel="Sí, vaciar cuadro"
+            variant="danger"
+            loading={isPending}
+          />
+
+          {/* ConfirmModal: Eliminar Partido de Eliminación */}
+          <ConfirmModal
+            isOpen={!!deletingPlayoffMatchId}
+            onClose={() => setDeletingPlayoffMatchId(null)}
+            onConfirm={() => {
+              if (deletingPlayoffMatchId) {
+                handleDeletePlayoffMatch(deletingPlayoffMatchId);
+              }
+            }}
+            title="¿Eliminar Partido de Eliminación?"
+            message="¿Estás seguro de eliminar este partido del cuadro de eliminación? Podrás armarlo nuevamente cuando lo desees."
+            confirmLabel="Eliminar partido"
+            variant="danger"
+            loading={isPending}
+          />
 
           {/* Modal: Programador Automático de Partidos */}
           {tournament && (

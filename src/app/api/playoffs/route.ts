@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { calculateRoundRobinStandings, getQualifiedPairs } from "@/lib/tournament/standings";
+import { calculateRoundRobinStandings, getQualifiedPairs, getEliminatedPair } from "@/lib/tournament/standings";
 import {
   generateSeededPlayoffBracket,
   type QualifiedPair,
@@ -9,9 +9,114 @@ import {
 } from "@/lib/tournament/elimination";
 
 /**
+ * Helper para calcular clasificados y eliminados por zona:
+ * - En zonas de 4 parejas: clasifican las 3 mejores (1°, 2°, 3°). La 4ª queda eliminada.
+ * - En zonas de 3 parejas: clasifican las 2 mejores (1°, 2°). La 3ª queda eliminada.
+ */
+async function calculateZoneQualifications(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  tournamentId: string
+) {
+  // 1. Zonas del torneo
+  const { data: zones } = await supabase
+    .from("zones")
+    .select("*")
+    .eq("tournament_id", tournamentId)
+    .order("zone_number", { ascending: true });
+
+  if (!zones || zones.length === 0) {
+    return { qualifiedPairs: [], eliminatedPairs: [], isZonePhaseCompleted: false, totalZoneMatches: 0, pendingZoneMatches: 0 };
+  }
+
+  // 2. Partidos de zona
+  const { data: zoneMatches } = await supabase
+    .from("matches")
+    .select("*")
+    .eq("tournament_id", tournamentId)
+    .eq("stage", "zone");
+
+  const totalZoneMatches = zoneMatches?.length ?? 0;
+  const pendingZoneMatches = (zoneMatches ?? []).filter((m) => m.status !== "completed").length;
+  const isZonePhaseCompleted = totalZoneMatches > 0 && pendingZoneMatches === 0;
+
+  // 3. Parejas con datos completos
+  const { data: allCouples } = await supabase
+    .from("couples")
+    .select("*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*)")
+    .eq("tournament_id", tournamentId);
+
+  const couplesMap = new Map((allCouples || []).map((c) => [c.id, c]));
+
+  // 4. Mapeo zone_couples
+  const { data: zcData } = await supabase
+    .from("zone_couples")
+    .select("zone_id, couple_id")
+    .in("zone_id", zones.map((z) => z.id));
+
+  const zoneCouplesMap = new Map<string, string[]>();
+  (zcData || []).forEach((zc) => {
+    const list = zoneCouplesMap.get(zc.zone_id) || [];
+    list.push(zc.couple_id);
+    zoneCouplesMap.set(zc.zone_id, list);
+  });
+
+  const qualifiedPairs: (QualifiedPair & { couple?: unknown })[] = [];
+  const eliminatedPairs: { pairId: string; zoneName: string; zonePosition: number; couple?: unknown }[] = [];
+
+  for (const zone of zones) {
+    let pairIds = zoneCouplesMap.get(zone.id) || [];
+    if (pairIds.length === 0) {
+      pairIds = (allCouples || []).filter((c) => c.zone_id === zone.id).map((c) => c.id);
+    }
+    if (pairIds.length === 0) continue;
+
+    const matchesThisZone = (zoneMatches || []).filter((m) => m.zone_id === zone.id);
+    const standings = calculateRoundRobinStandings(matchesThisZone, pairIds);
+
+    // Regla oficial:
+    // Zona de 4 -> clasifican 3 (1°, 2°, 3°).
+    // Zona de 3 -> clasifican 2 (1°, 2°).
+    const qualified = getQualifiedPairs(standings);
+    const eliminated = getEliminatedPair(standings);
+
+    if (eliminated && standings.length > qualified.length) {
+      const elimId = eliminated.couple_id || eliminated.pair_id || "";
+      eliminatedPairs.push({
+        pairId: elimId,
+        zoneName: zone.name,
+        zonePosition: eliminated.position || standings.length,
+        couple: couplesMap.get(elimId),
+      });
+    }
+
+    qualified.forEach((s) => {
+      const pid = s.couple_id || s.pair_id || "";
+      qualifiedPairs.push({
+        pairId: pid,
+        zoneId: zone.id,
+        zoneName: zone.name,
+        zonePosition: s.position || 1,
+        points: s.points,
+        gameDifference: (s.games_won ?? 0) - (s.games_lost ?? 0),
+        gamesWon: s.games_won ?? 0,
+        couple: couplesMap.get(pid),
+      });
+    });
+  }
+
+  return {
+    qualifiedPairs,
+    eliminatedPairs,
+    isZonePhaseCompleted,
+    totalZoneMatches,
+    pendingZoneMatches,
+  };
+}
+
+/**
  * GET /api/playoffs?tournamentId=xxx
- * Obtiene el cuadro eliminatorio completo y el estado de cada partido.
- * Auto-sincroniza en background los ganadores definidos hacia las siguientes fases.
+ * Obtiene el cuadro eliminatorio completo, el estado de cada partido
+ * y la lista oficial de parejas clasificadas por zona.
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -23,6 +128,7 @@ export async function GET(request: Request) {
 
   const supabase = await createClient();
 
+  // Partidos de playoffs
   const { data: playoffMatches, error } = await supabase
     .from("matches")
     .select("*, couple1:couples!matches_couple1_id_fkey(*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*)), couple2:couples!matches_couple2_id_fkey(*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*))")
@@ -46,154 +152,194 @@ export async function GET(request: Request) {
 
       await supabase.from("matches").update(payload).eq("id", update.id);
     }
-
-    const { data: refreshedMatches } = await supabase
-      .from("matches")
-      .select("*, couple1:couples!matches_couple1_id_fkey(*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*)), couple2:couples!matches_couple2_id_fkey(*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*))")
-      .eq("tournament_id", tournamentId)
-      .neq("stage", "zone")
-      .order("match_number", { ascending: true });
-
-    if (refreshedMatches) {
-      return NextResponse.json({
-        success: true,
-        matches: refreshedMatches,
-      });
-    }
   }
+
+  // Calcular las parejas clasificadas y eliminadas de las zonas
+  const qualificationInfo = await calculateZoneQualifications(supabase, tournamentId);
 
   return NextResponse.json({
     success: true,
     matches: updatedMatches,
+    qualifiedPairs: qualificationInfo.qualifiedPairs,
+    eliminatedPairs: qualificationInfo.eliminatedPairs,
+    isZonePhaseCompleted: qualificationInfo.isZonePhaseCompleted,
+    pendingZoneMatches: qualificationInfo.pendingZoneMatches,
   });
 }
 
 /**
  * POST /api/playoffs
- * Genera automáticamente el cuadro de eliminación directa (Playoffs):
- * 1. Calcula las posiciones finales de cada zona.
- * 2. Aplica la regla SPT: La PEOR de cada zona queda eliminada; las demás clasifican.
- * 3. Cruza 1°s contra 2°s/3°s evitando parejas de la misma zona en primera ronda.
- * 4. Asigna BYEs a los mejores 1°s si el número no es potencia de 2.
- * 5. Inserta los partidos del cuadro (Octavos/Cuartos/Semis/Final) en la BD.
+ * Permite al administrador conformar y gestionar manualmente cada partido del cuadro:
+ * - action: "create_match": Crear un partido individual de eliminación
+ * - action: "update_match": Editar parejas o instancia de un partido de eliminación
+ * - action: "delete_match": Eliminar un partido de eliminación
+ * - action: "clear_playoffs": Vaciar el cuadro de playoffs
+ * - action: "generate_fap": Generar sugerencia de cuadro oficial FAP
  */
 export async function POST(request: Request) {
   const supabase = await createClient();
   const body = await request.json();
-  const { tournamentId, force = false } = body;
+  const {
+    tournamentId,
+    action = "generate_fap",
+    matchId,
+    stage,
+    couple1_id,
+    couple2_id,
+    isBye = false,
+    match_number,
+    force = false,
+  } = body;
 
   if (!tournamentId) {
     return NextResponse.json({ error: "tournamentId es requerido" }, { status: 400 });
   }
 
-  // 1. Obtener datos del torneo
-  const { data: tournament, error: tourError } = await supabase
-    .from("tournaments")
-    .select("*")
-    .eq("id", tournamentId)
-    .single();
+  // 1. ELIMINAR PARTIDO ESPECÍFICO DE PLAYOFF
+  if (action === "delete_match") {
+    if (!matchId) {
+      return NextResponse.json({ error: "matchId es requerido para eliminar" }, { status: 400 });
+    }
+    const { error: delError } = await supabase
+      .from("matches")
+      .delete()
+      .eq("id", matchId)
+      .eq("tournament_id", tournamentId);
 
-  if (tourError || !tournament) {
-    return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 });
+    if (delError) {
+      return NextResponse.json({ error: delError.message }, { status: 500 });
+    }
+    return NextResponse.json({ success: true, message: "Partido de eliminación eliminado con éxito" });
   }
 
-  // 2. Obtener zonas del torneo
-  const { data: zones } = await supabase
-    .from("zones")
-    .select("*")
-    .eq("tournament_id", tournamentId)
-    .order("zone_number", { ascending: true });
+  // 2. VACIAR TODOS LOS PARTIDOS DE PLAYOFF
+  if (action === "clear_playoffs") {
+    const { error: clearError } = await supabase
+      .from("matches")
+      .delete()
+      .eq("tournament_id", tournamentId)
+      .neq("stage", "zone");
 
-  if (!zones || zones.length === 0) {
-    return NextResponse.json(
-      { error: "No hay zonas configuradas para este torneo" },
-      { status: 400 }
-    );
+    if (clearError) {
+      return NextResponse.json({ error: clearError.message }, { status: 500 });
+    }
+    return NextResponse.json({ success: true, message: "Cuadro de eliminación vaciado con éxito" });
   }
 
-  // 3. Obtener todos los partidos de zona
-  const { data: zoneMatches } = await supabase
-    .from("matches")
-    .select("*")
-    .eq("tournament_id", tournamentId)
-    .eq("stage", "zone");
+  // 3. EDITAR PARTIDO DE PLAYOFF (CAMBIAR PAREJAS O INSTANCIA)
+  if (action === "update_match") {
+    if (!matchId) {
+      return NextResponse.json({ error: "matchId es requerido para editar" }, { status: 400 });
+    }
 
-  const pendingZoneMatches = zoneMatches?.filter((m) => m.status !== "completed") ?? [];
-  if (pendingZoneMatches.length > 0 && !force) {
+    const payload: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (couple1_id !== undefined) payload.couple1_id = couple1_id || null;
+    if (couple2_id !== undefined) payload.couple2_id = couple2_id || null;
+    if (stage) payload.stage = stage;
+    if (match_number !== undefined) payload.match_number = match_number;
+
+    if (isBye) {
+      payload.couple2_id = null;
+      payload.winner_couple_id = couple1_id || null;
+      payload.score_set1 = "BYE (Pasa de ronda)";
+      payload.status = "completed";
+    }
+
+    const { error: updateError } = await supabase
+      .from("matches")
+      .update(payload)
+      .eq("id", matchId)
+      .eq("tournament_id", tournamentId);
+
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, message: "Partido de eliminación actualizado con éxito" });
+  }
+
+  // 4. CREAR PARTIDO INDIVIDUAL DE PLAYOFF POR EL ADMINISTRADOR
+  if (action === "create_match") {
+    if (!stage) {
+      return NextResponse.json({ error: "La etapa (stage) es requerida" }, { status: 400 });
+    }
+
+    // Calcular siguiente match_number si no se envió
+    let assignedMatchNumber = match_number;
+    if (!assignedMatchNumber) {
+      const { data: maxM } = await supabase
+        .from("matches")
+        .select("match_number")
+        .eq("tournament_id", tournamentId)
+        .order("match_number", { ascending: false })
+        .limit(1);
+
+      assignedMatchNumber = (maxM?.[0]?.match_number ?? 100) + 1;
+    }
+
+    const matchToInsert = {
+      tournament_id: tournamentId,
+      stage,
+      match_number: assignedMatchNumber,
+      couple1_id: couple1_id || null,
+      couple2_id: isBye ? null : (couple2_id || null),
+      winner_couple_id: isBye ? (couple1_id || null) : null,
+      score_set1: isBye ? "BYE (Pasa de ronda)" : null,
+      status: isBye ? "completed" : "pending",
+    };
+
+    const { data: inserted, error: insErr } = await supabase
+      .from("matches")
+      .insert(matchToInsert)
+      .select()
+      .single();
+
+    if (insErr) {
+      return NextResponse.json({ error: insErr.message }, { status: 500 });
+    }
+
+    // Actualizar estado del torneo a playoffs si no lo estaba
+    await supabase
+      .from("tournaments")
+      .update({ status: "playoffs", updated_at: new Date().toISOString() })
+      .eq("id", tournamentId);
+
+    return NextResponse.json({
+      success: true,
+      message: "Partido de eliminación creado con éxito",
+      match: inserted,
+    });
+  }
+
+  // 5. ACCIÓN SUGERIR / CARGAR CRUCES OFICIALES FAP (A DEMANDA DEL ADMINISTRADOR)
+  // Calcula clasificados: en zonas de 4 clasifican 3; en zonas de 3 clasifican 2
+  const qualificationInfo = await calculateZoneQualifications(supabase, tournamentId);
+  const { qualifiedPairs, eliminatedPairs, pendingZoneMatches } = qualificationInfo;
+
+  if (pendingZoneMatches > 0 && !force) {
     return NextResponse.json(
       {
-        error: `Faltan completar ${pendingZoneMatches.length} partidos de la fase de zonas antes de generar los playoffs. (Use force: true para forzar)`,
+        error: `Faltan completar ${pendingZoneMatches} partidos de la fase de zonas antes de conformar los playoffs. (Use force: true para forzar)`,
       },
       { status: 400 }
     );
   }
 
-  // 4. Calcular clasificados por zona (excluyendo a la peor pareja de cada zona)
-  const allQualified: QualifiedPair[] = [];
-  const eliminatedPairs: { pairId: string; zoneName: string }[] = [];
-
-  for (const zone of zones) {
-    // Parejas de esta zona
-    let zonePairIds: string[] = [];
-    const { data: zc } = await supabase
-      .from("zone_couples")
-      .select("couple_id")
-      .eq("zone_id", zone.id);
-
-    if (zc && zc.length > 0) {
-      zonePairIds = zc.map((item) => item.couple_id);
-    } else {
-      const { data: cp } = await supabase
-        .from("couples")
-        .select("id")
-        .eq("zone_id", zone.id);
-      if (cp) zonePairIds = cp.map((p) => p.id);
-    }
-
-    if (zonePairIds.length === 0) continue;
-
-    const matchesThisZone = (zoneMatches ?? []).filter((m) => m.zone_id === zone.id);
-    const standings = calculateRoundRobinStandings(matchesThisZone, zonePairIds);
-
-    // Regla SPT: La peor clasificada queda eliminada
-    const qualifiedInZone = getQualifiedPairs(standings);
-
-    // Identificar a la eliminada
-    if (standings.length > qualifiedInZone.length) {
-      const last = standings[standings.length - 1];
-      eliminatedPairs.push({
-        pairId: last.couple_id || last.pair_id || "",
-        zoneName: zone.name,
-      });
-    }
-
-    // Agregar a la lista de clasificados con su posición (1°, 2°, 3°)
-    qualifiedInZone.forEach((s) => {
-      allQualified.push({
-        pairId: s.couple_id || s.pair_id || "",
-        zoneId: zone.id,
-        zoneName: zone.name,
-        zonePosition: s.position || 1,
-        points: s.points,
-        gameDifference: (s.games_won ?? 0) - (s.games_lost ?? 0),
-        gamesWon: s.games_won ?? 0,
-      });
-    });
-  }
-
-  if (allQualified.length < 2) {
+  if (qualifiedPairs.length < 2) {
     return NextResponse.json(
-      { error: "Se necesitan al menos 2 parejas clasificadas para generar los playoffs" },
+      { error: "Se necesitan al menos 2 parejas clasificadas para conformar el cuadro" },
       { status: 400 }
     );
   }
 
-  // 5. Generar emparejamientos y cuadro de playoffs con plantillas oficiales FAP
-  const totalTournamentCouples = allQualified.length + eliminatedPairs.length;
-  const bracket = generateSeededPlayoffBracket(allQualified, totalTournamentCouples);
+  const totalTournamentCouples = qualifiedPairs.length + eliminatedPairs.length;
+  const bracket = generateSeededPlayoffBracket(qualifiedPairs, totalTournamentCouples);
   const initialStage = bracket.allStages[0];
 
-  // 6. Eliminar partidos de playoffs previos si existían
+  // Eliminar partidos de playoffs previos si existían
   await supabase
     .from("matches")
     .delete()
@@ -213,12 +359,11 @@ export async function POST(request: Request) {
   }[] = [];
   const firstRoundMatchesCreated: { id?: string; advancingPairId?: string; isBye: boolean }[] = [];
 
-  // 7. Insertar primera ronda de Playoffs (Octavos / Cuartos / Semis)
   for (const m of bracket.firstRoundMatches) {
-    const isBye = m.isBye;
+    const isMBye = m.isBye;
     const couple1 = m.couple1Id !== "BYE" ? m.couple1Id : null;
     const couple2 = m.couple2Id !== "BYE" ? m.couple2Id : null;
-    const winnerId = isBye ? m.advancingPairId ?? couple1 ?? couple2 : null;
+    const winnerId = isMBye ? m.advancingPairId ?? couple1 ?? couple2 : null;
 
     matchesToInsert.push({
       tournament_id: tournamentId,
@@ -227,25 +372,23 @@ export async function POST(request: Request) {
       couple1_id: couple1,
       couple2_id: couple2,
       winner_couple_id: winnerId,
-      score_set1: isBye ? "BYE (Pasa de ronda)" : null,
-      status: isBye ? "completed" : "pending",
+      score_set1: isMBye ? "BYE (Pasa de ronda)" : null,
+      status: isMBye ? "completed" : "pending",
     });
 
     firstRoundMatchesCreated.push({
       advancingPairId: m.advancingPairId,
-      isBye,
+      isBye: isMBye,
     });
   }
 
-  // 8. Crear slots para rondas sucesivas (Semifinales, Final...)
+  // Crear slots para rondas sucesivas
   let previousRoundSlotsCount = bracket.firstRoundMatches.length;
-
   for (let sIdx = 1; sIdx < bracket.allStages.length; sIdx++) {
     const currentStage = bracket.allStages[sIdx];
     const matchesInThisStage = Math.max(1, previousRoundSlotsCount / 2);
 
     for (let mIdx = 0; mIdx < matchesInThisStage; mIdx++) {
-      // Si venimos de la ronda 1 y hubo parejas con BYE, vincularlas al slot sucesivo
       let prefilledC1: string | null = null;
       let prefilledC2: string | null = null;
 
@@ -278,7 +421,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
-  // 8.1. Conformar automáticamente el fixture para rondas sucesivas (por ejemplo cruces con BYE)
+  // Auto-propagar cruces con BYE
   const { data: insertedMatches } = await supabase
     .from("matches")
     .select("*")
@@ -296,7 +439,6 @@ export async function POST(request: Request) {
     }
   }
 
-  // 9. Actualizar estado del torneo a 'playoffs'
   await supabase
     .from("tournaments")
     .update({ status: "playoffs", updated_at: new Date().toISOString() })
@@ -304,8 +446,8 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     success: true,
-    message: `Cuadro de playoffs generado con éxito (${getStageName(initialStage)})`,
-    qualifiedCount: allQualified.length,
+    message: `Cuadro de eliminación generado (${getStageName(initialStage)})`,
+    qualifiedCount: qualifiedPairs.length,
     eliminatedCount: eliminatedPairs.length,
     totalSlots: bracket.totalSlots,
     byesCount: bracket.byesCount,
@@ -313,4 +455,39 @@ export async function POST(request: Request) {
     matchesCreated: matchesToInsert.length,
     eliminatedPairs,
   });
+}
+
+/**
+ * DELETE /api/playoffs?tournamentId=xxx&matchId=yyy
+ */
+export async function DELETE(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const tournamentId = searchParams.get("tournamentId");
+  const matchId = searchParams.get("matchId");
+
+  if (!tournamentId) {
+    return NextResponse.json({ error: "tournamentId es requerido" }, { status: 400 });
+  }
+
+  const supabase = await createClient();
+
+  if (matchId) {
+    const { error } = await supabase
+      .from("matches")
+      .delete()
+      .eq("id", matchId)
+      .eq("tournament_id", tournamentId);
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true, message: "Partido eliminado" });
+  } else {
+    const { error } = await supabase
+      .from("matches")
+      .delete()
+      .eq("tournament_id", tournamentId)
+      .neq("stage", "zone");
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true, message: "Partidos de eliminación eliminados" });
+  }
 }

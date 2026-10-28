@@ -982,7 +982,7 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
         return a.id.localeCompare(b.id);
       });
 
-    // 1. Si ya hay partidos de playoffs creados en la BD, utilizarlos con sus marcadores y estados reales
+    // Solo dibujar los partidos que han sido conformados en la base de datos
     if (playoffMatches.length > 0) {
       const playoffRoundsMap: Record<string, { id?: string; pair1: string; pair2: string; winner?: string; score?: string; status?: string }[]> = {};
 
@@ -1008,66 +1008,8 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
         }));
     }
 
-    // 2. Si todavía no se confirmaron partidos de playoffs en la BD, DIBUJAR el cuadro proyectado
-    // según las plantillas oficiales FAP (LIBRO.pdf)
-    if (allQualifiedPairs.length >= 2) {
-      const bracketData = generateSeededPlayoffBracket(allQualifiedPairs, couples.length);
-      const rounds: { round: string; matches: { id?: string; pair1: string; pair2: string; winner?: string; score?: string; status?: string }[] }[] = [];
-
-      const initialStage = bracketData.allStages[0];
-      rounds.push({
-        round: initialStage,
-        matches: bracketData.firstRoundMatches.map((m, idx) => ({
-          id: `proj_${initialStage}_${idx}_${m.couple1Id}_${m.couple2Id}`,
-          pair1: m.couple1Id,
-          pair2: m.couple2Id,
-          winner: m.isBye ? m.advancingPairId : undefined,
-          score: m.isBye ? "BYE" : undefined,
-          status: m.isBye ? "completed" : "pending",
-        })),
-      });
-
-      let previousRoundSlotsCount = bracketData.firstRoundMatches.length;
-      for (let sIdx = 1; sIdx < bracketData.allStages.length; sIdx++) {
-        const currentStage = bracketData.allStages[sIdx];
-        const matchesInThisStage = Math.max(1, previousRoundSlotsCount / 2);
-        const stageMatches = [];
-
-        for (let mIdx = 0; mIdx < matchesInThisStage; mIdx++) {
-          let prefilledC1 = "Por definir";
-          let prefilledC2 = "Por definir";
-
-          if (sIdx === 1) {
-            const originatingMatch1 = bracketData.firstRoundMatches[mIdx * 2];
-            const originatingMatch2 = bracketData.firstRoundMatches[mIdx * 2 + 1];
-            if (originatingMatch1?.isBye && originatingMatch1.advancingPairId) {
-              prefilledC1 = originatingMatch1.advancingPairId;
-            }
-            if (originatingMatch2?.isBye && originatingMatch2.advancingPairId) {
-              prefilledC2 = originatingMatch2.advancingPairId;
-            }
-          }
-
-          stageMatches.push({
-            id: `proj_${currentStage}_${mIdx}_${prefilledC1}_${prefilledC2}`,
-            pair1: prefilledC1,
-            pair2: prefilledC2,
-            status: "pending",
-          });
-        }
-
-        rounds.push({
-          round: currentStage,
-          matches: stageMatches,
-        });
-        previousRoundSlotsCount = matchesInThisStage;
-      }
-
-      return rounds;
-    }
-
     return [];
-  }, [displayMatches, allQualifiedPairs]);
+  }, [displayMatches]);
 
   if (loading) {
     return (
