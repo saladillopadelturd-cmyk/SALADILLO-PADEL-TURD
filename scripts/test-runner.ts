@@ -7,6 +7,98 @@ import { runTournamentBusinessLogicTests } from "../src/lib/tournament/tournamen
 import { generateSeededPlayoffBracket, type QualifiedPair } from "../src/lib/tournament/elimination";
 import { runSchedulerTests } from "../src/lib/tournament/scheduler.test";
 import { FAP_DRAW_TEMPLATES } from "../src/lib/tournament/fap-draws";
+import {
+  calculateFAPZoneStructure,
+  generateZones,
+  generateFAPZoneMatches,
+  resolveQualifiers,
+  buildBracket32,
+  FAP_32_BASE_TEMPLATES,
+  type FAPPair,
+  type ZoneResolvedResults,
+} from "../src/lib/tournament/fap-engine";
+
+function runFAPEngineSuite(): { passed: number; failed: number; errors: string[] } {
+  let passed = 0;
+  let failed = 0;
+  const errors: string[] = [];
+
+  const check = (condition: boolean, desc: string) => {
+    if (condition) {
+      passed++;
+    } else {
+      failed++;
+      errors.push(desc);
+    }
+  };
+
+  // 1. Validar N mod 3 en rango 6 a 48 parejas
+  for (let n = 6; n <= 48; n++) {
+    const s = calculateFAPZoneStructure(n);
+    const sumCapacities = s.capacities.reduce((a, b) => a + b, 0);
+    check(sumCapacities === n, `Suma de capacidades debe ser igual a N=${n}`);
+    if (n % 3 === 0) {
+      check(s.capacities.every((c) => c === 3), `Para N=${n} mod 3 == 0 todas deben ser de 3`);
+    } else if (n % 3 === 1) {
+      check(s.capacities[0] === 4 && s.capacities.slice(1).every((c) => c === 3), `Para N=${n} mod 3 == 1 solo Zona A es de 4`);
+    } else if (n % 3 === 2) {
+      check(s.capacities[0] === 4 && s.capacities[1] === 4 && s.capacities.slice(2).every((c) => c === 3), `Para N=${n} mod 3 == 2 Zonas A y B son de 4`);
+    }
+  }
+
+  // 2. Validar distribución con separación institucional
+  const pairsWithClubs: FAPPair[] = [
+    { id: "p1", names: "P1", ranking: 1, institutionId: "ClubA" },
+    { id: "p2", names: "P2", ranking: 2, institutionId: "ClubB" },
+    { id: "p3", names: "P3", ranking: 3, institutionId: "ClubC" },
+    { id: "p4", names: "P4", ranking: 4, institutionId: "ClubA" },
+    { id: "p5", names: "P5", ranking: 5, institutionId: "ClubB" },
+    { id: "p6", names: "P6", ranking: 6, institutionId: "ClubC" },
+  ];
+  const zInst = generateZones(pairsWithClubs);
+  zInst.forEach((z) => {
+    const clubACount = z.teams.filter((t) => t.institutionId === "ClubA").length;
+    check(clubACount <= 1, `Zona ${z.letter} no debe tener más de 1 pareja de ClubA`);
+  });
+
+  // 3. Validar generación de partidos en zona de 4 (Doble eliminatoria corta)
+  const z4 = zInst[0];
+  z4.capacity = 4;
+  z4.teams = [
+    { id: "1", names: "1", ranking: 1 },
+    { id: "2", names: "2", ranking: 2 },
+    { id: "3", names: "3", ranking: 3 },
+    { id: "4", names: "4", ranking: 4 },
+  ];
+  const m4 = generateFAPZoneMatches(z4);
+  check(m4.length === 4, "Zona de 4 debe generar exactamente 4 partidos");
+  check(m4[0].couple1Id === "1" && m4[0].couple2Id === "4", "Partido 1 debe ser P1 vs P4");
+  check(m4[1].couple1Id === "2" && m4[1].couple2Id === "3", "Partido 2 debe ser P2 vs P3");
+  check(m4[2].isWinnersMatch === true, "Partido 3 debe ser Ganador vs Ganador");
+  check(m4[3].isLosersMatch === true, "Partido 4 debe ser Perdedor vs Perdedor");
+
+  // 4. Validar plantillas de llaves de 32 (28, 29, 30, 31, 32, 33, 34, 35, 36, 48)
+  const sizesToTest = [28, 29, 30, 31, 32, 33, 34, 35, 36, 48];
+  for (const couples of sizesToTest) {
+    const tmpl = FAP_32_BASE_TEMPLATES[couples];
+    check(tmpl !== undefined, `Plantilla de 32 debe existir para ${couples} parejas`);
+    check(tmpl.length === 16, `Plantilla de 32 para ${couples} debe tener 16 partidos`);
+    check(tmpl[0].includes("1º A"), `Plantilla ${couples}: 1º A debe estar en match 0`);
+    check(tmpl[15].includes("1º B"), `Plantilla ${couples}: 1º B debe estar en match 15`);
+
+    // Comprobar que 3º A y 3º B NUNCA reciben BYE
+    for (const [t1, t2] of tmpl) {
+      if (t1 === "3º A" || t2 === "3º A") {
+        check(t1 !== "BYE" && t2 !== "BYE", `Plantilla ${couples}: 3º A NUNCA debe tener BYE`);
+      }
+      if (t1 === "3º B" || t2 === "3º B") {
+        check(t1 !== "BYE" && t2 !== "BYE", `Plantilla ${couples}: 3º B NUNCA debe tener BYE`);
+      }
+    }
+  }
+
+  return { passed, failed, errors };
+}
 
 function runFAPDrawTemplatesSuite(): { passed: number; failed: number; errors: string[] } {
   let passed = 0;
@@ -188,9 +280,21 @@ async function main() {
     fapResults.errors.forEach((e) => console.error(`  x ${e}`));
   }
 
+  // 5. Suite de Motor FAP Integral (Zonas N mod 3, Restricción Institucional, Llaves 32)
+  console.log("\n>> Ejecutando Suite de Motor Integral FAP (fap-engine.ts)...");
+  const fapEngineResults = runFAPEngineSuite();
+  console.log(`Resultados Motor Integral FAP:`);
+  console.log(`  - Validaciones Pasadas: ${fapEngineResults.passed}`);
+  console.log(`  - Fallos Detectados:    ${fapEngineResults.failed}`);
+
+  if (fapEngineResults.errors.length > 0) {
+    console.error("\n[ERRORES EN MOTOR FAP]:");
+    fapEngineResults.errors.forEach((e) => console.error(`  x ${e}`));
+  }
+
   const elapsed = Date.now() - startTime;
-  const totalPassed = businessLogicResults.passed + playoffStress.passed + schedulerResults.passed + fapResults.passed;
-  const totalFailed = businessLogicResults.failed + playoffStress.failed + schedulerResults.failed + fapResults.failed;
+  const totalPassed = businessLogicResults.passed + playoffStress.passed + schedulerResults.passed + fapResults.passed + fapEngineResults.passed;
+  const totalFailed = businessLogicResults.failed + playoffStress.failed + schedulerResults.failed + fapResults.failed + fapEngineResults.failed;
 
   console.log("\n===============================================================");
   console.log("   RESUMEN FINAL DE TESTING Y CALIDAD (QA)");
