@@ -226,45 +226,87 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, message: "Cuadro de eliminación vaciado con éxito" });
   }
 
+  const cleanCoupleId = (v: unknown): string | null => {
+    if (!v || typeof v !== "string") return null;
+    const t = v.trim();
+    if (!t || t === "Por definir" || t === "BYE" || t.toLowerCase() === "null" || t.toLowerCase() === "undefined") {
+      return null;
+    }
+    return t;
+  };
+
+  const cleanStage = (stageVal: unknown): string => {
+    if (!stageVal || typeof stageVal !== "string") return "quarter";
+    const s = stageVal.trim();
+    if (s === "cuartos") return "quarter";
+    if (s === "octavos") return "round_of_16";
+    if (s === "semifinal") return "semi";
+    if (s === "dieciseisavos") return "round_of_32";
+    if (s === "tercer_puesto") return "third_place";
+    return s;
+  };
+
   // 3. EDITAR PARTIDO DE PLAYOFF (CAMBIAR PAREJAS O INSTANCIA)
   if (action === "update_match") {
     if (!matchId) {
       return NextResponse.json({ error: "matchId es requerido para editar" }, { status: 400 });
     }
 
+    const c1 = cleanCoupleId(couple1_id);
+    const c2 = isBye ? null : cleanCoupleId(couple2_id);
+
+    if (c1 && c2 && c1 === c2) {
+      return NextResponse.json({ error: "La Pareja 1 y la Pareja 2 no pueden ser la misma." }, { status: 400 });
+    }
+
     const payload: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
+      couple1_id: c1,
+      couple2_id: c2,
     };
 
-    if (couple1_id !== undefined) payload.couple1_id = couple1_id || null;
-    if (couple2_id !== undefined) payload.couple2_id = couple2_id || null;
-    if (stage) payload.stage = stage;
-    if (match_number !== undefined) payload.match_number = match_number;
+    if (stage) payload.stage = cleanStage(stage);
+    if (match_number !== undefined) payload.match_number = Number(match_number);
 
     if (isBye) {
       payload.couple2_id = null;
-      payload.winner_couple_id = couple1_id || null;
+      payload.winner_couple_id = c1;
       payload.score_set1 = "BYE (Pasa de ronda)";
       payload.status = "completed";
+    } else {
+      payload.winner_couple_id = null;
+      payload.score_set1 = null;
+      payload.status = "pending";
     }
 
-    const { error: updateError } = await supabase
+    const { data: updated, error: updateError } = await supabase
       .from("matches")
       .update(payload)
       .eq("id", matchId)
-      .eq("tournament_id", tournamentId);
+      .eq("tournament_id", tournamentId)
+      .select()
+      .single();
 
     if (updateError) {
+      console.error("Error al actualizar partido de playoffs:", updateError);
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, message: "Partido de eliminación actualizado con éxito" });
+    return NextResponse.json({
+      success: true,
+      message: "Partido de eliminación actualizado con éxito",
+      match: updated,
+    });
   }
 
   // 4. CREAR PARTIDO INDIVIDUAL DE PLAYOFF POR EL ADMINISTRADOR
   if (action === "create_match") {
-    if (!stage) {
-      return NextResponse.json({ error: "La etapa (stage) es requerida" }, { status: 400 });
+    const sanitizedStage = cleanStage(stage);
+    const c1 = cleanCoupleId(couple1_id);
+    const c2 = isBye ? null : cleanCoupleId(couple2_id);
+
+    if (c1 && c2 && c1 === c2) {
+      return NextResponse.json({ error: "La Pareja 1 y la Pareja 2 no pueden ser la misma." }, { status: 400 });
     }
 
     // Calcular siguiente match_number si no se envió
@@ -282,11 +324,11 @@ export async function POST(request: Request) {
 
     const matchToInsert = {
       tournament_id: tournamentId,
-      stage,
-      match_number: assignedMatchNumber,
-      couple1_id: couple1_id || null,
-      couple2_id: isBye ? null : (couple2_id || null),
-      winner_couple_id: isBye ? (couple1_id || null) : null,
+      stage: sanitizedStage,
+      match_number: Number(assignedMatchNumber),
+      couple1_id: c1,
+      couple2_id: c2,
+      winner_couple_id: isBye ? c1 : null,
       score_set1: isBye ? "BYE (Pasa de ronda)" : null,
       status: isBye ? "completed" : "pending",
     };
@@ -298,6 +340,7 @@ export async function POST(request: Request) {
       .single();
 
     if (insErr) {
+      console.error("Error al crear partido de playoffs:", insErr);
       return NextResponse.json({ error: insErr.message }, { status: 500 });
     }
 

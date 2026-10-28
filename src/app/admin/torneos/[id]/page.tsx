@@ -661,11 +661,16 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
 
   const handleSavePlayoffMatch = async () => {
     if (!tournamentId) return;
-    if (!playoffCouple1Id && !playoffIsBye) {
-      setNotification({ type: "error", text: "Debes seleccionar al menos una pareja para el partido." });
-      return;
-    }
-    if (!playoffIsBye && playoffCouple1Id && playoffCouple1Id === playoffCouple2Id) {
+
+    const cleanId = (v: string | null | undefined) => {
+      if (!v || v === "Por definir" || v === "BYE" || v === "") return null;
+      return v.trim() || null;
+    };
+
+    const c1 = cleanId(playoffCouple1Id);
+    const c2 = playoffIsBye ? null : cleanId(playoffCouple2Id);
+
+    if (!playoffIsBye && c1 && c2 && c1 === c2) {
       setNotification({ type: "error", text: "La Pareja 1 y la Pareja 2 no pueden ser la misma." });
       return;
     }
@@ -681,8 +686,8 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
             action: isEdit ? "update_match" : "create_match",
             matchId: editingPlayoffMatch?.id,
             stage: playoffStage,
-            couple1_id: playoffCouple1Id || null,
-            couple2_id: playoffIsBye ? null : (playoffCouple2Id || null),
+            couple1_id: c1,
+            couple2_id: c2,
             isBye: playoffIsBye,
             match_number: playoffMatchNumber ? parseInt(playoffMatchNumber, 10) : undefined,
           }),
@@ -691,8 +696,23 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Error al guardar partido de playoffs");
 
+        // Al presionar CREAR PARTIDO (o guardar): el partido queda creado y se cierra el modal
         setIsPlayoffMatchModalOpen(false);
         setEditingPlayoffMatch(null);
+        setPlayoffCouple1Id("");
+        setPlayoffCouple2Id("");
+        setPlayoffIsBye(false);
+
+        if (data.match) {
+          setMatches((prev) => {
+            const exists = prev.some((m) => m.id === data.match.id);
+            if (exists) {
+              return prev.map((m) => (m.id === data.match.id ? { ...m, ...data.match } : m));
+            }
+            return [...prev, data.match];
+          });
+        }
+
         await loadData();
         setNotification({
           type: "success",
@@ -2189,7 +2209,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                       variant="primary"
                       size="sm"
                       onClick={openCreatePlayoffMatchModal}
-                      disabled={isPending || zoneQualifications.qualified.length === 0}
+                      disabled={isPending}
                       className="flex items-center gap-1.5 font-bold bg-emerald-500 hover:bg-emerald-600 text-dark-950 shadow-md"
                     >
                       <Plus className="w-4 h-4 text-dark-950" />
@@ -2353,7 +2373,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                       <Button
                         size="sm"
                         onClick={openCreatePlayoffMatchModal}
-                        disabled={isPending || zoneQualifications.qualified.length === 0}
+                        disabled={isPending}
                         className="bg-emerald-500 hover:bg-emerald-600 text-dark-950 font-bold text-xs"
                       >
                         <Plus className="w-3.5 h-3.5 mr-1" />
@@ -3352,6 +3372,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
               {/* Botones de acción */}
               <div className="flex justify-end gap-2 pt-3 border-t border-dark-800">
                 <Button
+                  type="button"
                   variant="ghost"
                   size="sm"
                   onClick={() => {
@@ -3363,6 +3384,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                   Cancelar
                 </Button>
                 <Button
+                  type="button"
                   variant="primary"
                   size="sm"
                   onClick={handleSavePlayoffMatch}
