@@ -14,7 +14,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
 import { calculateRoundRobinStandings, getQualifiedPairs, getEliminatedPair } from "@/lib/tournament/standings";
 import { calculateOptimalZones, getZoneSuggestions, getMatchZoneDisplayName, propagateZoneMatches, getZone4MatchInfo } from "@/lib/tournament/zones";
-import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel, isSumaCategory, formatScoreInput } from "@/lib/tournament/couples";
+import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel, getCoupleLastNames, isSumaCategory, formatScoreInput } from "@/lib/tournament/couples";
 import { findNextPlayoffMatchSlot, propagatePlayoffWinners, getStageName } from "@/lib/tournament/elimination";
 import ZoneCard from "@/components/tournament/ZoneCard";
 import ZoneConformationEditor from "@/components/tournament/ZoneConformationEditor";
@@ -260,11 +260,16 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
   }, [matches]);
 
   const bracketPairNames = useMemo(() => {
-    const names: Record<string, string> = { ...coupleNamesMap };
+    const names: Record<string, string> = {};
     names["BYE"] = "BYE (Pasa de ronda)";
     names["Por definir"] = "Por definir";
+
+    couples.forEach((c) => {
+      names[c.id] = getCoupleLastNames(c);
+    });
+
     return names;
-  }, [coupleNamesMap]);
+  }, [couples]);
 
   // Cálculo oficial de parejas clasificadas y eliminadas por zona:
   // - En zonas de 4 parejas: clasifican las 3 mejores (1°, 2°, 3°). La 4ª queda eliminada.
@@ -3614,7 +3619,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                     activeSlotTarget?.slot === 1
                       ? q.pairId === activeSlotTarget?.match.pair1
                       : q.pairId === activeSlotTarget?.match.pair2;
-                  const coupleName = getCoupleLabel(q.coupleObj);
+                  const coupleName = q.coupleObj ? getCoupleLastNames(q.coupleObj) : getCoupleLabel(q.coupleObj);
 
                   return (
                     <button

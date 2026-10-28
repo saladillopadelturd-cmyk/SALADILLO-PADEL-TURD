@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type { Tournament, Zone, Couple, Match } from "@/types/tournament";
 import { calculateRoundRobinStandings, getQualifiedPairs } from "@/lib/tournament/standings";
 import { getMatchZoneDisplayName, propagateZoneMatches, getZone4MatchInfo } from "@/lib/tournament/zones";
-import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel, isSumaCategory, formatScoreInput } from "@/lib/tournament/couples";
+import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel, getCoupleLastNames, isSumaCategory, formatScoreInput } from "@/lib/tournament/couples";
 import {
   propagatePlayoffWinners,
   getStageName,
@@ -940,19 +940,18 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
     return { allQualifiedPairs: qualified, hasPlayoffMatchesInDb: hasPlayoffs };
   }, [matches, zones, zoneCouplesMap, couples, displayMatches]);
 
-  // Nombres de parejas enriquecidos para el cuadro (ej: "1° Zona A: Pareja 1")
+  // Nombres de parejas para el cuadro (apellidos de los jugadores)
   const bracketPairNames = useMemo(() => {
-    const names: Record<string, string> = { ...coupleNamesMap };
+    const names: Record<string, string> = {};
     names["BYE"] = "BYE (Pasa de ronda)";
     names["Por definir"] = "Por definir";
 
-    allQualifiedPairs.forEach((q) => {
-      const originalName = coupleNamesMap[q.pairId] || "Pareja";
-      names[q.pairId] = `${q.zonePosition}° ${q.zoneName}: ${originalName}`;
+    couples.forEach((c) => {
+      names[c.id] = getCoupleLastNames(c);
     });
 
     return names;
-  }, [coupleNamesMap, allQualifiedPairs]);
+  }, [couples]);
 
   // Incondicional: Estructura del cuadro eliminatorio para pestaña playoffs
   const bracketRounds = useMemo(() => {

@@ -68,6 +68,7 @@ import {
   validateCoupleFormation,
   getCoupleNumberMap,
   getCoupleLabelWithNumber,
+  getCoupleLastNames,
   formatPlayerShortName,
   formatPlayerFullName,
   generateRandomCouples,
@@ -947,6 +948,10 @@ export function runTournamentBusinessLogicTests(): TestResult {
   // Formato completo sin abreviar opcional
   const labelFull = getCoupleLabelWithNumber(numberingCouples[2], 3, false);
   assert(labelFull === "Pareja 3: Matías Vidal / Agustín Ruiz", "Formato completo sin abreviar accesible con flag");
+
+  // Formato oficial de llaves/cuadro: únicamente apellidos de los jugadores
+  const labelLastNames = getCoupleLastNames(numberingCouples[2]);
+  assert(labelLastNames === "Vidal / Ruiz", "getCoupleLastNames devuelve únicamente los apellidos de los jugadores");
 
   // e) Generación automática de parejas con numeración consecutiva
   const playersForAuto: Player[] = [

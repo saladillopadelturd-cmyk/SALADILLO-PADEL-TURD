@@ -487,6 +487,18 @@ export function getCouplePlayersShortLabel(couple?: Couple | null): string {
 }
 
 /**
+ * Devuelve únicamente los apellidos de los jugadores de la pareja ("Apellido 1 / Apellido 2").
+ * Si un jugador no tiene apellido cargado, utiliza su nombre.
+ * Ejemplo: "Vidal / Ruiz"
+ */
+export function getCoupleLastNames(couple?: Couple | null): string {
+  if (!couple) return "Por definir";
+  const p1 = couple.player1?.last_name?.trim() || couple.player1?.first_name?.trim() || "Jugador 1";
+  const p2 = couple.player2?.last_name?.trim() || couple.player2?.first_name?.trim() || "Jugador 2";
+  return `${p1} / ${p2}`;
+}
+
+/**
  * Genera parejas aleatorias a partir de una lista de jugadores disponibles para un torneo.
  * En torneos SUMA, realiza emparejamientos inteligentes que satisfagan la suma de categorías requerida.
  * Asigna la numeración secuencial correlativa ("Pareja 1", "Pareja 2", etc.).
