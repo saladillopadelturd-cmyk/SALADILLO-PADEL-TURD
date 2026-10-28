@@ -22,6 +22,7 @@ export interface BracketProps {
   pairNames: Record<string, string>;
   onMatchClick?: (matchId: string, winningPairId?: string, match?: BracketMatch) => void;
   onAssignClick?: (match: BracketMatch, stage: string, matchIndex: number) => void;
+  onAssignSlotClick?: (match: BracketMatch, stage: string, matchIndex: number, slot: 1 | 2) => void;
   isAdmin?: boolean;
 }
 
@@ -255,7 +256,7 @@ function getStageTheme(roundKey: string): StageTheme {
   return STAGE_THEMES[normalizedKey] ?? DEFAULT_STAGE_THEME;
 }
 
-export default function Bracket({ rounds, pairNames, onMatchClick, onAssignClick, isAdmin }: BracketProps) {
+export default function Bracket({ rounds, pairNames, onMatchClick, onAssignClick, onAssignSlotClick, isAdmin }: BracketProps) {
   const canInteract = isAdmin !== false && Boolean(onMatchClick);
 
   if (!rounds || rounds.length === 0) {
@@ -420,6 +421,9 @@ export default function Bracket({ rounds, pairNames, onMatchClick, onAssignClick
                                 if (isP1Clickable && onMatchClick) {
                                   e.stopPropagation();
                                   onMatchClick(matchIdentifier, match.pair1, match);
+                                } else if (isAdmin && onAssignSlotClick) {
+                                  e.stopPropagation();
+                                  onAssignSlotClick(match, round.round, matchIndex, 1);
                                 } else if (isAdmin && onAssignClick && isP1Pending) {
                                   e.stopPropagation();
                                   onAssignClick(match, round.round, matchIndex);
@@ -428,21 +432,23 @@ export default function Bracket({ rounds, pairNames, onMatchClick, onAssignClick
                               title={
                                 isP1Clickable
                                   ? "Hacé clic para marcar a esta pareja como ganadora y anotar el resultado"
-                                  : isAdmin && isP1Pending
-                                  ? "Hacé clic para asignar la Pareja 1"
+                                  : isAdmin
+                                  ? isP1Pending
+                                    ? "Hacé clic para elegir una pareja de la lista"
+                                    : "Hacé clic para cambiar esta pareja"
                                   : undefined
                               }
-                              className={`group/p1 flex items-center justify-between px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all mb-1.5 ${
+                              className={`group/p1 flex items-center justify-between px-3 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all mb-1.5 ${
                                 isP1Winner
                                   ? "bg-emerald-500/25 text-emerald-300 border-2 border-emerald-500/80 font-bold shadow-md shadow-emerald-500/20"
                                   : isP1Loser
                                   ? "bg-rose-500/20 text-rose-300 border-2 border-rose-500/60 font-medium shadow-sm shadow-rose-500/10"
                                   : isP1Pending
                                   ? isAdmin
-                                    ? "bg-dark-950/60 text-emerald-400/80 hover:text-emerald-300 hover:border-emerald-500/40 italic font-normal border border-dashed border-dark-700/80 cursor-pointer"
+                                    ? "bg-dark-950/70 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 hover:border-emerald-400/80 font-medium border-2 border-dashed border-emerald-500/50 cursor-pointer shadow-sm"
                                     : "bg-dark-950/40 text-dark-400 italic font-normal border border-dark-800/50"
                                   : `bg-dark-950/70 text-slate-200 border border-dark-800 ${
-                                      isP1Clickable
+                                      isP1Clickable || (isAdmin && onAssignSlotClick)
                                         ? "hover:bg-emerald-500/15 hover:border-emerald-400/70 hover:text-emerald-200 cursor-pointer"
                                         : ""
                                     }`
@@ -455,11 +461,18 @@ export default function Bracket({ rounds, pairNames, onMatchClick, onAssignClick
                                   <span className="w-2 h-2 rounded-full bg-rose-400 flex-shrink-0" />
                                 ) : isP1Clickable ? (
                                   <span className="w-2 h-2 rounded-full bg-emerald-400/40 group-hover/p1:bg-emerald-400 flex-shrink-0 transition-colors" />
+                                ) : isP1Pending && isAdmin ? (
+                                  <Plus className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
                                 ) : null}
                                 <span className="truncate">{p1DisplayName}</span>
                               </div>
 
                               <div className="flex items-center gap-1.5 flex-shrink-0">
+                                {isP1Pending && isAdmin && (
+                                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                                    Elegir
+                                  </span>
+                                )}
                                 {isP1Winner && (
                                   <span className="scoreboard-digit text-[10px] font-mono font-black text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded border border-emerald-500/40">
                                     GANADOR
@@ -489,6 +502,9 @@ export default function Bracket({ rounds, pairNames, onMatchClick, onAssignClick
                                 if (isP2Clickable && onMatchClick) {
                                   e.stopPropagation();
                                   onMatchClick(matchIdentifier, match.pair2, match);
+                                } else if (isAdmin && onAssignSlotClick) {
+                                  e.stopPropagation();
+                                  onAssignSlotClick(match, round.round, matchIndex, 2);
                                 } else if (isAdmin && onAssignClick && isP2Pending) {
                                   e.stopPropagation();
                                   onAssignClick(match, round.round, matchIndex);
@@ -497,21 +513,23 @@ export default function Bracket({ rounds, pairNames, onMatchClick, onAssignClick
                               title={
                                 isP2Clickable
                                   ? "Hacé clic para marcar a esta pareja como ganadora y anotar el resultado"
-                                  : isAdmin && isP2Pending
-                                  ? "Hacé clic para asignar la Pareja 2"
+                                  : isAdmin
+                                  ? isP2Pending
+                                    ? "Hacé clic para elegir una pareja de la lista"
+                                    : "Hacé clic para cambiar esta pareja"
                                   : undefined
                               }
-                              className={`group/p2 flex items-center justify-between px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                              className={`group/p2 flex items-center justify-between px-3 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
                                 isP2Winner
                                   ? "bg-emerald-500/25 text-emerald-300 border-2 border-emerald-500/80 font-bold shadow-md shadow-emerald-500/20"
                                   : isP2Loser
                                   ? "bg-rose-500/20 text-rose-300 border-2 border-rose-500/60 font-medium shadow-sm shadow-rose-500/10"
                                   : isP2Pending
                                   ? isAdmin
-                                    ? "bg-dark-950/60 text-sky-400/80 hover:text-sky-300 hover:border-sky-500/40 italic font-normal border border-dashed border-dark-700/80 cursor-pointer"
+                                    ? "bg-dark-950/70 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10 hover:border-sky-400/80 font-medium border-2 border-dashed border-sky-500/50 cursor-pointer shadow-sm"
                                     : "bg-dark-950/40 text-dark-400 italic font-normal border border-dark-800/50"
                                   : `bg-dark-950/70 text-slate-200 border border-dark-800 ${
-                                      isP2Clickable
+                                      isP2Clickable || (isAdmin && onAssignSlotClick)
                                         ? "hover:bg-emerald-500/15 hover:border-emerald-400/70 hover:text-emerald-200 cursor-pointer"
                                         : ""
                                     }`
@@ -524,11 +542,18 @@ export default function Bracket({ rounds, pairNames, onMatchClick, onAssignClick
                                   <span className="w-2 h-2 rounded-full bg-rose-400 flex-shrink-0" />
                                 ) : isP2Clickable ? (
                                   <span className="w-2 h-2 rounded-full bg-emerald-400/40 group-hover/p2:bg-emerald-400 flex-shrink-0 transition-colors" />
+                                ) : isP2Pending && isAdmin ? (
+                                  <Plus className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
                                 ) : null}
                                 <span className="truncate">{p2DisplayName}</span>
                               </div>
 
                               <div className="flex items-center gap-1.5 flex-shrink-0">
+                                {isP2Pending && isAdmin && (
+                                  <span className="text-[10px] font-bold text-sky-400 bg-sky-500/15 px-1.5 py-0.5 rounded border border-sky-500/30">
+                                    Elegir
+                                  </span>
+                                )}
                                 {isP2Winner && (
                                   <span className="scoreboard-digit text-[10px] font-mono font-black text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded border border-emerald-500/40">
                                     GANADOR

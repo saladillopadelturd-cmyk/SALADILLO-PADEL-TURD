@@ -107,6 +107,15 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
   const [isClearPlayoffsModalOpen, setIsClearPlayoffsModalOpen] = useState(false);
   const [deletingPlayoffMatchId, setDeletingPlayoffMatchId] = useState<string | null>(null);
 
+  // Estados para Selección Rápida de Pareja al hacer clic en "Por definir" en el cuadro
+  const [isSlotPickerOpen, setIsSlotPickerOpen] = useState(false);
+  const [activeSlotTarget, setActiveSlotTarget] = useState<{
+    match: { id?: string; pair1: string; pair2: string; winner?: string; score?: string; status?: string };
+    stage: string;
+    matchIndex: number;
+    slot: 1 | 2;
+  } | null>(null);
+
   const supabase = createClient();
 
   // Sync tab with URL parameter when parameter changes
@@ -657,6 +666,118 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
       setPlayoffIsBye(bracketMatch.pair2 === "BYE");
       setIsPlayoffMatchModalOpen(true);
     }
+  };
+
+  // Al hacer clic en un cuadro "Por definir": se abre inmediatamente el listado de parejas
+  const handleBracketSlotClick = (
+    bracketMatch: { id?: string; pair1: string; pair2: string; winner?: string; score?: string; status?: string },
+    stage: string,
+    matchIndex: number,
+    slot: 1 | 2
+  ) => {
+    setActiveSlotTarget({ match: bracketMatch, stage, matchIndex, slot });
+    setIsSlotPickerOpen(true);
+  };
+
+  // Al elegir una pareja de la lista: queda definida en ese cuadro y se cierra el listado
+  const handleSelectCoupleForSlot = async (selectedPairId: string) => {
+    if (!activeSlotTarget || !tournamentId) return;
+    const { match, stage, matchIndex, slot } = activeSlotTarget;
+
+    // Cerrar inmediatamente el listado
+    setIsSlotPickerOpen(false);
+    setActiveSlotTarget(null);
+
+    let existingMatch: Match | undefined;
+    if (match.id && !match.id.startsWith("slot_") && !match.id.startsWith("proj_")) {
+      existingMatch = matches.find((m) => m.id === match.id);
+    }
+    if (!existingMatch) {
+      const stageNorm = stage;
+      const playoffMatchesThisStage = matches
+        .filter(
+          (m) =>
+            m.stage === stageNorm ||
+            (stageNorm === "quarter" && (m.stage as string) === "cuartos") ||
+            (stageNorm === "semi" && (m.stage as string) === "semifinal") ||
+            (stageNorm === "round_of_16" && (m.stage as string) === "octavos") ||
+            (stageNorm === "round_of_32" && (m.stage as string) === "dieciseisavos")
+        )
+        .sort((a, b) => (a.match_number ?? 999) - (b.match_number ?? 999));
+      existingMatch = playoffMatchesThisStage[matchIndex];
+    }
+
+    const isBye = selectedPairId === "BYE";
+    const pairIdToSave = selectedPairId === "Por definir" || selectedPairId === "BYE" ? null : selectedPairId;
+
+    startTransition(async () => {
+      try {
+        if (existingMatch) {
+          const c1 = slot === 1 ? pairIdToSave : existingMatch.couple1_id;
+          const c2 = isBye ? null : (slot === 2 ? pairIdToSave : existingMatch.couple2_id);
+          const matchIsBye = isBye || Boolean(existingMatch.score_set1?.includes("BYE"));
+
+          const res = await fetch("/api/playoffs", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              tournamentId,
+              action: "update_match",
+              matchId: existingMatch.id,
+              stage,
+              couple1_id: c1,
+              couple2_id: c2,
+              isBye: matchIsBye,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Error al actualizar cruce");
+
+          if (data.match) {
+            setMatches((prev) => prev.map((m) => (m.id === data.match.id ? { ...m, ...data.match } : m)));
+          }
+        } else {
+          const c1 = slot === 1 ? pairIdToSave : null;
+          const c2 = isBye ? null : (slot === 2 ? pairIdToSave : null);
+          const baseNum =
+            stage === "round_of_32" || stage === "dieciseisavos"
+              ? 100
+              : stage === "round_of_16" || stage === "octavos"
+              ? 120
+              : stage === "quarter" || stage === "cuartos"
+              ? 140
+              : stage === "semi" || stage === "semifinal"
+              ? 150
+              : 160;
+          const matchNumber = baseNum + matchIndex + 1;
+
+          const res = await fetch("/api/playoffs", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              tournamentId,
+              action: "create_match",
+              stage,
+              match_number: matchNumber,
+              couple1_id: c1,
+              couple2_id: c2,
+              isBye,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Error al asignar cruce");
+
+          if (data.match) {
+            setMatches((prev) => [...prev.filter((m) => m.id !== data.match.id), data.match]);
+          }
+        }
+
+        await loadData();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Error al asignar pareja";
+        setNotification({ type: "error", text: msg });
+      }
+    });
   };
 
   const handleSavePlayoffMatch = async () => {
@@ -2396,6 +2517,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                     pairNames={bracketPairNames}
                     isAdmin={true}
                     onAssignClick={handleBracketAssignClick}
+                    onAssignSlotClick={handleBracketSlotClick}
                     onMatchClick={(matchId, winningPairId, matchData) => {
                       let found = matches.find((m) => m.id === matchId);
                       if (!found && matchData) {
@@ -3393,6 +3515,116 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                 >
                   {isPending ? "Guardando..." : editingPlayoffMatch ? "Guardar Cambios" : "Crear Partido"}
                 </Button>
+              </div>
+            </div>
+          </Modal>
+
+          {/* Modal: Selección Rápida de Pareja (SOLO el listado de parejas) al hacer clic en "Por definir" en el cuadro */}
+          <Modal
+            isOpen={isSlotPickerOpen}
+            onClose={() => {
+              setIsSlotPickerOpen(false);
+              setActiveSlotTarget(null);
+            }}
+            size="md"
+            title={
+              activeSlotTarget
+                ? `Elegir ${activeSlotTarget.slot === 1 ? "Pareja 1" : "Pareja 2"} - ${
+                    activeSlotTarget.stage === "round_of_32"
+                      ? "16avos"
+                      : activeSlotTarget.stage === "round_of_16"
+                      ? "Octavos"
+                      : activeSlotTarget.stage === "quarter"
+                      ? "Cuartos"
+                      : activeSlotTarget.stage === "semi"
+                      ? "Semifinal"
+                      : "Final"
+                  } (Partido #${activeSlotTarget.matchIndex + 1})`
+                : "Seleccionar Pareja"
+            }
+          >
+            <div className="space-y-2">
+              <p className="text-xs text-dark-400 mb-2">
+                Hacé clic sobre una pareja para definirla en este cuadro:
+              </p>
+
+              <div className="max-h-[60vh] overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+                {(zoneQualifications.qualified.length > 0
+                  ? zoneQualifications.qualified
+                  : couples.map((c, i) => ({
+                      pairId: c.id,
+                      coupleObj: c,
+                      zoneName: "General",
+                      position: i + 1,
+                      isAssigned: matches.some(
+                        (m) => m.stage !== "zone" && (m.couple1_id === c.id || m.couple2_id === c.id)
+                      ),
+                      assignedMatchNumber: matches.find(
+                        (m) => m.stage !== "zone" && (m.couple1_id === c.id || m.couple2_id === c.id)
+                      )?.match_number,
+                    }))
+                ).map((q) => {
+                  const isCurrentInThisSlot =
+                    activeSlotTarget?.slot === 1
+                      ? q.pairId === activeSlotTarget?.match.pair1
+                      : q.pairId === activeSlotTarget?.match.pair2;
+                  const coupleName = getCoupleLabel(q.coupleObj);
+
+                  return (
+                    <button
+                      key={q.pairId}
+                      type="button"
+                      onClick={() => handleSelectCoupleForSlot(q.pairId)}
+                      className={`w-full p-3 rounded-xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer ${
+                        isCurrentInThisSlot
+                          ? "bg-emerald-500/20 border-emerald-500 text-white font-bold ring-1 ring-emerald-500/40"
+                          : "bg-dark-950/70 border-dark-800 hover:border-emerald-400/80 hover:bg-dark-900 text-white hover:scale-[1.01]"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span
+                          className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${
+                            q.position === 1
+                              ? "bg-amber-400/20 text-amber-300 border border-amber-400/40"
+                              : q.position === 2
+                              ? "bg-slate-300/20 text-slate-200 border border-slate-300/40"
+                              : "bg-amber-700/20 text-amber-400 border border-amber-700/40"
+                          }`}
+                        >
+                          {q.position}°
+                        </span>
+                        <div className="truncate">
+                          <span className="text-xs text-dark-400 mr-1.5 font-bold">{q.zoneName}:</span>
+                          <span className="font-semibold text-sm text-white">{coupleName}</span>
+                        </div>
+                      </div>
+
+                      {q.isAssigned && !isCurrentInThisSlot && (
+                        <span className="text-[10px] text-sky-300 bg-sky-500/15 px-2 py-0.5 rounded border border-sky-500/30 flex-shrink-0">
+                          {q.assignedMatchNumber ? `En M#${q.assignedMatchNumber}` : "Asignada"}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+
+                {/* Opción BYE */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectCoupleForSlot("BYE")}
+                  className="w-full p-3 rounded-xl border border-dashed border-amber-500/40 hover:border-amber-400 bg-amber-500/10 hover:bg-amber-500/20 text-left flex items-center justify-between text-xs text-amber-300 font-bold transition-all cursor-pointer"
+                >
+                  <span>⚡ BYE (Pase directo sin rival)</span>
+                </button>
+
+                {/* Opción Dejar por definir */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectCoupleForSlot("Por definir")}
+                  className="w-full p-2.5 rounded-xl border border-dashed border-dark-800 hover:border-dark-700 text-xs text-dark-400 hover:text-dark-300 text-center transition-all cursor-pointer"
+                >
+                  Dejar como &quot;Por definir&quot;
+                </button>
               </div>
             </div>
           </Modal>
