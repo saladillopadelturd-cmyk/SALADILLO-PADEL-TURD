@@ -1257,18 +1257,6 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                   </span>
                 </Button>
 
-                {zones.length > 0 && !isEditingConformation && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setIsEditingConformation(true)}
-                    className="border-dark-700 hover:border-emerald-500/40 text-slate-200 font-bold flex items-center gap-1.5"
-                  >
-                    <Settings2 className="w-4 h-4 text-emerald-400" />
-                    <span>Editar Conformación</span>
-                  </Button>
-                )}
-
                 {zones.length > 0 && emptyZonesCount > 0 && !isEditingConformation && (
                   <Button
                     variant="secondary"
