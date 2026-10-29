@@ -105,6 +105,7 @@ export function initializeR1Slots(_totalCouplesCount?: number): AnchoredMatchSlo
 
 /**
  * Asigna una pareja como SEMBRADA para que aparezca directamente en 8VOS DE FINAL.
+ * Siempre se van completando las llaves estrictamente de ARRIBA HACIA ABAJO (slots 0 a 15).
  * En 16vos de final recibe pase libre (BYE) y en 8vos de final aparece en su cruce correspondiente esperando rival.
  * Por ningún motivo altera la ubicación de parejas colocadas previamente.
  */
@@ -116,27 +117,8 @@ export function assignSeedToSlots(
   const cleaned = removeCoupleFromSlots(currentSlots, coupleId);
   const nextSlots = cleaned.map((s) => ({ ...s }));
 
-  // 2. Buscamos el primer cruce de 8vos disponible (preferentemente slot par de 16vos: 0, 2, 4, 6...)
-  // para que ingrese en la ranura superior de 8vos de final
-  let targetIdx = -1;
-
-  // Prioridad 1: Cruce par de 16vos totalmente vacío (ranura superior de 8vos)
-  for (let i = 0; i < NUM_16VOS_MATCHES; i += 2) {
-    if (nextSlots[i].type === "empty") {
-      targetIdx = i;
-      break;
-    }
-  }
-
-  // Prioridad 2: Si todos los pares están ocupados, cualquier cruce impar totalmente vacío
-  if (targetIdx === -1) {
-    for (let i = 1; i < NUM_16VOS_MATCHES; i += 2) {
-      if (nextSlots[i].type === "empty") {
-        targetIdx = i;
-        break;
-      }
-    }
-  }
+  // 2. Buscamos el primer slot libre estrictamente de arriba hacia abajo (slots 0 a 15)
+  const targetIdx = nextSlots.findIndex((s) => s.type === "empty");
 
   if (targetIdx !== -1) {
     nextSlots[targetIdx] = {

@@ -459,7 +459,7 @@ export function ManualPlayoffBracketModal({
                 Generador Manual de Cuadro de Eliminación Directa
               </h2>
               <p className="text-xs text-dark-400">
-                Cada pareja sembrada o colocada queda fija en su llave. Solo dejará su lugar si presionas (X).
+                Las llaves se van completando de arriba hacia abajo. Marca &apos;Sembrar&apos; para 8vos o &apos;Jugar&apos; para disputar 16vos.
               </p>
             </div>
           </div>
@@ -612,22 +612,22 @@ export function ManualPlayoffBracketModal({
                       <div className="mt-2 pt-2 border-t border-dark-800/60 text-[11px]">
                         {isUnassigned ? (
                           <span className="text-dark-500 italic">
-                            Sin asignar. Elige si jugará en 16vos de Final o se siembra en 8vos de Final.
+                            Sin asignar. Selecciona Sembrar o Jugar (se asignará de arriba hacia abajo).
                           </span>
                         ) : isSeed ? (
                           <span className="text-amber-400 font-medium flex items-center gap-1">
                             <Sparkles className="w-3 h-3 flex-shrink-0" />
-                            Sembrada en 8vos de Final (Partido #{Math.floor(location.matchIndex / 2) + 1}): pasa directo a 8vos y espera rival.
+                            Llave #{Math.floor(location.matchIndex / 2) + 1} de 8vos ({location.matchIndex % 2 === 0 ? "Superior" : "Inferior"}): Sembrada directo en 8vos.
                           </span>
                         ) : location?.isWaiting ? (
                           <span className="text-rose-400 font-medium flex items-center gap-1">
                             <AlertCircle className="w-3 h-3 flex-shrink-0" />
-                            Cruce en 16vos de Final (Partido #{location.matchIndex + 1}) (esperando rival). Marca otra pareja con &apos;Jugar&apos;.
+                            16vos de Final (Llave #{Math.floor(location.matchIndex / 2) + 1} de 8vos - {location.matchIndex % 2 === 0 ? "Superior" : "Inferior"}, esperando rival). Marca otra pareja con &apos;Jugar&apos;.
                           </span>
                         ) : (
                           <span className="text-emerald-400 font-medium flex items-center gap-1">
                             <Swords className="w-3 h-3 flex-shrink-0" />
-                            Cruce en 16vos de Final (Partido #{location.matchIndex + 1}) vs{" "}
+                            16vos de Final (Llave #{Math.floor(location.matchIndex / 2) + 1} de 8vos - {location.matchIndex % 2 === 0 ? "Superior" : "Inferior"}) vs{" "}
                             <span className="underline font-bold text-slate-200">
                               {location.opponentName || "Rival"}
                             </span>

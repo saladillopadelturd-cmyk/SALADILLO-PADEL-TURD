@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert";
 import {
   buildManualPlayoffBracket,
+  buildManualPlayoffBracketFromSlots,
   initializeR1Slots,
   assignSeedToSlots,
   assignPlayToSlots,
@@ -143,5 +144,60 @@ describe("Motor Manual de Eliminación Directa: 16vos para Jugar y 8vos para Sem
     assert.strictEqual(slots[1].couple1Id, "C");
     assert.strictEqual(slots[1].couple2Id, null);
     assert.strictEqual(slots[0].couple1Id, "A");
+  });
+
+  it("Caso 8: Asignación secuencial de arriba hacia abajo (Llave 1 de 8vos con sembrada y 16vos, luego pasa a Llave 2)", () => {
+    let slots = initializeR1Slots();
+
+    // 1. En la primer llave se siembra una pareja (ocupa slot 0 de arriba hacia abajo)
+    slots = assignSeedToSlots(slots, "P1");
+    assert.strictEqual(slots[0].type, "seed");
+    assert.strictEqual(slots[0].couple1Id, "P1");
+
+    // 2. Seguido a esto se eligen 2 parejas para jugar 16vos de final (ocupan slot 1)
+    slots = assignPlayToSlots(slots, "P2");
+    assert.strictEqual(slots[1].type, "match");
+    assert.strictEqual(slots[1].couple1Id, "P2");
+    assert.strictEqual(slots[1].couple2Id, null, "P2 espera rival en 16vos");
+
+    slots = assignPlayToSlots(slots, "P3");
+    assert.strictEqual(slots[1].type, "match");
+    assert.strictEqual(slots[1].couple1Id, "P2");
+    assert.strictEqual(slots[1].couple2Id, "P3", "P2 y P3 disputan 16vos para enfrentar a P1 en 8vos");
+
+    // 3. De allí pasamos a la segunda llave de octavos (slots 2 y 3)
+    slots = assignSeedToSlots(slots, "P4");
+    assert.strictEqual(slots[2].type, "seed");
+    assert.strictEqual(slots[2].couple1Id, "P4", "P4 ocupa la parte superior de la 2da llave de 8vos");
+
+    slots = assignPlayToSlots(slots, "P5");
+    slots = assignPlayToSlots(slots, "P6");
+    assert.strictEqual(slots[3].type, "match");
+    assert.strictEqual(slots[3].couple1Id, "P5");
+    assert.strictEqual(slots[3].couple2Id, "P6", "P5 y P6 disputan 16vos para la 2da llave de 8vos");
+
+    // 4. Verificamos la construcción del cuadro
+    const couplesMap = new Map([
+      ["P1", { id: "P1", name: "Pareja 1 (Sembrada)" }],
+      ["P2", { id: "P2", name: "Pareja 2 (Juega 16vos)" }],
+      ["P3", { id: "P3", name: "Pareja 3 (Juega 16vos)" }],
+      ["P4", { id: "P4", name: "Pareja 4 (Sembrada)" }],
+      ["P5", { id: "P5", name: "Pareja 5 (Juega 16vos)" }],
+      ["P6", { id: "P6", name: "Pareja 6 (Juega 16vos)" }],
+    ]);
+
+    const result = buildManualPlayoffBracketFromSlots(couplesMap, slots, 6, 101);
+    const round8 = result.previewRounds.find((r) => r.stage === "round_of_16");
+    assert.ok(round8);
+
+    // Partido 1 de 8vos: Pareja 1 sembrada arriba, Ganador de 16vos abajo
+    const match8_1 = round8.matches[0];
+    assert.strictEqual(match8_1.couple1.id, "P1", "Llave 1 de 8vos (arriba) tiene a P1 sembrada");
+    assert.strictEqual(match8_1.couple2.isFeeder, true, "Llave 1 de 8vos (abajo) recibe al ganador de 16vos");
+
+    // Partido 2 de 8vos: Pareja 4 sembrada arriba, Ganador de 16vos abajo
+    const match8_2 = round8.matches[1];
+    assert.strictEqual(match8_2.couple1.id, "P4", "Llave 2 de 8vos (arriba) tiene a P4 sembrada");
+    assert.strictEqual(match8_2.couple2.isFeeder, true, "Llave 2 de 8vos (abajo) recibe al ganador de 16vos");
   });
 });
