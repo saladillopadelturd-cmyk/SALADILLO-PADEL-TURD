@@ -140,6 +140,13 @@ export function ManualPlayoffBracketModal({
     setPairsList((prev) => prev.map((p) => ({ ...p, action: null })));
   };
 
+  // Quitar una pareja específica de la llave desde el botón (x)
+  const removeCoupleFromBracket = (coupleId: string) => {
+    setPairsList((prev) =>
+      prev.map((p) => (p.id === coupleId ? { ...p, action: null } : p))
+    );
+  };
+
   // Cálculo en tiempo real del cuadro de eliminación directa
   const bracketResult = useMemo(() => {
     if (pairsList.length === 0) return null;
@@ -515,9 +522,25 @@ export function ManualPlayoffBracketModal({
                                           : "bg-dark-800/90 border border-dark-700 text-white font-medium"
                                       }`}
                                     >
-                                      <span className="truncate">{pm.couple1.name}</span>
-                                      {pm.couple1.isSeed && (
-                                        <Sparkles className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                        <span className="truncate">{pm.couple1.name}</span>
+                                        {pm.couple1.isSeed && (
+                                          <Sparkles className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                                        )}
+                                      </div>
+                                      {/* Pequeña (x) para eliminar la pareja de la llave si fue colocada por error */}
+                                      {pm.couple1.id && !pm.couple1.isFeeder && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            removeCoupleFromBracket(pm.couple1.id!);
+                                          }}
+                                          className="p-1 rounded text-dark-400 hover:text-rose-400 hover:bg-rose-500/20 transition-colors flex-shrink-0"
+                                          title="Quitar pareja de esta llave (deshacer colocación)"
+                                        >
+                                          <X className="w-3.5 h-3.5" />
+                                        </button>
                                       )}
                                     </div>
                                   )}
@@ -547,9 +570,25 @@ export function ManualPlayoffBracketModal({
                                           : "bg-dark-800/90 border border-dark-700 text-white font-medium"
                                       }`}
                                     >
-                                      <span className="truncate">{pm.couple2.name}</span>
-                                      {pm.couple2.isSeed && (
-                                        <Sparkles className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                        <span className="truncate">{pm.couple2.name}</span>
+                                        {pm.couple2.isSeed && (
+                                          <Sparkles className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                                        )}
+                                      </div>
+                                      {/* Pequeña (x) para eliminar la pareja de la llave si fue colocada por error */}
+                                      {pm.couple2.id && !pm.couple2.isFeeder && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            removeCoupleFromBracket(pm.couple2.id!);
+                                          }}
+                                          className="p-1 rounded text-dark-400 hover:text-rose-400 hover:bg-rose-500/20 transition-colors flex-shrink-0"
+                                          title="Quitar pareja de esta llave (deshacer colocación)"
+                                        >
+                                          <X className="w-3.5 h-3.5" />
+                                        </button>
                                       )}
                                     </div>
                                   )}
