@@ -16,7 +16,12 @@ import {
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import {
-  buildManualPlayoffBracket,
+  buildManualPlayoffBracketFromSlots,
+  initializeR1Slots,
+  assignSeedToSlots,
+  assignPlayToSlots,
+  removeCoupleFromSlots,
+  type AnchoredMatchSlot,
   type ManualCoupleEntry,
 } from "@/lib/tournament/manual-bracket";
 import type { Couple } from "@/types/tournament";
@@ -53,12 +58,14 @@ export function ManualPlayoffBracketModal({
     return map;
   }, [allCouples]);
 
-  // Lista local editable de parejas para ordenar de arriba hacia abajo y definir 'seed' | 'play' | null
+  // Lista local editable de parejas
   const [pairsList, setPairsList] = useState<ManualCoupleEntry[]>([]);
+  // Slots anclados y fijos de Ronda 1
+  const [r1Slots, setR1Slots] = useState<AnchoredMatchSlot[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Inicializar parejas clasificadas inicialmente SIN acción (campos vacíos)
+  // Inicializar parejas clasificadas y slots vacíos
   useEffect(() => {
     if (!isOpen) return;
 
@@ -90,16 +97,16 @@ export function ManualPlayoffBracketModal({
         name: label,
         zoneName: q.zoneName,
         zonePosition: q.position,
-        // Inicialmente en blanco/vacío para que el administrador decida libremente
         action: null,
       });
     });
 
     setPairsList(initialEntries);
+    setR1Slots(initializeR1Slots(sourceList.length));
     setErrorMsg(null);
   }, [isOpen, qualifiedPairs, allCouples, couplesMap]);
 
-  // Funciones para reordenar de arriba hacia abajo
+  // Funciones para reordenar la vista de parejas en la lista (no altera las llaves ya ancladas)
   const moveUp = (index: number) => {
     if (index === 0) return;
     setPairsList((prev) => {
@@ -122,87 +129,106 @@ export function ManualPlayoffBracketModal({
     });
   };
 
-  // Alternar acción: si se vuelve a presionar el mismo botón, se deselecciona (vuelve a null)
-  const toggleAction = (index: number, newAction: "seed" | "play") => {
-    setPairsList((prev) => {
-      const next = [...prev];
-      const currentAction = next[index].action;
-      next[index] = {
-        ...next[index],
-        action: currentAction === newAction ? null : newAction,
-      };
-      return next;
-    });
-  };
-
-  // Limpiar todas las selecciones (vuelven a estar vacías)
-  const clearAllSelections = () => {
-    setPairsList((prev) => prev.map((p) => ({ ...p, action: null })));
-  };
-
-  // Quitar una pareja específica de la llave desde el botón (x)
-  const removeCoupleFromBracket = (coupleId: string) => {
-    setPairsList((prev) =>
-      prev.map((p) => (p.id === coupleId ? { ...p, action: null } : p))
-    );
-  };
-
-  // Cálculo en tiempo real del cuadro de eliminación directa
-  const bracketResult = useMemo(() => {
-    if (pairsList.length === 0) return null;
-    return buildManualPlayoffBracket(pairsList, 101);
-  }, [pairsList]);
-
-  // Total de parejas con acción asignada
-  const assignedCount = useMemo(() => {
-    return pairsList.filter((p) => p.action !== null).length;
-  }, [pairsList]);
-
-  // Mapeo informativo de cruces entre parejas 'play' para feedback visual en cada tarjeta
-  const pairingsInfo = useMemo(() => {
+  // Mapa de ubicación actual de cada pareja en los slots
+  const coupleSlotMap = useMemo(() => {
     const map = new Map<
       string,
-      { role: "first" | "second" | "waiting"; opponentName?: string; matchIndex?: number }
+      {
+        type: "seed" | "play";
+        matchIndex: number;
+        slot: 1 | 2;
+        opponentName?: string;
+        isWaiting?: boolean;
+      }
     >();
-    let firstPlayIndex: number | null = null;
-    let matchCounter = 1;
 
-    pairsList.forEach((p, idx) => {
-      if (p.action !== "play") return;
+    r1Slots.forEach((slot, idx) => {
+      if (slot.type === "seed" && slot.couple1Id) {
+        map.set(slot.couple1Id, {
+          type: "seed",
+          matchIndex: idx,
+          slot: 1,
+        });
+      } else if (slot.type === "match" && slot.couple1Id) {
+        const c1 = pairsList.find((p) => p.id === slot.couple1Id);
+        const c2 = slot.couple2Id ? pairsList.find((p) => p.id === slot.couple2Id) : undefined;
 
-      if (firstPlayIndex === null) {
-        firstPlayIndex = idx;
-      } else {
-        const firstPair = pairsList[firstPlayIndex];
-        map.set(firstPair.id, {
-          role: "first",
-          opponentName: p.name,
-          matchIndex: matchCounter,
+        map.set(slot.couple1Id, {
+          type: "play",
+          matchIndex: idx,
+          slot: 1,
+          opponentName: c2?.name,
+          isWaiting: !slot.couple2Id,
         });
-        map.set(p.id, {
-          role: "second",
-          opponentName: firstPair.name,
-          matchIndex: matchCounter,
-        });
-        matchCounter++;
-        firstPlayIndex = null;
+
+        if (slot.couple2Id) {
+          map.set(slot.couple2Id, {
+            type: "play",
+            matchIndex: idx,
+            slot: 2,
+            opponentName: c1?.name,
+          });
+        }
       }
     });
 
-    if (firstPlayIndex !== null) {
-      const unpaired = pairsList[firstPlayIndex];
-      map.set(unpaired.id, { role: "waiting" });
-    }
-
     return map;
-  }, [pairsList]);
+  }, [r1Slots, pairsList]);
+
+  // Manejador para botón "Sembrar" (Anclaje fijo)
+  const handleToggleSeed = (coupleId: string) => {
+    const currentLoc = coupleSlotMap.get(coupleId);
+    if (currentLoc && currentLoc.type === "seed") {
+      // Si ya está sembrada, al presionar de nuevo se desasigna de su slot
+      setR1Slots((prev) => removeCoupleFromSlots(prev, coupleId));
+    } else {
+      // Si no estaba sembrada, se coloca en el primer slot libre sin mover a ninguna otra pareja
+      setR1Slots((prev) => assignSeedToSlots(prev, coupleId));
+    }
+  };
+
+  // Manejador para botón "Jugar" (Anclaje fijo)
+  const handleTogglePlay = (coupleId: string) => {
+    const currentLoc = coupleSlotMap.get(coupleId);
+    if (currentLoc && currentLoc.type === "play") {
+      // Si ya está jugando, al presionar de nuevo se desasigna de su slot
+      setR1Slots((prev) => removeCoupleFromSlots(prev, coupleId));
+    } else {
+      // Si no estaba jugando, se completa un cruce disponible o se abre uno nuevo sin mover a nadie
+      setR1Slots((prev) => assignPlayToSlots(prev, coupleId));
+    }
+  };
+
+  // Quitar una pareja de su lugar asignado mediante la pequeña (x)
+  const handleRemoveCouple = (coupleId: string) => {
+    setR1Slots((prev) => removeCoupleFromSlots(prev, coupleId));
+  };
+
+  // Limpiar todas las asignaciones
+  const clearAllSelections = () => {
+    setR1Slots(initializeR1Slots(pairsList.length));
+  };
+
+  // Cálculo en tiempo real del cuadro de eliminación directa a partir de los slots anclados
+  const bracketResult = useMemo(() => {
+    if (pairsList.length === 0) return null;
+    const namesMap = new Map<string, { id: string; name: string }>();
+    pairsList.forEach((p) => namesMap.set(p.id, { id: p.id, name: p.name }));
+
+    return buildManualPlayoffBracketFromSlots(namesMap, r1Slots, pairsList.length, 101);
+  }, [pairsList, r1Slots]);
+
+  // Total de parejas con acción asignada
+  const assignedCount = bracketResult?.assignedCount ?? 0;
 
   // Guardar cuadro manual
   const handleSave = async () => {
     if (!bracketResult) return;
-    if (bracketResult.unpairedPlayCouple) {
+    if (bracketResult.unpairedPlayCouples.length > 0) {
+      const waitingId = bracketResult.unpairedPlayCouples[0];
+      const waitingCouple = pairsList.find((p) => p.id === waitingId);
       setErrorMsg(
-        `La pareja "${bracketResult.unpairedPlayCouple.name}" está seleccionada para 'Jugar' pero no tiene rival. Selecciona otra pareja con 'Jugar' o cámbiala a 'Sembrar'.`
+        `La pareja "${waitingCouple?.name || "Pareja"}" está colocada para 'Jugar' pero no tiene rival asignado. Asigna otra pareja con 'Jugar' para completar el cruce o quítala con (X).`
       );
       return;
     }
@@ -257,7 +283,7 @@ export function ManualPlayoffBracketModal({
                 Generador Manual de Cuadro de Eliminación Directa
               </h2>
               <p className="text-xs text-dark-400">
-                Los campos del cuadro inician vacíos y se van ocupando a medida que eliges sembrar o generar partidos.
+                Cada pareja sembrada o colocada queda fija en su llave. Solo dejará su lugar si presionas (X).
               </p>
             </div>
           </div>
@@ -296,7 +322,7 @@ export function ManualPlayoffBracketModal({
                   type="button"
                   onClick={clearAllSelections}
                   className="text-[11px] text-dark-400 hover:text-rose-400 flex items-center gap-1 transition-colors"
-                  title="Vaciar todas las asignaciones"
+                  title="Vaciar todas las llaves"
                 >
                   <RotateCcw className="w-3 h-3" />
                   Vaciar
@@ -311,10 +337,10 @@ export function ManualPlayoffBracketModal({
                 </div>
               ) : (
                 pairsList.map((entry, index) => {
-                  const pairing = pairingsInfo.get(entry.id);
-                  const isSeed = entry.action === "seed";
-                  const isPlay = entry.action === "play";
-                  const isUnassigned = entry.action === null;
+                  const location = coupleSlotMap.get(entry.id);
+                  const isSeed = location?.type === "seed";
+                  const isPlay = location?.type === "play";
+                  const isUnassigned = !location;
 
                   return (
                     <div
@@ -322,7 +348,7 @@ export function ManualPlayoffBracketModal({
                       className={`p-3 rounded-xl border transition-all ${
                         isSeed
                           ? "bg-amber-950/20 border-amber-500/50 shadow-sm"
-                          : isPlay && pairing?.role === "waiting"
+                          : isPlay && location?.isWaiting
                           ? "bg-rose-950/20 border-rose-500/50 shadow-sm"
                           : isPlay
                           ? "bg-emerald-950/20 border-emerald-500/40 shadow-sm"
@@ -330,7 +356,7 @@ export function ManualPlayoffBracketModal({
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        {/* Controles de mover de arriba hacia abajo */}
+                        {/* Controles de posición en la lista */}
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                           <span className="w-6 h-6 rounded-md bg-dark-800 text-dark-300 flex items-center justify-center text-xs font-mono font-bold">
                             {index + 1}
@@ -341,7 +367,7 @@ export function ManualPlayoffBracketModal({
                               onClick={() => moveUp(index)}
                               disabled={index === 0}
                               className="text-dark-400 hover:text-white disabled:opacity-20 p-0.5"
-                              title="Subir posición"
+                              title="Subir en la lista"
                             >
                               <ArrowUp className="w-3.5 h-3.5" />
                             </button>
@@ -350,7 +376,7 @@ export function ManualPlayoffBracketModal({
                               onClick={() => moveDown(index)}
                               disabled={index === pairsList.length - 1}
                               className="text-dark-400 hover:text-white disabled:opacity-20 p-0.5"
-                              title="Bajar posición"
+                              title="Bajar en la lista"
                             >
                               <ArrowDown className="w-3.5 h-3.5" />
                             </button>
@@ -377,13 +403,13 @@ export function ManualPlayoffBracketModal({
                             type="button"
                             size="sm"
                             variant={isSeed ? "primary" : "secondary"}
-                            onClick={() => toggleAction(index, "seed")}
+                            onClick={() => handleToggleSeed(entry.id)}
                             className={`text-xs px-2.5 py-1 font-bold ${
                               isSeed
                                 ? "bg-amber-500 hover:bg-amber-400 text-dark-950 shadow-md shadow-amber-500/20"
                                 : "text-dark-400 hover:text-white"
                             }`}
-                            title={isSeed ? "Click para deseleccionar" : "Sembrar a la próxima ronda"}
+                            title={isSeed ? "Click para desasignar" : "Sembrar en la próxima llave disponible"}
                           >
                             <Sparkles className="w-3 h-3 mr-1" />
                             Sembrar
@@ -392,13 +418,13 @@ export function ManualPlayoffBracketModal({
                             type="button"
                             size="sm"
                             variant={isPlay ? "primary" : "secondary"}
-                            onClick={() => toggleAction(index, "play")}
+                            onClick={() => handleTogglePlay(entry.id)}
                             className={`text-xs px-2.5 py-1 font-bold ${
                               isPlay
                                 ? "bg-emerald-500 hover:bg-emerald-400 text-dark-950 shadow-md shadow-emerald-500/20"
                                 : "text-dark-400 hover:text-white"
                             }`}
-                            title={isPlay ? "Click para deseleccionar" : "Jugar cruce preliminar"}
+                            title={isPlay ? "Click para desasignar" : "Colocar para jugar cruce"}
                           >
                             <Swords className="w-3 h-3 mr-1" />
                             Jugar
@@ -406,28 +432,28 @@ export function ManualPlayoffBracketModal({
                         </div>
                       </div>
 
-                      {/* Estado explicativo debajo de la tarjeta */}
+                      {/* Estado explicativo y fijo debajo de la tarjeta */}
                       <div className="mt-2 pt-2 border-t border-dark-800/60 text-[11px]">
                         {isUnassigned ? (
                           <span className="text-dark-500 italic">
-                            Sin asignar. Elige si esta pareja se siembra directamente o juega cruce.
+                            Sin asignar. Elige &apos;Sembrar&apos; o &apos;Jugar&apos; para depositarla en una llave fija.
                           </span>
                         ) : isSeed ? (
                           <span className="text-amber-400 font-medium flex items-center gap-1">
                             <Sparkles className="w-3 h-3 flex-shrink-0" />
-                            Sembrada: pasa a la próxima ronda y espera rival.
+                            Sembrada fija en Partido #{location.matchIndex + 1}: pasa directo a la próxima ronda.
                           </span>
-                        ) : pairing?.role === "waiting" ? (
+                        ) : location?.isWaiting ? (
                           <span className="text-rose-400 font-medium flex items-center gap-1">
                             <AlertCircle className="w-3 h-3 flex-shrink-0" />
-                            Esperando rival: marca otra pareja con &apos;Jugar&apos; para conformar el partido.
+                            Fijada en Partido #{location.matchIndex + 1} (esperando rival). Marca otra pareja con &apos;Jugar&apos;.
                           </span>
                         ) : (
                           <span className="text-emerald-400 font-medium flex items-center gap-1">
                             <Swords className="w-3 h-3 flex-shrink-0" />
-                            {pairing?.matchIndex ? `Cruce #${pairing.matchIndex} vs ` : "Jugará vs "}
+                            Fijada en Partido #{location.matchIndex + 1} vs{" "}
                             <span className="underline font-bold text-slate-200">
-                              {pairing?.opponentName || "Próxima pareja con 'Jugar'"}
+                              {location.opponentName || "Rival"}
                             </span>
                           </span>
                         )}
@@ -439,7 +465,7 @@ export function ManualPlayoffBracketModal({
             </div>
           </div>
 
-          {/* Columna Derecha: Previsualización Gráfica con Campos Inicialmente Vacíos */}
+          {/* Columna Derecha: Previsualización Gráfica con Llaves Ancladas */}
           <div className="lg:col-span-7 flex flex-col h-full overflow-hidden p-4 space-y-3 bg-dark-950/60">
             <div className="flex items-center justify-between flex-shrink-0">
               <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
@@ -447,7 +473,7 @@ export function ManualPlayoffBracketModal({
                 Previsualización Gráfica del Cuadro Resultante
               </span>
               <span className="text-[11px] text-dark-400">
-                Los campos vacíos se ocupan al asignar parejas
+                Presiona (X) en cualquier pareja para liberarla
               </span>
             </div>
 
@@ -528,13 +554,13 @@ export function ManualPlayoffBracketModal({
                                           <Sparkles className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
                                         )}
                                       </div>
-                                      {/* Pequeña (x) para eliminar la pareja de la llave si fue colocada por error */}
+                                      {/* Pequeña (X) para eliminar la pareja de la llave si fue colocada por error */}
                                       {pm.couple1.id && !pm.couple1.isFeeder && (
                                         <button
                                           type="button"
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            removeCoupleFromBracket(pm.couple1.id!);
+                                            handleRemoveCouple(pm.couple1.id!);
                                           }}
                                           className="p-1 rounded text-dark-400 hover:text-rose-400 hover:bg-rose-500/20 transition-colors flex-shrink-0"
                                           title="Quitar pareja de esta llave (deshacer colocación)"
@@ -576,13 +602,13 @@ export function ManualPlayoffBracketModal({
                                           <Sparkles className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
                                         )}
                                       </div>
-                                      {/* Pequeña (x) para eliminar la pareja de la llave si fue colocada por error */}
+                                      {/* Pequeña (X) para eliminar la pareja de la llave si fue colocada por error */}
                                       {pm.couple2.id && !pm.couple2.isFeeder && (
                                         <button
                                           type="button"
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            removeCoupleFromBracket(pm.couple2.id!);
+                                            handleRemoveCouple(pm.couple2.id!);
                                           }}
                                           className="p-1 rounded text-dark-400 hover:text-rose-400 hover:bg-rose-500/20 transition-colors flex-shrink-0"
                                           title="Quitar pareja de esta llave (deshacer colocación)"
@@ -632,7 +658,7 @@ export function ManualPlayoffBracketModal({
               disabled={
                 isSaving ||
                 assignedCount < 2 ||
-                !!bracketResult?.unpairedPlayCouple
+                (bracketResult?.unpairedPlayCouples.length ?? 0) > 0
               }
               className="bg-emerald-500 hover:bg-emerald-600 text-dark-950 font-bold"
             >

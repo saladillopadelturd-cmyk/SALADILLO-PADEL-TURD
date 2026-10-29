@@ -2,10 +2,15 @@ import { describe, it } from "node:test";
 import assert from "node:assert";
 import {
   buildManualPlayoffBracket,
+  initializeR1Slots,
+  assignSeedToSlots,
+  assignPlayToSlots,
+  removeCoupleFromSlots,
+  buildManualPlayoffBracketFromSlots,
   type ManualCoupleEntry,
 } from "./manual-bracket";
 
-describe("Motor Manual de Eliminación Directa", () => {
+describe("Motor Manual de Eliminación Directa con Slots Anclados", () => {
   it("Caso 1: 2 parejas con acción 'play' conforman una Final directa", () => {
     const couples: ManualCoupleEntry[] = [
       { id: "c1", name: "Pareja 1", action: "play" },
@@ -18,14 +23,10 @@ describe("Motor Manual de Eliminación Directa", () => {
     assert.strictEqual(result.matchesToInsert.length, 1);
     assert.strictEqual(result.matchesToInsert[0].couple1_id, "c1");
     assert.strictEqual(result.matchesToInsert[0].couple2_id, "c2");
-    assert.strictEqual(result.unpairedPlayCouple, null);
+    assert.strictEqual(result.unpairedPlayCouples.length, 0);
   });
 
   it("Caso 2: 1 pareja sembrada ('seed') y 2 parejas jugando ('play')", () => {
-    // 4 slots base (semifinal y final):
-    // 1. Pareja A -> Sembrada (espera rival)
-    // 2. Pareja B -> Jugar \_ Juegan entre sí en R1
-    // 3. Pareja C -> Jugar /
     const couples: ManualCoupleEntry[] = [
       { id: "pA", name: "Pareja A (1° Zona A)", action: "seed" },
       { id: "pB", name: "Pareja B (2° Zona B)", action: "play" },
@@ -64,8 +65,8 @@ describe("Motor Manual de Eliminación Directa", () => {
     ];
 
     const result = buildManualPlayoffBracket(couples, 101);
-    assert.ok(result.unpairedPlayCouple);
-    assert.strictEqual(result.unpairedPlayCouple.id, "p1");
+    assert.strictEqual(result.unpairedPlayCouples.length, 1);
+    assert.strictEqual(result.unpairedPlayCouples[0], "p1");
   });
 
   it("Caso 4: Estructura de 6 parejas (2 sembradas y 2 cruces preliminares)", () => {
@@ -79,7 +80,7 @@ describe("Motor Manual de Eliminación Directa", () => {
     ];
 
     const result = buildManualPlayoffBracket(couples, 101);
-    assert.strictEqual(result.unpairedPlayCouple, null);
+    assert.strictEqual(result.unpairedPlayCouples.length, 0);
     assert.strictEqual(result.allStages[0], "quarter");
     assert.strictEqual(result.allStages[1], "semi");
     assert.strictEqual(result.allStages[2], "final");
@@ -101,7 +102,6 @@ describe("Motor Manual de Eliminación Directa", () => {
     const result = buildManualPlayoffBracket(couples, 101);
     assert.strictEqual(result.assignedCount, 0);
 
-    // Todos los partidos de la previsualización deben tener isEmpty === true
     for (const round of result.previewRounds) {
       for (const match of round.matches) {
         assert.strictEqual(match.couple1.isEmpty, true);
@@ -109,7 +109,45 @@ describe("Motor Manual de Eliminación Directa", () => {
       }
     }
 
-    // No debe haber partidos para insertar hasta que el administrador asigne
     assert.strictEqual(result.matchesToInsert.length, 0);
+  });
+
+  it("Caso 6: Inmutabilidad de slots fijados (una nueva asignación NUNCA mueve a parejas previas)", () => {
+    // 8 parejas base -> 4 slots en Ronda 1
+    let slots = initializeR1Slots(8);
+    assert.strictEqual(slots.length, 4);
+
+    // 1. Sembrar pareja A -> se ancla en slot 0
+    slots = assignSeedToSlots(slots, "A");
+    assert.strictEqual(slots[0].type, "seed");
+    assert.strictEqual(slots[0].couple1Id, "A");
+
+    // 2. Colocar pareja B y C para Jugar -> se anclan en slot 1
+    slots = assignPlayToSlots(slots, "B");
+    slots = assignPlayToSlots(slots, "C");
+    assert.strictEqual(slots[1].type, "match");
+    assert.strictEqual(slots[1].couple1Id, "B");
+    assert.strictEqual(slots[1].couple2Id, "C");
+    // Verificamos que A en slot 0 NO se movió
+    assert.strictEqual(slots[0].type, "seed");
+    assert.strictEqual(slots[0].couple1Id, "A");
+
+    // 3. Sembrar pareja D -> se ancla en el primer slot libre (slot 2)
+    slots = assignSeedToSlots(slots, "D");
+    assert.strictEqual(slots[2].type, "seed");
+    assert.strictEqual(slots[2].couple1Id, "D");
+    // Verificamos que A en slot 0 y B/C en slot 1 siguen exactamente en sus lugares
+    assert.strictEqual(slots[0].couple1Id, "A");
+    assert.strictEqual(slots[1].couple1Id, "B");
+    assert.strictEqual(slots[1].couple2Id, "C");
+
+    // 4. Presionar (X) en B (removeCoupleFromSlots)
+    slots = removeCoupleFromSlots(slots, "B");
+    // B fue removida, C permanece en slot 1 esperando rival
+    assert.strictEqual(slots[1].couple1Id, "C");
+    assert.strictEqual(slots[1].couple2Id, null);
+    // Y A en slot 0 y D en slot 2 NO se alteraron en lo más mínimo
+    assert.strictEqual(slots[0].couple1Id, "A");
+    assert.strictEqual(slots[2].couple1Id, "D");
   });
 });

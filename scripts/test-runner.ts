@@ -19,6 +19,10 @@ import {
 } from "../src/lib/tournament/fap-engine";
 import {
   buildManualPlayoffBracket,
+  initializeR1Slots,
+  assignSeedToSlots,
+  assignPlayToSlots,
+  removeCoupleFromSlots,
   type ManualCoupleEntry,
 } from "../src/lib/tournament/manual-bracket";
 
@@ -378,6 +382,20 @@ async function main() {
     mb5.previewRounds.every((r) => r.matches.every((m) => m.couple1.isEmpty && m.couple2.isEmpty)),
     "Todos los campos de las llaves parten vacíos"
   );
+
+  // Test 6: Inmutabilidad de slots fijados
+  let testSlots = initializeR1Slots(8);
+  testSlots = assignSeedToSlots(testSlots, "A");
+  testSlots = assignPlayToSlots(testSlots, "B");
+  testSlots = assignPlayToSlots(testSlots, "C");
+  testSlots = assignSeedToSlots(testSlots, "D");
+  checkManual(testSlots[0].couple1Id === "A", "A permanece fija en slot 0");
+  checkManual(testSlots[1].couple1Id === "B" && testSlots[1].couple2Id === "C", "B y C permanecen fijas en slot 1");
+  checkManual(testSlots[2].couple1Id === "D", "D permanece fija en slot 2");
+
+  testSlots = removeCoupleFromSlots(testSlots, "B");
+  checkManual(testSlots[1].couple1Id === "C" && testSlots[1].couple2Id === null, "Al quitar B, C sigue en slot 1");
+  checkManual(testSlots[0].couple1Id === "A" && testSlots[2].couple1Id === "D", "A y D no se alteraron al quitar B");
 
   console.log(`Resultados Cuadro Manual:`);
   console.log(`  - Validaciones Pasadas: ${manualPassed}`);
