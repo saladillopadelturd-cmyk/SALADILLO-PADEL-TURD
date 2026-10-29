@@ -3241,11 +3241,13 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
             tournamentId={tournamentId}
             qualifiedPairs={zoneQualifications.qualified}
             allCouples={couples}
+            existingMatches={matches.filter((m) => m.stage !== "zone")}
             onSuccess={() => {
               loadData();
+              setActiveTab("playoffs");
               setNotification({
                 type: "success",
-                text: "Cuadro de eliminación directa generado exitosamente.",
+                text: "Cuadro de eliminación directa confirmado y guardado exitosamente.",
               });
             }}
           />

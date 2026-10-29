@@ -404,10 +404,12 @@ export function buildManualPlayoffBracketFromSlots(
       const c2 = m.couple2.isEmpty || m.couple2.isWaiting || m.couple2.isBye ? null : m.couple2.id;
       const isMBye = m.isBye;
 
+      const isPostRound8 = stage === "quarter" || stage === "semi" || stage === "final";
       const hasContent =
         !m.couple1.isEmpty || !m.couple2.isEmpty || m.couple1.isFeeder || m.couple2.isFeeder;
 
-      if (hasContent) {
+      // Si el cuadro tiene asignaciones, insertar partidos con contenido y la estructura completa de playoffs
+      if (assignedCount > 0 && (hasContent || isPostRound8)) {
         matchesToInsert.push({
           stage,
           match_number: m.matchNumber,
@@ -504,4 +506,78 @@ export function buildManualPlayoffBracket(
     ...result,
     unpairedPlayCouple: unpairedCoupleObj,
   };
+}
+
+/**
+ * Reconstruye los 16 slots anclados a partir de partidos de playoffs existentes guardados en la BD.
+ */
+export function reconstructSlotsFromMatches(
+  playoffMatches: {
+    stage: string;
+    match_number?: number | null;
+    couple1_id?: string | null;
+    couple2_id?: string | null;
+  }[]
+): AnchoredMatchSlot[] | null {
+  if (!playoffMatches || playoffMatches.length === 0) return null;
+
+  const slots = initializeR1Slots();
+  let assignedAny = false;
+
+  // 1. Reconstruir cruces de 16vos (round_of_32)
+  const r32Matches = playoffMatches.filter(
+    (m) => m.stage === "round_of_32" || m.stage === "dieciseisavos"
+  );
+  for (const m of r32Matches) {
+    if (!m.match_number) continue;
+    const slotIdx = m.match_number >= 101 && m.match_number <= 116 ? m.match_number - 101 : -1;
+    if (slotIdx >= 0 && slotIdx < NUM_16VOS_MATCHES) {
+      if (m.couple1_id || m.couple2_id) {
+        slots[slotIdx] = {
+          matchIndex: slotIdx,
+          type: "match",
+          couple1Id: m.couple1_id ?? null,
+          couple2Id: m.couple2_id ?? null,
+        };
+        assignedAny = true;
+      }
+    }
+  }
+
+  // 2. Reconstruir parejas sembradas directamente en 8vos (round_of_16)
+  const r16Matches = playoffMatches.filter(
+    (m) => m.stage === "round_of_16" || m.stage === "octavos"
+  );
+  for (const m of r16Matches) {
+    if (!m.match_number) continue;
+    const octavosIdx = m.match_number >= 117 && m.match_number <= 124 ? m.match_number - 117 : -1;
+    if (octavosIdx >= 0 && octavosIdx < NUM_8VOS_MATCHES) {
+      const topSlot = octavosIdx * 2;
+      const botSlot = octavosIdx * 2 + 1;
+
+      // Si el slot superior no era un match de 16vos y tiene couple1_id, es sembrada
+      if (slots[topSlot].type === "empty" && m.couple1_id) {
+        slots[topSlot] = {
+          matchIndex: topSlot,
+          type: "seed",
+          couple1Id: m.couple1_id,
+          couple2Id: null,
+        };
+        assignedAny = true;
+      }
+
+      // Si el slot inferior no era un match de 16vos y tiene couple2_id, es sembrada
+      if (slots[botSlot].type === "empty" && m.couple2_id) {
+        slots[botSlot] = {
+          matchIndex: botSlot,
+          type: "seed",
+          couple1Id: m.couple2_id,
+          couple2Id: null,
+        };
+        assignedAny = true;
+      }
+    }
+  }
+
+  return assignedAny ? slots : null;
 }

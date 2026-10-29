@@ -25,10 +25,11 @@ import {
   assignSeedToSlots,
   assignPlayToSlots,
   removeCoupleFromSlots,
+  reconstructSlotsFromMatches,
   type AnchoredMatchSlot,
   type ManualCoupleEntry,
 } from "@/lib/tournament/manual-bracket";
-import type { Couple } from "@/types/tournament";
+import type { Couple, Match } from "@/types/tournament";
 
 export interface QualifiedPairItem {
   pairId: string;
@@ -44,6 +45,7 @@ interface ManualPlayoffBracketModalProps {
   tournamentId: string;
   qualifiedPairs: QualifiedPairItem[];
   allCouples?: Couple[];
+  existingMatches?: Match[];
   onSuccess: () => void;
 }
 
@@ -53,6 +55,7 @@ export function ManualPlayoffBracketModal({
   tournamentId,
   qualifiedPairs,
   allCouples = [],
+  existingMatches = [],
   onSuccess,
 }: ManualPlayoffBracketModalProps) {
   // Mapa de parejas
@@ -123,10 +126,45 @@ export function ManualPlayoffBracketModal({
       });
     });
 
-    setPairsList(initialEntries);
-    setR1Slots(initializeR1Slots(sourceList.length));
+    // Intentar restaurar el estado previo guardado (localStorage o matches existentes en BD)
+    let restoredSlots: AnchoredMatchSlot[] | null = null;
+    let restoredPairs: ManualCoupleEntry[] | null = null;
+
+    try {
+      const storageKey = `spt_manual_bracket_${tournamentId}`;
+      const savedRaw = typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
+      if (savedRaw) {
+        const saved = JSON.parse(savedRaw);
+        if (saved && Array.isArray(saved.slots) && Array.isArray(saved.pairs)) {
+          const currentIds = new Set(initialEntries.map((p) => p.id));
+          const hasMatch = saved.pairs.some((p: ManualCoupleEntry) => currentIds.has(p.id));
+          if (hasMatch) {
+            restoredSlots = saved.slots;
+            restoredPairs = saved.pairs;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Error leyendo estado del cuadro de localStorage", e);
+    }
+
+    if (!restoredSlots && existingMatches && existingMatches.length > 0) {
+      const fromDb = reconstructSlotsFromMatches(existingMatches);
+      if (fromDb) {
+        restoredSlots = fromDb;
+      }
+    }
+
+    if (restoredSlots) {
+      setR1Slots(restoredSlots);
+      setPairsList(restoredPairs || initialEntries);
+    } else {
+      setPairsList(initialEntries);
+      setR1Slots(initializeR1Slots(sourceList.length));
+    }
+
     setErrorMsg(null);
-  }, [isOpen, qualifiedPairs, allCouples, couplesMap]);
+  }, [isOpen, qualifiedPairs, allCouples, couplesMap, tournamentId, existingMatches]);
 
   // Funciones para reordenar la vista de parejas en la lista (no altera las llaves ya ancladas)
   const moveUp = (index: number) => {
@@ -229,6 +267,13 @@ export function ManualPlayoffBracketModal({
   // Limpiar todas las asignaciones
   const clearAllSelections = () => {
     setR1Slots(initializeR1Slots(pairsList.length));
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(`spt_manual_bracket_${tournamentId}`);
+      }
+    } catch (e) {
+      console.warn("Error al limpiar localStorage de cuadro manual", e);
+    }
   };
 
   // Cálculo en tiempo real del cuadro de eliminación directa a partir de los slots anclados
@@ -431,6 +476,22 @@ export function ManualPlayoffBracketModal({
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Error al guardar el cuadro de eliminación directa");
+      }
+
+      // Guardar el estado actual del cuadro (slots y parejas) para persistencia total
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.setItem(
+            `spt_manual_bracket_${tournamentId}`,
+            JSON.stringify({
+              slots: r1Slots,
+              pairs: pairsList,
+              timestamp: Date.now(),
+            })
+          );
+        }
+      } catch (err) {
+        console.warn("No se pudo persistir estado en localStorage", err);
       }
 
       onSuccess();

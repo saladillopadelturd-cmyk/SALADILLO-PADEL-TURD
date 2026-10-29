@@ -7,6 +7,7 @@ import {
   assignSeedToSlots,
   assignPlayToSlots,
   removeCoupleFromSlots,
+  reconstructSlotsFromMatches,
   OFFICIAL_STAGES,
   type ManualCoupleEntry,
 } from "./manual-bracket";
@@ -199,5 +200,38 @@ describe("Motor Manual de Eliminación Directa: 16vos para Jugar y 8vos para Sem
     const match8_2 = round8.matches[1];
     assert.strictEqual(match8_2.couple1.id, "P4", "Llave 2 de 8vos (arriba) tiene a P4 sembrada");
     assert.strictEqual(match8_2.couple2.isFeeder, true, "Llave 2 de 8vos (abajo) recibe al ganador de 16vos");
+  });
+
+  it("Caso 9: Reconstruye slots anclados a partir de partidos guardados en base de datos", () => {
+    const savedMatches = [
+      {
+        stage: "round_of_32",
+        match_number: 102, // slot 1 (parte inferior de llave 1 de 8vos)
+        couple1_id: "P2",
+        couple2_id: "P3",
+      },
+      {
+        stage: "round_of_16",
+        match_number: 117, // llave 1 de 8vos (slots 0 y 1)
+        couple1_id: "P1", // sembrada en slot 0
+        couple2_id: null, // feeder de 16vos en slot 1
+      },
+      {
+        stage: "round_of_16",
+        match_number: 118, // llave 2 de 8vos (slots 2 y 3)
+        couple1_id: "P4", // sembrada en slot 2
+        couple2_id: null,
+      },
+    ];
+
+    const reconstructed = reconstructSlotsFromMatches(savedMatches);
+    assert.ok(reconstructed);
+    assert.strictEqual(reconstructed[0].type, "seed");
+    assert.strictEqual(reconstructed[0].couple1Id, "P1", "P1 sembrada en slot 0");
+    assert.strictEqual(reconstructed[1].type, "match");
+    assert.strictEqual(reconstructed[1].couple1Id, "P2");
+    assert.strictEqual(reconstructed[1].couple2Id, "P3", "P2 y P3 en slot 1");
+    assert.strictEqual(reconstructed[2].type, "seed");
+    assert.strictEqual(reconstructed[2].couple1Id, "P4", "P4 sembrada en slot 2");
   });
 });
