@@ -1,5 +1,5 @@
 import type { MatchStage } from "@/types/tournament";
-import { getStageName, normalizeStage } from "./elimination";
+import { getStageName } from "./elimination";
 
 export interface ManualCoupleEntry {
   id: string; // couple_id
@@ -7,14 +7,17 @@ export interface ManualCoupleEntry {
   zoneName?: string;
   zonePosition?: number;
   ranking?: number;
-  action: "seed" | "play";
+  action: "seed" | "play" | null;
 }
 
 export interface PreviewMatchCouple {
   id: string | null;
   name: string;
+  isEmpty?: boolean;
+  isWaiting?: boolean;
   isBye?: boolean;
   isSeed?: boolean;
+  isFeeder?: boolean;
 }
 
 export interface PreviewMatch {
@@ -52,6 +55,7 @@ export interface ManualBracketResult {
   previewRounds: PreviewRound[];
   unpairedPlayCouple: ManualCoupleEntry | null;
   totalEntries: number;
+  assignedCount: number;
 }
 
 /**
@@ -74,220 +78,187 @@ export function getStagesHierarchy(initialSlots: number): MatchStage[] {
 }
 
 /**
- * Construye el cuadro de eliminación directa 100% manual:
- * - Recorre la lista de duplas de arriba hacia abajo.
- * - Dupla 'seed' (Sembrar): Recibe pase directo / BYE en la ronda inicial y avanza a la siguiente ronda esperando rival.
- * - Dupla 'play' (Jugar): Juega contra la próxima dupla marcada con 'play'.
- * - El orden secuencial de arriba hacia abajo determina la disposición exacta de los cruces de llaves.
+ * Construye el cuadro de eliminación directa 100% manual con slots inicialmente VACÍOS:
+ * - Genera el esqueleto completo de llaves según la cantidad de parejas del torneo.
+ * - Todos los campos de cada llave inician VACÍOS.
+ * - A medida que el administrador elige:
+ *   - 'seed' (Sembrar): Ocupa la llave con pase libre (BYE) y avanza inmediatamente al slot de la siguiente instancia esperando rival.
+ *   - 'play' (Jugar): Ocupa la primera ranura libre de un cruce. La siguiente pareja con 'play' completa el cruce rival.
+ * - Si no hay elección ('null'), el campo permanece vacío.
  */
 export function buildManualPlayoffBracket(
   orderedCouples: ManualCoupleEntry[],
   startingMatchNumber: number = 101
 ): ManualBracketResult {
-  // 1. Procesar la lista de arriba hacia abajo identificando Sembradas y Partidos Jugados
-  type Branch =
-    | { type: "seed"; couple: ManualCoupleEntry }
-    | { type: "play_match"; couple1: ManualCoupleEntry; couple2: ManualCoupleEntry };
+  const totalEntries = orderedCouples.length;
 
-  const branches: Branch[] = [];
-  let pendingPlayCouple: ManualCoupleEntry | null = null;
-
-  for (const c of orderedCouples) {
-    if (c.action === "seed") {
-      // Si había una pareja esperando rival de 'play', la sembrada no puede emparejarse con ella
-      branches.push({ type: "seed", couple: c });
-    } else {
-      if (!pendingPlayCouple) {
-        pendingPlayCouple = c;
-      } else {
-        branches.push({ type: "play_match", couple1: pendingPlayCouple, couple2: c });
-        pendingPlayCouple = null;
-      }
-    }
-  }
-
-  const numBranches = branches.length;
-  if (numBranches === 0) {
-    return {
-      initialStage: "final",
-      allStages: ["final"],
-      matchesToInsert: [],
-      previewRounds: [],
-      unpairedPlayCouple: pendingPlayCouple,
-      totalEntries: orderedCouples.length,
-    };
-  }
-
-  // 2. Determinar el tamaño de la llave y las etapas correspondientes
-  // Cada branch representa una posición de entrada a la siguiente etapa (Ronda 2)
-  // o si sólo hay 1 branch de play_match sin sembradas, es una final directa.
+  // 1. Determinar el tamaño de la llave según el total de parejas clasificadas
+  // Potencia de 2 mayor o igual a totalEntries (mínimo 2 o 4)
   let initialSlots = 2;
-  while (initialSlots < numBranches) {
+  while (initialSlots < Math.max(totalEntries, 2)) {
     initialSlots *= 2;
   }
   initialSlots = Math.max(initialSlots, 2);
 
-  // Si todas son ramas y hay partidos preliminares, la Ronda 1 (preliminar) tiene 'initialSlots * 2' o 'initialSlots'
-  // Ejemplo: si hay 4 branches (ej: 2 sembradas y 2 partidos), la Ronda 2 tiene 4 slots (Semifinales).
-  // La Ronda 1 es Cuartos de Final (8 slots virtuales, 4 partidos de R1).
-  const hasPlayMatches = branches.some((b) => b.type === "play_match");
-  const hasSeeds = branches.some((b) => b.type === "seed");
-
-  // Si no hay sembradas y solo hay 1 partido jugado -> final directa
-  let allStages: MatchStage[];
-  if (!hasSeeds && branches.length === 1 && branches[0].type === "play_match") {
-    allStages = ["final"];
-  } else if (!hasPlayMatches) {
-    // Si todas son sembradas (raro, pero posible en tests)
-    allStages = getStagesHierarchy(initialSlots);
-  } else {
-    // Ronda 1 contiene los partidos preliminares y los BYEs de las sembradas.
-    // Ronda 2 es donde se enfrentan las sembradas con los ganadores de Ronda 1.
-    const r1Slots = initialSlots * 2;
-    allStages = getStagesHierarchy(r1Slots);
-  }
-
+  // Etapas del cuadro completo
+  const allStages = getStagesHierarchy(initialSlots);
   const initialStage = allStages[0];
+
+  // 2. Crear el esqueleto completo de partidos con slots VACÍOS
   let curMatchNumber = startingMatchNumber;
-
-  const matchesToInsert: MatchToInsert[] = [];
   const previewRounds: PreviewRound[] = [];
+  const matchesByStage: Map<MatchStage, PreviewMatch[]> = new Map();
 
-  // 3. Ronda 1 (Ronda Inicial)
-  // Cada branch genera un cruce de R1:
-  // - Si es 'seed': partido BYE (couple1 = couple, couple2 = null, winner = couple, status = completed)
-  // - Si es 'play_match': partido normal (couple1, couple2, status = pending)
-  const r1Matches: PreviewMatch[] = [];
-  const r1BranchFeeders: { advancingId: string | null; advancingName: string; isSeed: boolean }[] = [];
-
-  for (let i = 0; i < branches.length; i++) {
-    const branch = branches[i];
-    const matchNum = curMatchNumber++;
-
-    if (branch.type === "seed") {
-      matchesToInsert.push({
-        stage: initialStage,
-        match_number: matchNum,
-        couple1_id: branch.couple.id,
-        couple2_id: null,
-        winner_couple_id: branch.couple.id,
-        score_set1: "BYE (Pasa de ronda)",
-        status: "completed",
-      });
-
-      r1Matches.push({
-        matchNumber: matchNum,
-        stage: initialStage,
-        couple1: { id: branch.couple.id, name: branch.couple.name, isSeed: true },
-        couple2: { id: null, name: "BYE (Pase directo)", isBye: true },
-        isBye: true,
-        status: "completed",
-        winnerId: branch.couple.id,
-      });
-
-      r1BranchFeeders.push({
-        advancingId: branch.couple.id,
-        advancingName: branch.couple.name,
-        isSeed: true,
-      });
-    } else {
-      matchesToInsert.push({
-        stage: initialStage,
-        match_number: matchNum,
-        couple1_id: branch.couple1.id,
-        couple2_id: branch.couple2.id,
-        winner_couple_id: null,
-        score_set1: null,
-        status: "pending",
-      });
-
-      r1Matches.push({
-        matchNumber: matchNum,
-        stage: initialStage,
-        couple1: { id: branch.couple1.id, name: branch.couple1.name },
-        couple2: { id: branch.couple2.id, name: branch.couple2.name },
-        isBye: false,
-        status: "pending",
-      });
-
-      r1BranchFeeders.push({
-        advancingId: null,
-        advancingName: `Ganador P#${matchNum}`,
-        isSeed: false,
-      });
-    }
-  }
-
-  previewRounds.push({
-    stage: initialStage,
-    stageName: getStageName(initialStage),
-    matches: r1Matches,
-  });
-
-  // 4. Rondas Subsiguientes (Ronda 2 hasta la Final)
-  // Cada ronda sucesiva toma de a 2 los feeders de la ronda anterior
-  let currentFeeders = r1BranchFeeders;
-
-  for (let sIdx = 1; sIdx < allStages.length; sIdx++) {
+  let slotsInStage = initialSlots;
+  for (let sIdx = 0; sIdx < allStages.length; sIdx++) {
     const stage = allStages[sIdx];
-    const numMatchesInStage = Math.max(1, Math.ceil(currentFeeders.length / 2));
-    const nextFeeders: { advancingId: string | null; advancingName: string; isSeed: boolean }[] = [];
+    const numMatches = Math.max(1, slotsInStage / 2);
     const stageMatches: PreviewMatch[] = [];
 
-    for (let mIdx = 0; mIdx < numMatchesInStage; mIdx++) {
-      const f1 = currentFeeders[mIdx * 2];
-      const f2 = currentFeeders[mIdx * 2 + 1];
+    for (let mIdx = 0; mIdx < numMatches; mIdx++) {
       const matchNum = curMatchNumber++;
-
-      const c1Id = f1 ? f1.advancingId : null;
-      const c1Name = f1 ? (f1.advancingId ? f1.advancingName : f1.advancingName) : "Por definir";
-
-      const c2Id = f2 ? f2.advancingId : null;
-      const c2Name = f2 ? (f2.advancingId ? f2.advancingName : f2.advancingName) : "Por definir";
-
-      matchesToInsert.push({
-        stage,
-        match_number: matchNum,
-        couple1_id: c1Id,
-        couple2_id: c2Id,
-        winner_couple_id: null,
-        score_set1: null,
-        status: "pending",
-      });
-
       stageMatches.push({
         matchNumber: matchNum,
         stage,
-        couple1: {
-          id: c1Id,
-          name: c1Name,
-          isSeed: f1?.isSeed,
-        },
-        couple2: {
-          id: c2Id,
-          name: c2Name,
-          isSeed: f2?.isSeed,
-        },
+        couple1: { id: null, name: "Vacío", isEmpty: true },
+        couple2: { id: null, name: "Vacío", isEmpty: true },
         isBye: false,
         status: "pending",
-        originatingMatch1Number: r1Matches[mIdx * 2]?.matchNumber,
-        originatingMatch2Number: r1Matches[mIdx * 2 + 1]?.matchNumber,
-      });
-
-      nextFeeders.push({
-        advancingId: null,
-        advancingName: `Ganador P#${matchNum}`,
-        isSeed: false,
       });
     }
 
+    matchesByStage.set(stage, stageMatches);
     previewRounds.push({
       stage,
       stageName: getStageName(stage),
       matches: stageMatches,
     });
 
-    currentFeeders = nextFeeders;
+    slotsInStage = numMatches;
+  }
+
+  // 3. Poblar las llaves según las elecciones del administrador (arriba hacia abajo)
+  const r1Matches = matchesByStage.get(initialStage) || [];
+  let currentR1MatchIdx = 0;
+  let waitingCouple: ManualCoupleEntry | null = null;
+  let assignedCount = 0;
+
+  for (const c of orderedCouples) {
+    if (!c.action) continue; // Si es null, no ocupa slot todavía
+    assignedCount++;
+
+    if (c.action === "seed") {
+      // Si había una pareja esperando rival de 'play', la sembrada no puede emparejarse con ella.
+      // Buscamos el siguiente partido libre en R1
+      if (currentR1MatchIdx < r1Matches.length) {
+        const match = r1Matches[currentR1MatchIdx];
+        match.couple1 = { id: c.id, name: c.name, isSeed: true };
+        match.couple2 = { id: null, name: "BYE (Pase directo)", isBye: true };
+        match.isBye = true;
+        match.status = "completed";
+        match.winnerId = c.id;
+
+        // Propagar inmediatamente al slot correspondiente de la siguiente ronda
+        if (allStages.length > 1) {
+          const nextStage = allStages[1];
+          const nextMatches = matchesByStage.get(nextStage) || [];
+          const targetMatchIdx = Math.floor(currentR1MatchIdx / 2);
+          const isSlot1 = currentR1MatchIdx % 2 === 0;
+
+          if (targetMatchIdx < nextMatches.length) {
+            const nextMatch = nextMatches[targetMatchIdx];
+            const slotData: PreviewMatchCouple = {
+              id: c.id,
+              name: c.name,
+              isSeed: true,
+            };
+            if (isSlot1) {
+              nextMatch.couple1 = slotData;
+            } else {
+              nextMatch.couple2 = slotData;
+            }
+          }
+        }
+
+        currentR1MatchIdx++;
+      }
+    } else if (c.action === "play") {
+      if (!waitingCouple) {
+        // Primera pareja del cruce
+        waitingCouple = c;
+        if (currentR1MatchIdx < r1Matches.length) {
+          const match = r1Matches[currentR1MatchIdx];
+          match.couple1 = { id: c.id, name: c.name };
+          match.couple2 = { id: null, name: "Esperando rival...", isWaiting: true };
+          match.isBye = false;
+          match.status = "pending";
+        }
+      } else {
+        // Segunda pareja que completa el cruce
+        if (currentR1MatchIdx < r1Matches.length) {
+          const match = r1Matches[currentR1MatchIdx];
+          match.couple2 = { id: c.id, name: c.name };
+          match.isBye = false;
+          match.status = "pending";
+
+          // En la siguiente ronda, el slot correspondiente muestra el ganador esperado
+          if (allStages.length > 1) {
+            const nextStage = allStages[1];
+            const nextMatches = matchesByStage.get(nextStage) || [];
+            const targetMatchIdx = Math.floor(currentR1MatchIdx / 2);
+            const isSlot1 = currentR1MatchIdx % 2 === 0;
+
+            if (targetMatchIdx < nextMatches.length) {
+              const nextMatch = nextMatches[targetMatchIdx];
+              const slotData: PreviewMatchCouple = {
+                id: null,
+                name: `Ganador P#${match.matchNumber}`,
+                isFeeder: true,
+              };
+              if (isSlot1) {
+                nextMatch.couple1 = slotData;
+              } else {
+                nextMatch.couple2 = slotData;
+              }
+            }
+          }
+
+          currentR1MatchIdx++;
+        }
+        waitingCouple = null;
+      }
+    }
+  }
+
+  // 4. Generar la lista de partidos reales a insertar en la base de datos
+  // Solo se guardan los cruces que tengan al menos una acción (sembrada o jugada)
+  // y las rondas subsiguientes conectadas.
+  const matchesToInsert: MatchToInsert[] = [];
+
+  // Recorrer todas las etapas
+  for (const stage of allStages) {
+    const stageMatches = matchesByStage.get(stage) || [];
+    for (const m of stageMatches) {
+      // Un partido se inserta si no está totalmente vacío
+      const c1 = m.couple1.isEmpty ? null : m.couple1.id;
+      const c2 = m.couple2.isEmpty || m.couple2.isWaiting || m.couple2.isBye ? null : m.couple2.id;
+      const isMBye = m.isBye;
+
+      // Si es de R1 y tiene alguna pareja o si es de rondas siguientes y alimenta a partidos
+      const hasContent = !m.couple1.isEmpty || !m.couple2.isEmpty || m.couple1.isFeeder || m.couple2.isFeeder;
+
+      if (hasContent) {
+        matchesToInsert.push({
+          stage,
+          match_number: m.matchNumber,
+          couple1_id: c1,
+          couple2_id: c2,
+          winner_couple_id: isMBye ? m.winnerId ?? c1 : null,
+          score_set1: isMBye ? "BYE (Pasa de ronda)" : null,
+          status: isMBye ? "completed" : "pending",
+        });
+      }
+    }
   }
 
   return {
@@ -295,7 +266,8 @@ export function buildManualPlayoffBracket(
     allStages,
     matchesToInsert,
     previewRounds,
-    unpairedPlayCouple: pendingPlayCouple,
-    totalEntries: orderedCouples.length,
+    unpairedPlayCouple: waitingCouple,
+    totalEntries,
+    assignedCount,
   };
 }

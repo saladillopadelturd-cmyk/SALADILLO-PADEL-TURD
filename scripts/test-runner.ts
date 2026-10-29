@@ -365,6 +365,20 @@ async function main() {
   const semiM = mb4.matchesToInsert.filter((m) => m.stage === "semi");
   checkManual(semiM[0].couple1_id === "sA" && semiM[1].couple2_id === "sF", "Sembradas en slots opuestos de semifinal");
 
+  // Test 5: Campos de cada llave inician VACÍOS si action es null
+  const mb5 = buildManualPlayoffBracket([
+    { id: "c1", name: "P1", action: null },
+    { id: "c2", name: "P2", action: null },
+    { id: "c3", name: "P3", action: null },
+    { id: "c4", name: "P4", action: null },
+  ]);
+  checkManual(mb5.assignedCount === 0, "0 asignadas al inicio");
+  checkManual(mb5.matchesToInsert.length === 0, "No se insertan partidos vacíos");
+  checkManual(
+    mb5.previewRounds.every((r) => r.matches.every((m) => m.couple1.isEmpty && m.couple2.isEmpty)),
+    "Todos los campos de las llaves parten vacíos"
+  );
+
   console.log(`Resultados Cuadro Manual:`);
   console.log(`  - Validaciones Pasadas: ${manualPassed}`);
   console.log(`  - Fallos Detectados:    ${manualFailed}`);

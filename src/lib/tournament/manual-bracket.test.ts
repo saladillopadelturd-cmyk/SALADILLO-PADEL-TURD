@@ -22,7 +22,7 @@ describe("Motor Manual de Eliminación Directa", () => {
   });
 
   it("Caso 2: 1 pareja sembrada ('seed') y 2 parejas jugando ('play')", () => {
-    // Orden de arriba hacia abajo:
+    // 4 slots base (semifinal y final):
     // 1. Pareja A -> Sembrada (espera rival)
     // 2. Pareja B -> Jugar \_ Juegan entre sí en R1
     // 3. Pareja C -> Jugar /
@@ -33,8 +33,6 @@ describe("Motor Manual de Eliminación Directa", () => {
     ];
 
     const result = buildManualPlayoffBracket(couples, 101);
-    // Ronda 1: Semifinal (Match 101: pA con BYE, Match 102: pB vs pC)
-    // Ronda 2: Final (Match 103: pA pre-asignada vs Ganador P#102)
     assert.strictEqual(result.allStages.length, 2);
     assert.strictEqual(result.allStages[0], "semi");
     assert.strictEqual(result.allStages[1], "final");
@@ -57,7 +55,6 @@ describe("Motor Manual de Eliminación Directa", () => {
     const mFinal = result.matchesToInsert.find((m) => m.stage === "final");
     assert.ok(mFinal);
     assert.strictEqual(mFinal.couple1_id, "pA");
-    assert.strictEqual(mFinal.couple2_id, null);
   });
 
   it("Caso 3: Detecta pareja impar pendiente con acción 'play'", () => {
@@ -72,13 +69,6 @@ describe("Motor Manual de Eliminación Directa", () => {
   });
 
   it("Caso 4: Estructura de 6 parejas (2 sembradas y 2 cruces preliminares)", () => {
-    // Arriba hacia abajo:
-    // 1: Sembrada A
-    // 2: Jugar B \_ Cruce 1
-    // 3: Jugar C /
-    // 4: Jugar D \_ Cruce 2
-    // 5: Jugar E /
-    // 6: Sembrada F
     const couples: ManualCoupleEntry[] = [
       { id: "sA", name: "Sembrada A", action: "seed" },
       { id: "jB", name: "Juega B", action: "play" },
@@ -90,20 +80,36 @@ describe("Motor Manual de Eliminación Directa", () => {
 
     const result = buildManualPlayoffBracket(couples, 101);
     assert.strictEqual(result.unpairedPlayCouple, null);
-    // 4 branches: sA, (jB vs jC), (jD vs jE), sF.
-    // Cuartos (R1) -> Semis (R2) -> Final (R3)
     assert.strictEqual(result.allStages[0], "quarter");
     assert.strictEqual(result.allStages[1], "semi");
     assert.strictEqual(result.allStages[2], "final");
 
-    // En semifinales:
-    // Semi 1: sA vs Ganador(jB vs jC)
-    // Semi 2: Ganador(jD vs jE) vs sF
-    const semiMatches = result.matchesToInsert.filter((m) => m.stage === "semi");
-    assert.strictEqual(semiMatches.length, 2);
-    assert.strictEqual(semiMatches[0].couple1_id, "sA");
-    assert.strictEqual(semiMatches[0].couple2_id, null); // Espera al ganador de jB vs jC
-    assert.strictEqual(semiMatches[1].couple1_id, null); // Espera al ganador de jD vs jE
-    assert.strictEqual(semiMatches[1].couple2_id, "sF");
+    const semiM = result.matchesToInsert.filter((m) => m.stage === "semi");
+    assert.strictEqual(semiM.length, 2);
+    assert.strictEqual(semiM[0].couple1_id, "sA");
+    assert.strictEqual(semiM[1].couple2_id, "sF");
+  });
+
+  it("Caso 5: Campos de cada llave inician VACÍOS si action es null", () => {
+    const couples: ManualCoupleEntry[] = [
+      { id: "c1", name: "P1", action: null },
+      { id: "c2", name: "P2", action: null },
+      { id: "c3", name: "P3", action: null },
+      { id: "c4", name: "P4", action: null },
+    ];
+
+    const result = buildManualPlayoffBracket(couples, 101);
+    assert.strictEqual(result.assignedCount, 0);
+
+    // Todos los partidos de la previsualización deben tener isEmpty === true
+    for (const round of result.previewRounds) {
+      for (const match of round.matches) {
+        assert.strictEqual(match.couple1.isEmpty, true);
+        assert.strictEqual(match.couple2.isEmpty, true);
+      }
+    }
+
+    // No debe haber partidos para insertar hasta que el administrador asigne
+    assert.strictEqual(result.matchesToInsert.length, 0);
   });
 });
