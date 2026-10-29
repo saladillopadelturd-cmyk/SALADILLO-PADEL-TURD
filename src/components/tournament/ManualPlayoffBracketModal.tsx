@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import {
   Trophy,
   ArrowUp,
@@ -15,6 +15,7 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
+  Printer,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
@@ -238,6 +239,143 @@ export function ManualPlayoffBracketModal({
 
     return buildManualPlayoffBracketFromSlots(namesMap, r1Slots, pairsList.length, 101);
   }, [pairsList, r1Slots]);
+
+  // Referencias y cálculo geométrico de líneas conectoras de la previsualización
+  const previewContainerRef = useRef<HTMLDivElement>(null);
+  const [previewLines, setPreviewLines] = useState<{ id: string; d: string }[]>([]);
+
+  const updatePreviewLines = useCallback(() => {
+    const container = previewContainerRef.current;
+    if (!container || !bracketResult) return;
+
+    const containerRect = container.getBoundingClientRect();
+    if (containerRect.width === 0 || containerRect.height === 0) return;
+
+    const scale =
+      container.offsetWidth > 0
+        ? containerRect.width / container.offsetWidth
+        : 1;
+
+    const lines: { id: string; d: string }[] = [];
+    const rounds = bracketResult.previewRounds;
+
+    for (let rIdx = 0; rIdx < rounds.length - 1; rIdx++) {
+      const curRound = rounds[rIdx];
+      const nextRound = rounds[rIdx + 1];
+
+      for (let nextIdx = 0; nextIdx < nextRound.matches.length; nextIdx++) {
+        const destEl = container.querySelector<HTMLElement>(
+          `[data-bracket-card="${rIdx + 1}-${nextIdx}"]`
+        );
+        if (!destEl) continue;
+
+        const destRect = destEl.getBoundingClientRect();
+        const destX = (destRect.left - containerRect.left) / scale;
+        const destY =
+          (destRect.top + destRect.height / 2 - containerRect.top) / scale;
+
+        const topIdx = nextIdx * 2;
+        const botIdx = nextIdx * 2 + 1;
+
+        const topEl = container.querySelector<HTMLElement>(
+          `[data-bracket-card="${rIdx}-${topIdx}"]`
+        );
+        const botEl = container.querySelector<HTMLElement>(
+          `[data-bracket-card="${rIdx}-${botIdx}"]`
+        );
+
+        const topRect = topEl ? topEl.getBoundingClientRect() : null;
+        const botRect = botEl ? botEl.getBoundingClientRect() : null;
+
+        const topX = topRect
+          ? (topRect.right - containerRect.left) / scale
+          : null;
+        const topY = topRect
+          ? (topRect.top + topRect.height / 2 - containerRect.top) / scale
+          : null;
+
+        const botX = botRect
+          ? (botRect.right - containerRect.left) / scale
+          : null;
+        const botY = botRect
+          ? (botRect.top + botRect.height / 2 - containerRect.top) / scale
+          : null;
+
+        if (topX !== null && topY !== null && botX !== null && botY !== null) {
+          const startX = Math.max(topX, botX);
+          const midX = startX + (destX - startX) / 2;
+          const radius = Math.min(
+            8,
+            Math.max(0, Math.abs(destY - topY) / 2),
+            Math.max(0, Math.abs(botY - destY) / 2),
+            (destX - startX) / 4
+          );
+
+          const pathTop =
+            radius >= 3
+              ? `M ${topX} ${topY} L ${midX - radius} ${topY} Q ${midX} ${topY} ${midX} ${
+                  topY + radius
+                } L ${midX} ${destY - radius} Q ${midX} ${destY} ${
+                  midX + radius
+                } ${destY} L ${destX} ${destY}`
+              : `M ${topX} ${topY} L ${midX} ${topY} L ${midX} ${destY} L ${destX} ${destY}`;
+
+          const pathBot =
+            radius >= 3
+              ? `M ${botX} ${botY} L ${midX - radius} ${botY} Q ${midX} ${botY} ${midX} ${
+                  botY - radius
+                } L ${midX} ${destY + radius} Q ${midX} ${destY} ${
+                  midX + radius
+                } ${destY} L ${destX} ${destY}`
+              : `M ${botX} ${botY} L ${midX} ${botY} L ${midX} ${destY} L ${destX} ${destY}`;
+
+          lines.push({
+            id: `pline-${rIdx}-${topIdx}-to-${rIdx + 1}-${nextIdx}`,
+            d: pathTop,
+          });
+          lines.push({
+            id: `pline-${rIdx}-${botIdx}-to-${rIdx + 1}-${nextIdx}`,
+            d: pathBot,
+          });
+        } else if (topX !== null && topY !== null) {
+          const midX = topX + (destX - topX) / 2;
+          lines.push({
+            id: `pline-${rIdx}-${topIdx}-to-${rIdx + 1}-${nextIdx}`,
+            d: `M ${topX} ${topY} L ${midX} ${topY} L ${midX} ${destY} L ${destX} ${destY}`,
+          });
+        } else if (botX !== null && botY !== null) {
+          const midX = botX + (destX - botX) / 2;
+          lines.push({
+            id: `pline-${rIdx}-${botIdx}-to-${rIdx + 1}-${nextIdx}`,
+            d: `M ${botX} ${botY} L ${midX} ${botY} L ${midX} ${destY} L ${destX} ${destY}`,
+          });
+        }
+      }
+    }
+
+    setPreviewLines(lines);
+  }, [bracketResult]);
+
+  useEffect(() => {
+    updatePreviewLines();
+    const tId = setTimeout(updatePreviewLines, 60);
+
+    const container = previewContainerRef.current;
+    let observer: ResizeObserver | null = null;
+    if (container && typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(() => {
+        updatePreviewLines();
+      });
+      observer.observe(container);
+    }
+
+    window.addEventListener("resize", updatePreviewLines);
+    return () => {
+      clearTimeout(tId);
+      if (observer) observer.disconnect();
+      window.removeEventListener("resize", updatePreviewLines);
+    };
+  }, [updatePreviewLines, zoomLevel, bracketResult]);
 
   // Total de parejas con acción asignada
   const assignedCount = bracketResult?.assignedCount ?? 0;
@@ -495,78 +633,111 @@ export function ManualPlayoffBracketModal({
                 Previsualización Gráfica del Cuadro Resultante
               </span>
 
-              {/* Controles de Zoom (Alejar para ver cuadro completo / Acercar para ver detalle) */}
-              <div className="flex items-center gap-1 bg-dark-900 border border-dark-800 rounded-lg p-1 self-start sm:self-auto shadow-sm">
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Botón para Imprimir en A4 */}
                 <button
                   type="button"
-                  onClick={handleZoomOut}
-                  disabled={zoomLevel <= 0.45}
-                  className="p-1 rounded text-dark-400 hover:text-white hover:bg-dark-800 disabled:opacity-25 transition-colors"
-                  title="Alejar (ver más instancias del torneo)"
+                  onClick={() => window.print()}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 hover:text-emerald-300 font-bold text-xs transition-colors shadow-sm"
+                  title="Imprimir el cuadro completo en hoja A4 horizontal"
                 >
-                  <ZoomOut className="w-3.5 h-3.5" />
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Imprimir A4</span>
                 </button>
-                <span className="text-[11px] font-mono font-bold text-amber-400 px-1 min-w-[38px] text-center">
-                  {Math.round(zoomLevel * 100)}%
-                </span>
-                <button
-                  type="button"
-                  onClick={handleZoomIn}
-                  disabled={zoomLevel >= 1.5}
-                  className="p-1 rounded text-dark-400 hover:text-white hover:bg-dark-800 disabled:opacity-25 transition-colors"
-                  title="Acercar (ver instancias de cerca)"
-                >
-                  <ZoomIn className="w-3.5 h-3.5" />
-                </button>
-                <div className="w-px h-3.5 bg-dark-800 mx-0.5" />
-                <button
-                  type="button"
-                  onClick={handleZoomFull}
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
-                    zoomLevel <= 0.6
-                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                      : "text-dark-400 hover:text-white hover:bg-dark-800"
-                  }`}
-                  title="Ver cuadro completo del torneo de un solo vistazo"
-                >
-                  Cuadro Completo
-                </button>
-                <button
-                  type="button"
-                  onClick={handleZoomReset}
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
-                    zoomLevel === 1.0
-                      ? "bg-sky-500/20 text-sky-300 border border-sky-500/30"
-                      : "text-dark-400 hover:text-white hover:bg-dark-800"
-                  }`}
-                  title="Restablecer tamaño normal (100%)"
-                >
-                  100%
-                </button>
+
+                {/* Controles de Zoom (Alejar para ver cuadro completo / Acercar para ver detalle) */}
+                <div className="flex items-center gap-1 bg-dark-900 border border-dark-800 rounded-lg p-1 self-start sm:self-auto shadow-sm">
+                  <button
+                    type="button"
+                    onClick={handleZoomOut}
+                    disabled={zoomLevel <= 0.45}
+                    className="p-1 rounded text-dark-400 hover:text-white hover:bg-dark-800 disabled:opacity-25 transition-colors"
+                    title="Alejar (ver más instancias del torneo)"
+                  >
+                    <ZoomOut className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="text-[11px] font-mono font-bold text-amber-400 px-1 min-w-[38px] text-center">
+                    {Math.round(zoomLevel * 100)}%
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleZoomIn}
+                    disabled={zoomLevel >= 1.5}
+                    className="p-1 rounded text-dark-400 hover:text-white hover:bg-dark-800 disabled:opacity-25 transition-colors"
+                    title="Acercar (ver instancias de cerca)"
+                  >
+                    <ZoomIn className="w-3.5 h-3.5" />
+                  </button>
+                  <div className="w-px h-3.5 bg-dark-800 mx-0.5" />
+                  <button
+                    type="button"
+                    onClick={handleZoomFull}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                      zoomLevel <= 0.6
+                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                        : "text-dark-400 hover:text-white hover:bg-dark-800"
+                    }`}
+                    title="Ver cuadro completo del torneo de un solo vistazo"
+                  >
+                    Cuadro Completo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleZoomReset}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                      zoomLevel === 1.0
+                        ? "bg-sky-500/20 text-sky-300 border border-sky-500/30"
+                        : "text-dark-400 hover:text-white hover:bg-dark-800"
+                    }`}
+                    title="Restablecer tamaño normal (100%)"
+                  >
+                    100%
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="flex-1 overflow-x-auto overflow-y-auto border border-dark-800 rounded-xl bg-dark-900/40 p-4 relative">
+            <div className="flex-1 overflow-x-auto overflow-y-auto border border-dark-800 rounded-xl bg-dark-900/40 p-4 relative bracket-scroll-container">
               {!bracketResult || bracketResult.previewRounds.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-dark-500 text-xs">
                   Cargando estructura del cuadro...
                 </div>
               ) : (
                 <div
-                  className="inline-flex gap-6 min-w-full items-stretch py-2 origin-top-left transition-all duration-150"
+                  ref={previewContainerRef}
+                  className="bracket-columns-container inline-flex gap-10 min-w-full items-stretch py-2 origin-top-left transition-all duration-150 relative"
                   style={{
                     zoom: zoomLevel,
                   }}
                 >
-                  {bracketResult.previewRounds.map((roundGroup) => {
+                  {/* Capa SVG de Líneas Conectoras entre Rondas */}
+                  <svg
+                    className="absolute inset-0 w-full h-full pointer-events-none z-0"
+                    style={{ overflow: "visible" }}
+                  >
+                    {previewLines.map((line) => (
+                      <path
+                        key={line.id}
+                        d={line.d}
+                        fill="none"
+                        stroke="#475569"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="bracket-connector-line opacity-70"
+                      />
+                    ))}
+                  </svg>
+
+                  {bracketResult.previewRounds.map((roundGroup, rIdx) => {
                     return (
                       <div
                         key={roundGroup.stage}
-                        className="flex flex-col min-w-[240px] max-w-[280px] flex-shrink-0"
+                        className="flex flex-col min-w-[240px] max-w-[280px] flex-shrink-0 relative z-10"
                       >
                         {/* Cabecera de Etapa */}
                         <div className="mb-3 text-center">
-                          <span className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-dark-800 text-sky-400 border border-dark-700">
+                          <span className="bracket-stage-badge inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-dark-800 text-sky-400 border border-dark-700">
                             {roundGroup.stageName}
                           </span>
                         </div>
@@ -582,7 +753,8 @@ export function ManualPlayoffBracketModal({
                             return (
                               <div
                                 key={pm.matchNumber}
-                                className={`rounded-xl border p-2.5 text-xs transition-colors ${
+                                data-bracket-card={`${rIdx}-${pmIdx}`}
+                                className={`bracket-match-card rounded-xl border p-2.5 text-xs transition-colors relative z-10 ${
                                   isBye
                                     ? "bg-amber-950/20 border-amber-500/40 shadow-sm"
                                     : !isC1Empty && !isC2Empty && !isC2Waiting

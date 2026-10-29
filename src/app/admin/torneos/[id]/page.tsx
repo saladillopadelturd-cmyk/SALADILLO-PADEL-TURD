@@ -2245,6 +2245,8 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                       onMatchClick={(m) => openScoreModal(m)}
                       title="Cuadro Gráfico de Eliminación Directa"
                       subtitle="Estructura conformada de arriba hacia abajo. Haz clic en cualquier cruce para registrar o modificar el resultado."
+                      tournamentName={tournament?.name}
+                      categoryName={tournament ? `${tournament.category || ""} ${tournament.gender ? `(${tournament.gender})` : ""}`.trim() : undefined}
                     />
                   </div>
                 )}

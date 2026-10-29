@@ -156,3 +156,97 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
+
+/* ==========================================================================
+   Estilos Oficiales de Impresión en Hoja A4 Horizontal para Cuadros de Torneo
+   ========================================================================== */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 6mm 8mm;
+  }
+
+  /* Ocultar elementos de interfaz ajenos al cuadro */
+  header,
+  nav,
+  aside,
+  footer,
+  button,
+  .no-print,
+  [role="navigation"],
+  [aria-label="Sidebar"],
+  .fixed,
+  .sticky {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Contenedor del cuadro en impresión: tamaño y ajuste óptimo */
+  .bracket-print-area {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .bracket-scroll-container {
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Factor de escala automático para encajar hasta 5 etapas de eliminación en A4 Landscape */
+  .bracket-columns-container {
+    zoom: 0.58 !important;
+    overflow: visible !important;
+    min-width: 0 !important;
+  }
+
+  /* Estilizado de alta legibilidad para papel (ahorro de tinta y nitidez) */
+  .bracket-match-card {
+    background-color: #ffffff !important;
+    border: 1.5px solid #334155 !important;
+    color: #0f172a !important;
+    box-shadow: none !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .bracket-match-header {
+    background-color: #f1f5f9 !important;
+    border-bottom: 1px solid #cbd5e1 !important;
+    color: #1e293b !important;
+    font-weight: 700 !important;
+  }
+
+  .bracket-stage-badge {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+    border: 1px solid #94a3b8 !important;
+  }
+
+  .bracket-row-winner {
+    background-color: #ecfdf5 !important;
+    color: #064e3b !important;
+    font-weight: 800 !important;
+  }
+
+  .bracket-connector-line {
+    stroke: #1e293b !important;
+    stroke-width: 2px !important;
+  }
+}
+

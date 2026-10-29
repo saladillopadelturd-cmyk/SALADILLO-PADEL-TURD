@@ -1747,6 +1747,8 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                   }}
                   title="Cuadro Oficial de Eliminación Directa"
                   subtitle="Conexión visual de llaves y avance de ganadores hacia la Gran Final."
+                  tournamentName={tournament.name}
+                  categoryName={`${tournament.category || ""} ${tournament.gender ? `(${tournament.gender})` : ""}`.trim()}
                 />
 
                 <div className="space-y-6 pt-4 border-t border-dark-800">
