@@ -9,7 +9,7 @@ import { getPlayerPhotosMap } from "@/lib/tournament/player-photos";
 import AboutRankingButton from "@/components/ranking/AboutRankingButton";
 import { Trophy, Medal, User } from "lucide-react";
 
-export const revalidate = 0;
+export const revalidate = 30; // ISR: cache de 30s para respuesta instantánea de rankings
 
 export const metadata: Metadata = {
   title: "Rankings Oficiales de Pádel",

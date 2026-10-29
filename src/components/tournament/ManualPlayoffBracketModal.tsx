@@ -274,15 +274,32 @@ export function ManualPlayoffBracketModal({
         const destY =
           (destRect.top + destRect.height / 2 - containerRect.top) / scale;
 
-        const topIdx = nextIdx * 2;
-        const botIdx = nextIdx * 2 + 1;
+        let topIdx = -1;
+        let botIdx = -1;
 
-        const topEl = container.querySelector<HTMLElement>(
-          `[data-bracket-card="${rIdx}-${topIdx}"]`
-        );
-        const botEl = container.querySelector<HTMLElement>(
-          `[data-bracket-card="${rIdx}-${botIdx}"]`
-        );
+        if (curRound.stage === "round_of_32") {
+          const destM = nextRound.matches[nextIdx];
+          if (destM.originatingMatch1Number != null) {
+            topIdx = curRound.matches.findIndex(
+              (m) => m.matchNumber === destM.originatingMatch1Number
+            );
+          }
+          if (destM.originatingMatch2Number != null) {
+            botIdx = curRound.matches.findIndex(
+              (m) => m.matchNumber === destM.originatingMatch2Number
+            );
+          }
+        } else {
+          topIdx = nextIdx * 2;
+          botIdx = nextIdx * 2 + 1;
+        }
+
+        const topEl = topIdx >= 0
+          ? container.querySelector<HTMLElement>(`[data-bracket-card="${rIdx}-${topIdx}"]`)
+          : null;
+        const botEl = botIdx >= 0
+          ? container.querySelector<HTMLElement>(`[data-bracket-card="${rIdx}-${botIdx}"]`)
+          : null;
 
         const topRect = topEl ? topEl.getBoundingClientRect() : null;
         const botRect = botEl ? botEl.getBoundingClientRect() : null;

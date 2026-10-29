@@ -10,7 +10,7 @@ import {
   ZoomOut,
   Printer,
 } from "lucide-react";
-import { getStageName, normalizeStage } from "@/lib/tournament/elimination";
+import { getStageName, normalizeStage, findNextPlayoffMatchSlot } from "@/lib/tournament/elimination";
 import type { Match, Couple } from "@/types/tournament";
 
 interface PlayoffBracketViewProps {
@@ -156,18 +156,38 @@ export function PlayoffBracketView({
         const destY =
           (destRect.top + destRect.height / 2 - containerRect.top) / scale;
 
-        const topIdx = nextIdx * 2;
-        const botIdx = nextIdx * 2 + 1;
+        let topMatch: (typeof curStage.matches)[0] | undefined;
+        let botMatch: (typeof curStage.matches)[0] | undefined;
+        let topIdx = -1;
+        let botIdx = -1;
 
-        const topMatch = curStage.matches[topIdx];
-        const botMatch = curStage.matches[botIdx];
+        if (curStage.stage === "round_of_32") {
+          for (let m16Idx = 0; m16Idx < curStage.matches.length; m16Idx++) {
+            const m16 = curStage.matches[m16Idx];
+            const nextSlot = findNextPlayoffMatchSlot(matches, m16);
+            if (nextSlot && nextSlot.targetMatchId === destMatch.id) {
+              if (nextSlot.slotField === "couple1_id") {
+                topMatch = m16;
+                topIdx = m16Idx;
+              } else {
+                botMatch = m16;
+                botIdx = m16Idx;
+              }
+            }
+          }
+        } else {
+          topIdx = nextIdx * 2;
+          botIdx = nextIdx * 2 + 1;
+          topMatch = curStage.matches[topIdx];
+          botMatch = curStage.matches[botIdx];
+        }
 
-        const topEl = container.querySelector<HTMLElement>(
-          `[data-bracket-card="${sIdx}-${topIdx}"]`
-        );
-        const botEl = container.querySelector<HTMLElement>(
-          `[data-bracket-card="${sIdx}-${botIdx}"]`
-        );
+        const topEl = topIdx >= 0
+          ? container.querySelector<HTMLElement>(`[data-bracket-card="${sIdx}-${topIdx}"]`)
+          : null;
+        const botEl = botIdx >= 0
+          ? container.querySelector<HTMLElement>(`[data-bracket-card="${sIdx}-${botIdx}"]`)
+          : null;
 
         const topRect = topEl ? topEl.getBoundingClientRect() : null;
         const botRect = botEl ? botEl.getBoundingClientRect() : null;

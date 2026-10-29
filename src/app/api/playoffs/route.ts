@@ -140,8 +140,21 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Auto-limpieza de llaves de 16vos no utilizadas (si el cuadro ya estaba definido)
+  let cleanPlayoffMatches = playoffMatches || [];
+  const unusedR32Matches = cleanPlayoffMatches.filter(
+    (m) =>
+      m.stage === "round_of_32" &&
+      (!m.couple1_id || !m.couple2_id || String(m.score_set1 || "").includes("BYE"))
+  );
+  if (unusedR32Matches.length > 0) {
+    const unusedIds = unusedR32Matches.map((m) => m.id);
+    await supabase.from("matches").delete().in("id", unusedIds);
+    cleanPlayoffMatches = cleanPlayoffMatches.filter((m) => !unusedIds.includes(m.id));
+  }
+
   // Propagar ganadores y auto-sanar slots pendientes en la base de datos si fuera necesario
-  const { updatedMatches, updatesToPersist } = propagatePlayoffWinners(playoffMatches || []);
+  const { updatedMatches, updatesToPersist } = propagatePlayoffWinners(cleanPlayoffMatches);
   if (updatesToPersist.length > 0) {
     for (const update of updatesToPersist) {
       const payload: Record<string, unknown> = {
@@ -263,8 +276,26 @@ export async function POST(request: Request) {
       .eq("tournament_id", tournamentId)
       .neq("stage", "zone");
 
-    // Preparar registros
-    const records = matchesToSave.map((m: {
+    // Preparar registros y eliminar todas las llaves de 16vos de final no utilizadas
+    const records = matchesToSave
+      .filter((m: {
+        stage: unknown;
+        couple1_id: unknown;
+        couple2_id: unknown;
+        score_set1?: unknown;
+      }) => {
+        const stg = cleanStage(m.stage);
+        if (stg === "round_of_32") {
+          const c1 = cleanCoupleId(m.couple1_id);
+          const c2 = cleanCoupleId(m.couple2_id);
+          const isBye = !c2 || String(m.score_set1 || "").includes("BYE");
+          if (!c1 || !c2 || isBye) {
+            return false; // Eliminar llave de 16vos no utilizada
+          }
+        }
+        return true;
+      })
+      .map((m: {
       stage: unknown;
       match_number: unknown;
       couple1_id: unknown;
@@ -474,7 +505,7 @@ export async function POST(request: Request) {
     .eq("tournament_id", tournamentId)
     .neq("stage", "zone");
 
-  let matchNumber = 100;
+  let matchNumber = 101;
   const matchesToInsert: {
     tournament_id: string;
     stage: string;
@@ -485,28 +516,39 @@ export async function POST(request: Request) {
     score_set1?: string | null;
     status: string;
   }[] = [];
-  const firstRoundMatchesCreated: { id?: string; advancingPairId?: string; isBye: boolean }[] = [];
+  const firstRoundMatchesCreated: { id?: string; advancingPairId?: string; isBye: boolean; matchNumber: number }[] = [];
 
-  for (const m of bracket.firstRoundMatches) {
+  for (let mIdx = 0; mIdx < bracket.firstRoundMatches.length; mIdx++) {
+    const m = bracket.firstRoundMatches[mIdx];
     const isMBye = m.isBye;
     const couple1 = m.couple1Id !== "BYE" ? m.couple1Id : null;
     const couple2 = m.couple2Id !== "BYE" ? m.couple2Id : null;
     const winnerId = isMBye ? m.advancingPairId ?? couple1 ?? couple2 : null;
+    const assignedNum = matchNumber++;
 
-    matchesToInsert.push({
-      tournament_id: tournamentId,
-      stage: initialStage,
-      match_number: matchNumber++,
-      couple1_id: couple1,
-      couple2_id: couple2,
-      winner_couple_id: winnerId,
-      score_set1: isMBye ? "BYE (Pasa de ronda)" : null,
-      status: isMBye ? "completed" : "pending",
-    });
+    // REGLA: Cuando el cuadro de eliminación quede definido, eliminar todas las llaves de 16vos de final no utilizadas.
+    // Si la etapa inicial es 16vos (round_of_32) y es un cruce con BYE (pareja sembrada directo a 8vos) o vacío,
+    // NO se inserta en la base de datos. Solo se insertan partidos reales entre dos parejas competidoras.
+    const shouldInsertFirstRoundMatch =
+      initialStage !== "round_of_32" || (!isMBye && !!couple1 && !!couple2);
+
+    if (shouldInsertFirstRoundMatch) {
+      matchesToInsert.push({
+        tournament_id: tournamentId,
+        stage: initialStage,
+        match_number: assignedNum,
+        couple1_id: couple1,
+        couple2_id: couple2,
+        winner_couple_id: winnerId,
+        score_set1: isMBye ? "BYE (Pasa de ronda)" : null,
+        status: isMBye ? "completed" : "pending",
+      });
+    }
 
     firstRoundMatchesCreated.push({
       advancingPairId: m.advancingPairId,
       isBye: isMBye,
+      matchNumber: assignedNum,
     });
   }
 
@@ -572,14 +614,20 @@ export async function POST(request: Request) {
     .update({ status: "playoffs", updated_at: new Date().toISOString() })
     .eq("id", tournamentId);
 
+  const hasR32Inserted = matchesToInsert.some((m) => m.stage === "round_of_32");
+  const effectiveInitialStage = hasR32Inserted ? initialStage : "round_of_16";
+  const effectiveStages = hasR32Inserted
+    ? bracket.allStages
+    : bracket.allStages.filter((s) => s !== "round_of_32");
+
   return NextResponse.json({
     success: true,
-    message: `Cuadro de eliminación generado (${getStageName(initialStage)})`,
+    message: `Cuadro de eliminación generado (${getStageName(effectiveInitialStage)})`,
     qualifiedCount: qualifiedPairs.length,
     eliminatedCount: eliminatedPairs.length,
     totalSlots: bracket.totalSlots,
     byesCount: bracket.byesCount,
-    stages: bracket.allStages,
+    stages: effectiveStages,
     matchesCreated: matchesToInsert.length,
     eliminatedPairs,
   });

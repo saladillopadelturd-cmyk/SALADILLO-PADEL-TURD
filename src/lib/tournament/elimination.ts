@@ -157,7 +157,7 @@ export function findNextPlayoffMatchSlot<
   }
 >(
   tournamentMatches: T[],
-  currentMatch: { id: string; stage: MatchStage | string }
+  currentMatch: { id: string; stage: MatchStage | string; match_number?: number | null }
 ): NextPlayoffSlot | null {
   const currentNormStage = normalizeStage(currentMatch.stage);
   const nextStage = getNextStage(currentNormStage);
@@ -194,11 +194,52 @@ export function findNextPlayoffMatchSlot<
 
   if (nextStageMatches.length === 0) return null;
 
-  const targetIndex = Math.floor(currentIndex / 2);
+  let targetIndex = Math.floor(currentIndex / 2);
+  let slotField: "couple1_id" | "couple2_id" = currentIndex % 2 === 0 ? "couple1_id" : "couple2_id";
+
+  // REGLA: Si la etapa actual es round_of_32 y las llaves de 16vos no utilizadas fueron eliminadas,
+  // currentStageMatches puede tener menos de 16 partidos (solo las llaves utilizadas).
+  // Mapeamos el slot exacto hacia 8vos de final (round_of_16) de forma canónica.
+  if (currentNormStage === "round_of_32") {
+    // Si la cantidad de partidos es exacta 2-a-1, se preserva el mapeo directo
+    if (currentStageMatches.length === nextStageMatches.length * 2) {
+      targetIndex = Math.floor(currentIndex / 2);
+      slotField = currentIndex % 2 === 0 ? "couple1_id" : "couple2_id";
+    } else {
+      const effectiveMatchNumber =
+        currentMatch.match_number ?? currentStageMatches[currentIndex]?.match_number;
+      if (effectiveMatchNumber != null) {
+        const mNum = effectiveMatchNumber;
+        let slotIndex = -1;
+
+        // Convención estándar SPT: 16vos son 101..116 y 8vos son 117..124
+        if (mNum >= 101 && mNum <= 116) {
+          slotIndex = mNum - 101;
+        } else {
+          const nextMinMNum = Math.min(
+            ...nextStageMatches
+              .map((m) => m.match_number)
+              .filter((n): n is number => n != null)
+          );
+          if (Number.isFinite(nextMinMNum) && mNum < nextMinMNum) {
+            slotIndex = mNum - (nextMinMNum - 16);
+          }
+        }
+
+        if (slotIndex >= 0 && slotIndex < 16) {
+          const computedTarget = Math.floor(slotIndex / 2);
+          if (computedTarget < nextStageMatches.length) {
+            targetIndex = computedTarget;
+            slotField = slotIndex % 2 === 0 ? "couple1_id" : "couple2_id";
+          }
+        }
+      }
+    }
+  }
+
   if (targetIndex >= nextStageMatches.length) return null;
 
   const targetMatch = nextStageMatches[targetIndex];
-  const slotField: "couple1_id" | "couple2_id" = currentIndex % 2 === 0 ? "couple1_id" : "couple2_id";
 
   return {
     targetMatchId: targetMatch.id,
@@ -281,11 +322,13 @@ export function propagatePlayoffWinners<
       const winnerId = match.winner_couple_id;
       if (!winnerId || winnerId === "BYE") continue;
 
-      const targetIdx = Math.floor(i / 2);
-      if (targetIdx >= nextStageMatches.length) continue;
+      const nextSlot = findNextPlayoffMatchSlot(clonedMatches, match);
+      if (!nextSlot) continue;
 
-      const targetMatch = nextStageMatches[targetIdx];
-      const slotField: "couple1_id" | "couple2_id" = i % 2 === 0 ? "couple1_id" : "couple2_id";
+      const targetMatch = clonedMatches.find((m) => m.id === nextSlot.targetMatchId);
+      if (!targetMatch) continue;
+
+      const slotField = nextSlot.slotField;
 
       if (targetMatch[slotField] !== winnerId) {
         targetMatch[slotField] = winnerId;

@@ -310,12 +310,7 @@ export default function AdminFlyersPage() {
     };
     img.onerror = () => {
       console.error(`Error al cargar el fondo local: ${filepath}`);
-      const fallbackPath = filepath.replace("/assets/fondos/", "/fondos/");
-      if (fallbackPath !== filepath) {
-        img.src = fallbackPath;
-      } else {
-        setLoadingBg(false);
-      }
+      setLoadingBg(false);
     };
     img.src = filepath;
   }, []);

@@ -6,7 +6,9 @@ import Header from "@/components/layout/Header";
 import ServiceWorkerRegister from "@/components/pwa/ServiceWorkerRegister";
 import InstallButton from "@/components/pwa/InstallButton";
 import { PlayerIdentityProvider } from "@/context/PlayerIdentityContext";
-import PlayerFichaModal from "@/components/player/PlayerFichaModal";
+import dynamic from "next/dynamic";
+
+const PlayerFichaModal = dynamic(() => import("@/components/player/PlayerFichaModal"));
 import { getSiteUrl } from "@/lib/siteUrl";
 
 const geistSans = Geist({

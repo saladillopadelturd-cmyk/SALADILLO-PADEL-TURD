@@ -379,8 +379,10 @@ export function buildManualPlayoffBracketFromSlots(
           };
           if (isSlot1In8) {
             match8.couple1 = slotData;
+            match8.originatingMatch1Number = match16.matchNumber;
           } else {
             match8.couple2 = slotData;
+            match8.originatingMatch2Number = match16.matchNumber;
           }
         }
       } else {
@@ -391,11 +393,31 @@ export function buildManualPlayoffBracketFromSlots(
   }
 
   // 3. Generar la lista de partidos a insertar en la base de datos
+  // REGLA: Cuando el cuadro de eliminación quede definido, se eliminan todas las llaves de 16vos de final no utilizadas.
+  // En round_of_32 SOLO se insertan llaves utilizadas (partidos reales entre dos parejas competidoras).
+  // Las llaves con BYE (parejas sembradas directas a 8vos) o vacías se descartan de 16vos.
   const matchesToInsert: MatchToInsert[] = [];
 
   for (const stage of allStages) {
     const stageMatches = matchesByStage.get(stage) || [];
     for (const m of stageMatches) {
+      if (stage === "round_of_32") {
+        // En 16vos de final: Solo es utilizada si se juega un partido real entre dos parejas
+        const isUsedR32 =
+          !m.isBye &&
+          !m.couple1.isEmpty &&
+          !m.couple2.isEmpty &&
+          !m.couple2.isWaiting &&
+          !m.couple2.isBye &&
+          !!m.couple1.id &&
+          !!m.couple2.id;
+
+        if (!isUsedR32) {
+          // Descartar/eliminar llave de 16vos no utilizada
+          continue;
+        }
+      }
+
       const c1 = m.couple1.isEmpty ? null : m.couple1.id;
       const c2 = m.couple2.isEmpty || m.couple2.isWaiting || m.couple2.isBye ? null : m.couple2.id;
       const isMBye = m.isBye;
@@ -417,11 +439,45 @@ export function buildManualPlayoffBracketFromSlots(
     }
   }
 
+  // Determinar etapas efectivas según si hay llaves utilizadas en 16vos
+  const hasUsedR32Matches = matchesToInsert.some((m) => m.stage === "round_of_32");
+  const effectiveInitialStage: MatchStage = hasUsedR32Matches ? "round_of_32" : "round_of_16";
+  const effectiveStages: MatchStage[] = hasUsedR32Matches
+    ? OFFICIAL_STAGES
+    : OFFICIAL_STAGES.filter((s) => s !== "round_of_32");
+
+  // Ajustar rondas de previsualización para eliminar llaves de 16vos no utilizadas
+  let cleanedPreviewRounds: PreviewRound[] = previewRounds;
+  if (assignedCount > 0) {
+    if (!hasUsedR32Matches) {
+      // Si nadie juega 16vos, la columna de 16vos se elimina por completo
+      cleanedPreviewRounds = previewRounds.filter((r) => r.stage !== "round_of_32");
+    } else {
+      // Si hay partidos de 16vos, mostrar únicamente las llaves utilizadas de 16vos
+      cleanedPreviewRounds = previewRounds.map((r) => {
+        if (r.stage !== "round_of_32") return r;
+        return {
+          ...r,
+          matches: r.matches.filter(
+            (m) =>
+              !m.isBye &&
+              !m.couple1.isEmpty &&
+              !m.couple2.isEmpty &&
+              !m.couple2.isWaiting &&
+              !m.couple2.isBye &&
+              !!m.couple1.id &&
+              !!m.couple2.id
+          ),
+        };
+      });
+    }
+  }
+
   return {
-    initialStage,
-    allStages,
+    initialStage: effectiveInitialStage,
+    allStages: effectiveStages,
     matchesToInsert,
-    previewRounds,
+    previewRounds: cleanedPreviewRounds,
     unpairedPlayCouples,
     totalEntries: totalCouplesCount,
     assignedCount,

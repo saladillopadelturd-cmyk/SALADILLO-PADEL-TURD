@@ -351,6 +351,21 @@ async function main() {
   const s1In8 = round8Preview?.matches.some((m) => m.couple1.id === "s1" || m.couple2.id === "s1");
   checkManual(!!s1In8, "Sembrada s1 aparece directamente en 8vos de final");
 
+  // Validación: Las llaves de 16vos no utilizadas (BYE de s1) se eliminan al definir el cuadro
+  const s1ByeIn16 = mb2.matchesToInsert.find((m) => m.stage === "round_of_32" && m.couple1_id === "s1");
+  checkManual(!s1ByeIn16, "Llave de 16vos con BYE de s1 no debe insertarse (se elimina)");
+  const r32CountMb2 = mb2.matchesToInsert.filter((m) => m.stage === "round_of_32").length;
+  checkManual(r32CountMb2 === 1, "Solo se inserta la llave de 16vos utilizada (p1 vs p2)");
+
+  // Test 2.1: Si solo hay sembradas en 8vos, se eliminan todas las llaves de 16vos y el cuadro arranca en 8vos
+  const mbAllSeeds = buildManualPlayoffBracket([
+    { id: "sa", name: "Sembrada A", action: "seed" },
+    { id: "sb", name: "Sembrada B", action: "seed" },
+  ]);
+  checkManual(mbAllSeeds.allStages[0] === "round_of_16", "Sin partidos en 16vos, etapa inicial es 8vos de final");
+  const r32MatchesAllSeeds = mbAllSeeds.matchesToInsert.filter((m) => m.stage === "round_of_32");
+  checkManual(r32MatchesAllSeeds.length === 0, "0 llaves de 16vos insertadas cuando todas son sembradas");
+
   // Test 3: Impar detectado en 16vos
   const mb3 = buildManualPlayoffBracket([
     { id: "p1", name: "Juega 1", action: "play" },

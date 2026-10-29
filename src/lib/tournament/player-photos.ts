@@ -38,6 +38,7 @@ export async function getPlayerPhotosMap(): Promise<Map<string, string>> {
       method: "POST",
       headers,
       body: JSON.stringify({ prefix: "", limit: 300 }),
+      signal: AbortSignal.timeout(2500),
     });
 
     if (res.ok) {

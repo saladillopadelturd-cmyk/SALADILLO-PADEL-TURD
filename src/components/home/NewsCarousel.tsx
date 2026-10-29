@@ -60,32 +60,31 @@ export default function NewsCarousel({
       console.warn("Error reading localStorage flyer:", e);
     }
 
-    // 2. Consultar API endpoint /api/flyers
-    fetch("/api/flyers")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && Array.isArray(data.flyers) && data.flyers.length > 0) {
-          setFlyers(data.flyers);
-        }
-      })
-      .catch((err) => console.warn("API flyers fetch error:", err));
+    // 2. Consultar API endpoint solo si no se recibieron flyers reales desde el servidor
+    const hasRealServerFlyers = initialFlyers && initialFlyers.length > 0 && initialFlyers[0].id !== DEFAULT_FLYER.id;
+    if (!hasRealServerFlyers) {
+      fetch("/api/flyers")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && Array.isArray(data.flyers) && data.flyers.length > 0) {
+            setFlyers(data.flyers);
+          }
+        })
+        .catch((err) => console.warn("API flyers fetch error:", err));
 
-    // 3. Consultar directamente Supabase Storage público como red de seguridad
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hrediohisjcjykaranzx.supabase.co";
-    fetch(`${supabaseUrl}/storage/v1/object/public/flyers/confirmed_flyer.json`, { cache: "no-store" })
-      .then((res) => {
-        if (res.ok) return res.json();
-        return null;
-      })
-      .then((cloudFlyer) => {
-        if (cloudFlyer && cloudFlyer.image_url) {
-          setFlyers((prev) => {
-            const filtered = prev.filter((f) => f.id !== cloudFlyer.id && f.id !== DEFAULT_FLYER.id);
-            return [cloudFlyer, ...filtered];
-          });
-        }
-      })
-      .catch(() => {});
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hrediohisjcjykaranzx.supabase.co";
+      fetch(`${supabaseUrl}/storage/v1/object/public/flyers/confirmed_flyer.json`, { cache: "no-store", signal: AbortSignal.timeout(2500) })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((cloudFlyer) => {
+          if (cloudFlyer && cloudFlyer.image_url) {
+            setFlyers((prev) => {
+              const filtered = prev.filter((f) => f.id !== cloudFlyer.id && f.id !== DEFAULT_FLYER.id);
+              return [cloudFlyer, ...filtered];
+            });
+          }
+        })
+        .catch(() => {});
+    }
 
     // 4. Escuchar evento personalizado para actualización en tiempo real (misma pestaña)
     const handleFlyerConfirmed = (event: Event) => {

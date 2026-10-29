@@ -11,7 +11,7 @@ import type { Flyer } from "@/types/flyer";
 import { formatDate } from "@/lib/dateUtils";
 import { getSiteUrl } from "@/lib/siteUrl";
 
-export const revalidate = 0; // Fresh tournament data on each load
+export const revalidate = 15; // ISR: datos frescos cada 15s con respuesta instantánea desde caché
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Borrador",
@@ -63,7 +63,8 @@ export default async function HomePage() {
       try {
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hrediohisjcjykaranzx.supabase.co";
         const storageRes = await fetch(`${supabaseUrl}/storage/v1/object/public/flyers/confirmed_flyer.json`, {
-          cache: "no-store",
+          signal: AbortSignal.timeout(2000),
+          next: { revalidate: 60 },
         });
         if (storageRes.ok) {
           const storageData = await storageRes.json();

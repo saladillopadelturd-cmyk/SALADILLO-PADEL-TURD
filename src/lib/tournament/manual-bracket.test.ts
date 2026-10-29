@@ -54,12 +54,13 @@ describe("Motor Manual de Eliminación Directa: 16vos para Jugar y 8vos para Sem
     );
     assert.ok(matchPlay, "pB y pC deben jugar en 16vos");
 
-    // 2. Pareja pA recibe BYE en 16vos para pasar directo a 8vos
+    // 2. Las llaves de 16vos no utilizadas (como el BYE de pA) se eliminan al definir el cuadro
     const matchBye = result.matchesToInsert.find(
       (m) => m.stage === "round_of_32" && m.couple1_id === "pA"
     );
-    assert.ok(matchBye, "pA debe recibir BYE en 16vos");
-    assert.strictEqual(matchBye.status, "completed");
+    assert.strictEqual(matchBye, undefined, "pA no debe tener llave de 16vos porque pasa directo a 8vos");
+    const r32Count = result.matchesToInsert.filter((m) => m.stage === "round_of_32").length;
+    assert.strictEqual(r32Count, 1, "Solo debe haber 1 partido de 16vos (el cruce jugado)");
 
     // 3. En la previsualización de 8vos de final (round_of_16), pA aparece colocada directamente
     const round8 = result.previewRounds.find((r) => r.stage === "round_of_16");
@@ -68,6 +69,22 @@ describe("Motor Manual de Eliminación Directa: 16vos para Jugar y 8vos para Sem
       (m) => m.couple1.id === "pA" || m.couple2.id === "pA"
     );
     assert.ok(hasPAin8, "pA debe aparecer directamente sembrada en 8vos de final");
+  });
+
+  it("Caso 7: Si todas las parejas son sembradas en 8vos, se eliminan todas las llaves de 16vos y arranca en 8vos", () => {
+    const couples: ManualCoupleEntry[] = [
+      { id: "s1", name: "Sembrada 1", action: "seed" },
+      { id: "s2", name: "Sembrada 2", action: "seed" },
+      { id: "s3", name: "Sembrada 3", action: "seed" },
+      { id: "s4", name: "Sembrada 4", action: "seed" },
+    ];
+
+    const result = buildManualPlayoffBracket(couples, 101);
+    assert.strictEqual(result.allStages[0], "round_of_16", "La primera etapa debe ser round_of_16");
+    assert.ok(!result.allStages.includes("round_of_32"), "No debe incluirse round_of_32");
+
+    const r32Matches = result.matchesToInsert.filter((m) => m.stage === "round_of_32");
+    assert.strictEqual(r32Matches.length, 0, "No debe insertarse ninguna llave de 16vos no utilizada");
   });
 
   it("Caso 4: Detecta pareja impar pendiente para jugar en 16vos", () => {

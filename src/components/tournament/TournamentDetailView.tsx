@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Card from "@/components/ui/Card";
@@ -23,8 +24,14 @@ import {
 } from "@/lib/tournament/elimination";
 import { normalizeScheduledTime } from "@/lib/tournament/scheduler";
 import { formatDate } from "@/lib/dateUtils";
-import ZoneConformationEditor from "@/components/tournament/ZoneConformationEditor";
-import AutoScheduleModal from "@/components/tournament/AutoScheduleModal";
+const ZoneConformationEditor = dynamic(
+  () => import("@/components/tournament/ZoneConformationEditor"),
+  { ssr: false }
+);
+const AutoScheduleModal = dynamic(
+  () => import("@/components/tournament/AutoScheduleModal"),
+  { ssr: false }
+);
 import { PlayoffBracketView } from "@/components/tournament/PlayoffBracketView";
 import PlayerAvatar from "@/components/player/PlayerAvatar";
 import {
