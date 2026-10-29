@@ -11,7 +11,7 @@ export interface ManualCoupleEntry {
 }
 
 export interface AnchoredMatchSlot {
-  matchIndex: number; // 0, 1, 2, ...
+  matchIndex: number; // 0 a 15 (16 cruces de 16vos de final)
   type: "empty" | "seed" | "match";
   couple1Id: string | null;
   couple2Id: string | null;
@@ -66,44 +66,33 @@ export interface ManualBracketResult {
 }
 
 /**
- * Retorna las etapas eliminatorias según el número de slots en la etapa inicial.
+ * Las etapas canónicas del cuadro principal de eliminación:
+ * 1. 16vos de Final (round_of_32): donde juegan las parejas para jugar
+ * 2. 8vos de Final (round_of_16): donde aparecen las parejas sembradas
+ * 3. Cuartos de Final (quarter)
+ * 4. Semifinales (semi)
+ * 5. Gran Final (final)
  */
-export function getStagesHierarchy(initialSlots: number): MatchStage[] {
-  if (initialSlots >= 32) {
-    return ["round_of_32", "round_of_16", "quarter", "semi", "final"];
-  }
-  if (initialSlots >= 16) {
-    return ["round_of_16", "quarter", "semi", "final"];
-  }
-  if (initialSlots >= 8) {
-    return ["quarter", "semi", "final"];
-  }
-  if (initialSlots >= 4) {
-    return ["semi", "final"];
-  }
-  return ["final"];
-}
+export const OFFICIAL_STAGES: MatchStage[] = [
+  "round_of_32",
+  "round_of_16",
+  "quarter",
+  "semi",
+  "final",
+];
+
+export const NUM_16VOS_MATCHES = 16;
+export const NUM_8VOS_MATCHES = 8;
+export const NUM_QUARTER_MATCHES = 4;
+export const NUM_SEMI_MATCHES = 2;
+export const NUM_FINAL_MATCHES = 1;
 
 /**
- * Calcula la potencia de 2 para el bracket según el número total de parejas.
+ * Inicializa los 16 cruces de 16vos de final totalmente vacíos.
  */
-export function calculateBracketSlots(totalCount: number): number {
-  let initialSlots = 2;
-  while (initialSlots < Math.max(totalCount, 2)) {
-    initialSlots *= 2;
-  }
-  return Math.max(initialSlots, 2);
-}
-
-/**
- * Inicializa los slots anclados de la ronda 1 totalmente vacíos.
- */
-export function initializeR1Slots(totalCouplesCount: number): AnchoredMatchSlot[] {
-  const slots = calculateBracketSlots(totalCouplesCount);
-  const numMatches = Math.max(1, slots / 2);
+export function initializeR1Slots(_totalCouplesCount?: number): AnchoredMatchSlot[] {
   const r1Slots: AnchoredMatchSlot[] = [];
-
-  for (let i = 0; i < numMatches; i++) {
+  for (let i = 0; i < NUM_16VOS_MATCHES; i++) {
     r1Slots.push({
       matchIndex: i,
       type: "empty",
@@ -111,23 +100,43 @@ export function initializeR1Slots(totalCouplesCount: number): AnchoredMatchSlot[
       couple2Id: null,
     });
   }
-
   return r1Slots;
 }
 
 /**
- * Asigna una pareja como SEMBRADA en el primer slot disponible sin alterar otros slots.
+ * Asigna una pareja como SEMBRADA para que aparezca directamente en 8VOS DE FINAL.
+ * En 16vos de final recibe pase libre (BYE) y en 8vos de final aparece en su cruce correspondiente esperando rival.
+ * Por ningún motivo altera la ubicación de parejas colocadas previamente.
  */
 export function assignSeedToSlots(
   currentSlots: AnchoredMatchSlot[],
   coupleId: string
 ): AnchoredMatchSlot[] {
-  // 1. Si ya estaba asignada, primero liberamos su posición anterior sin tocar a nadie más
+  // 1. Si ya estaba asignada, liberamos su posición anterior sin tocar a nadie más
   const cleaned = removeCoupleFromSlots(currentSlots, coupleId);
-
-  // 2. Buscamos el primer slot totalmente vacío
   const nextSlots = cleaned.map((s) => ({ ...s }));
-  const targetIdx = nextSlots.findIndex((s) => s.type === "empty");
+
+  // 2. Buscamos el primer cruce de 8vos disponible (preferentemente slot par de 16vos: 0, 2, 4, 6...)
+  // para que ingrese en la ranura superior de 8vos de final
+  let targetIdx = -1;
+
+  // Prioridad 1: Cruce par de 16vos totalmente vacío (ranura superior de 8vos)
+  for (let i = 0; i < NUM_16VOS_MATCHES; i += 2) {
+    if (nextSlots[i].type === "empty") {
+      targetIdx = i;
+      break;
+    }
+  }
+
+  // Prioridad 2: Si todos los pares están ocupados, cualquier cruce impar totalmente vacío
+  if (targetIdx === -1) {
+    for (let i = 1; i < NUM_16VOS_MATCHES; i += 2) {
+      if (nextSlots[i].type === "empty") {
+        targetIdx = i;
+        break;
+      }
+    }
+  }
 
   if (targetIdx !== -1) {
     nextSlots[targetIdx] = {
@@ -142,8 +151,10 @@ export function assignSeedToSlots(
 }
 
 /**
- * Asigna una pareja para JUGAR en el primer slot disponible (completando un cruce o abriendo uno nuevo)
- * SIN alterar la ubicación de parejas colocadas previamente.
+ * Asigna una pareja para JUGAR en 16VOS DE FINAL.
+ * Jugará su cruce en 16vos contra otra pareja marcada con 'Jugar'.
+ * El ganador avanzará a 8vos de final para enfrentar a la pareja sembrada o al ganador de otra llave.
+ * Por ningún motivo altera la ubicación de parejas colocadas previamente.
  */
 export function assignPlayToSlots(
   currentSlots: AnchoredMatchSlot[],
@@ -153,13 +164,13 @@ export function assignPlayToSlots(
   const cleaned = removeCoupleFromSlots(currentSlots, coupleId);
   const nextSlots = cleaned.map((s) => ({ ...s }));
 
-  // 2. Buscamos primero si hay algún cruce de tipo "match" con pareja 1 asignada pero esperando rival
+  // 2. Buscamos primero si hay algún cruce de 16vos de tipo "match" con pareja 1 asignada pero esperando rival
   const waitingMatchIdx = nextSlots.findIndex(
     (s) => s.type === "match" && s.couple1Id !== null && s.couple2Id === null
   );
 
   if (waitingMatchIdx !== -1) {
-    // Se asigna como pareja 2 de ese mismo cruce, manteniendo a pareja 1 en su posición fija
+    // Se asigna como pareja 2 de ese mismo cruce de 16vos, manteniendo fija a la pareja 1
     nextSlots[waitingMatchIdx] = {
       ...nextSlots[waitingMatchIdx],
       couple2Id: coupleId,
@@ -167,7 +178,7 @@ export function assignPlayToSlots(
     return nextSlots;
   }
 
-  // 3. Si no hay cruce esperando rival, buscamos el primer slot totalmente vacío
+  // 3. Si no hay cruce esperando rival, buscamos el primer cruce de 16vos totalmente vacío
   const emptyMatchIdx = nextSlots.findIndex((s) => s.type === "empty");
   if (emptyMatchIdx !== -1) {
     nextSlots[emptyMatchIdx] = {
@@ -195,7 +206,7 @@ export function removeCoupleFromSlots(
       return slot;
     }
 
-    // Si estaba sembrada en este slot
+    // Si estaba sembrada
     if (slot.type === "seed") {
       return {
         ...slot,
@@ -205,18 +216,18 @@ export function removeCoupleFromSlots(
       };
     }
 
-    // Si estaba jugando
+    // Si estaba jugando en 16vos
     if (slot.type === "match") {
       if (slot.couple1Id === coupleId) {
         if (slot.couple2Id) {
-          // Si había rival, el rival pasa a couple1Id y espera nuevo rival en este mismo cruce fijo
+          // Si había rival, el rival pasa a couple1Id y sigue esperando nuevo rival en el mismo cruce de 16vos
           return {
             ...slot,
             couple1Id: slot.couple2Id,
             couple2Id: null,
           };
         } else {
-          // Si estaba sola, el cruce vuelve a estar vacío
+          // Si estaba sola, el cruce de 16vos vuelve a estar vacío
           return {
             ...slot,
             type: "empty",
@@ -227,7 +238,7 @@ export function removeCoupleFromSlots(
       }
 
       if (slot.couple2Id === coupleId) {
-        // Se quita couple2Id, couple1Id queda intacta esperando rival en el mismo cruce
+        // Se quita couple2Id, couple1Id queda intacta esperando rival en el mismo cruce de 16vos
         return {
           ...slot,
           couple2Id: null,
@@ -240,8 +251,12 @@ export function removeCoupleFromSlots(
 }
 
 /**
- * Construye la estructura completa del cuadro (todas las rondas de izquierda a derecha)
- * a partir del estado ANCLADO de los slots de Ronda 1.
+ * Construye la estructura completa del cuadro eliminatorio:
+ * - 16vos de Final: partidos entre parejas que juegan
+ * - 8vos de Final: parejas sembradas y ganadores de 16vos
+ * - Cuartos de Final
+ * - Semifinales
+ * - Gran Final
  */
 export function buildManualPlayoffBracketFromSlots(
   couplesMap: Map<string, { id: string; name: string }>,
@@ -249,19 +264,27 @@ export function buildManualPlayoffBracketFromSlots(
   totalCouplesCount: number,
   startingMatchNumber: number = 101
 ): ManualBracketResult {
-  const initialSlots = calculateBracketSlots(totalCouplesCount);
-  const allStages = getStagesHierarchy(initialSlots);
-  const initialStage = allStages[0];
+  const allStages = OFFICIAL_STAGES;
+  const initialStage: MatchStage = "round_of_32";
 
   let curMatchNumber = startingMatchNumber;
   const previewRounds: PreviewRound[] = [];
   const matchesByStage: Map<MatchStage, PreviewMatch[]> = new Map();
 
-  // 1. Crear esqueleto de todas las rondas
-  let slotsInStage = initialSlots;
-  for (let sIdx = 0; sIdx < allStages.length; sIdx++) {
-    const stage = allStages[sIdx];
-    const numMatches = Math.max(1, slotsInStage / 2);
+  // Cantidad fija de cruces por etapa
+  const stageMatchCounts: Record<MatchStage, number> = {
+    round_of_32: NUM_16VOS_MATCHES,
+    round_of_16: NUM_8VOS_MATCHES,
+    quarter: NUM_QUARTER_MATCHES,
+    semi: NUM_SEMI_MATCHES,
+    final: NUM_FINAL_MATCHES,
+    zone: 0,
+    third_place: 0,
+  };
+
+  // 1. Crear esqueleto vacío de todas las rondas de izquierda a derecha
+  for (const stage of allStages) {
+    const numMatches = stageMatchCounts[stage] || 1;
     const stageMatches: PreviewMatch[] = [];
 
     for (let mIdx = 0; mIdx < numMatches; mIdx++) {
@@ -282,96 +305,86 @@ export function buildManualPlayoffBracketFromSlots(
       stageName: getStageName(stage),
       matches: stageMatches,
     });
-
-    slotsInStage = numMatches;
   }
 
-  // 2. Poblar Ronda 1 según el estado anclado de r1Slots
-  const r1Matches = matchesByStage.get(initialStage) || [];
+  // 2. Poblar 16vos de Final y 8vos de Final
+  const r16Matches = matchesByStage.get("round_of_32") || [];
+  const r8Matches = matchesByStage.get("round_of_16") || [];
   const unpairedPlayCouples: string[] = [];
   let assignedCount = 0;
 
   for (let i = 0; i < r1Slots.length; i++) {
     const slot = r1Slots[i];
-    if (i >= r1Matches.length) break;
-    const match = r1Matches[i];
+    if (i >= r16Matches.length) break;
+    const match16 = r16Matches[i];
+
+    const target8Idx = Math.floor(i / 2);
+    const isSlot1In8 = i % 2 === 0;
+    const match8 = r8Matches[target8Idx];
 
     if (slot.type === "empty") {
-      match.couple1 = { id: null, name: "Vacío", isEmpty: true };
-      match.couple2 = { id: null, name: "Vacío", isEmpty: true };
-      match.isBye = false;
-      match.status = "pending";
+      match16.couple1 = { id: null, name: "Vacío", isEmpty: true };
+      match16.couple2 = { id: null, name: "Vacío", isEmpty: true };
+      match16.isBye = false;
+      match16.status = "pending";
     } else if (slot.type === "seed" && slot.couple1Id) {
+      // Pareja SEMBRADA:
       const c = couplesMap.get(slot.couple1Id);
       const cName = c?.name || "Pareja Sembrada";
       assignedCount++;
 
-      match.couple1 = { id: slot.couple1Id, name: cName, isSeed: true };
-      match.couple2 = { id: null, name: "BYE (Pase directo)", isBye: true };
-      match.isBye = true;
-      match.status = "completed";
-      match.winnerId = slot.couple1Id;
+      // En 16vos: Cruce con BYE (pase directo a 8vos)
+      match16.couple1 = { id: slot.couple1Id, name: cName, isSeed: true };
+      match16.couple2 = { id: null, name: "BYE (Pase directo a 8vos)", isBye: true };
+      match16.isBye = true;
+      match16.status = "completed";
+      match16.winnerId = slot.couple1Id;
 
-      // Propagar inmediatamente al slot de la siguiente instancia (R2)
-      if (allStages.length > 1) {
-        const nextStage = allStages[1];
-        const nextMatches = matchesByStage.get(nextStage) || [];
-        const targetMatchIdx = Math.floor(i / 2);
-        const isSlot1 = i % 2 === 0;
-
-        if (targetMatchIdx < nextMatches.length) {
-          const nextMatch = nextMatches[targetMatchIdx];
-          const slotData: PreviewMatchCouple = {
-            id: slot.couple1Id,
-            name: cName,
-            isSeed: true,
-          };
-          if (isSlot1) {
-            nextMatch.couple1 = slotData;
-          } else {
-            nextMatch.couple2 = slotData;
-          }
+      // En 8vos: APARECE DIRECTAMENTE EN 8VOS DE FINAL
+      if (match8) {
+        const slotData: PreviewMatchCouple = {
+          id: slot.couple1Id,
+          name: cName,
+          isSeed: true,
+        };
+        if (isSlot1In8) {
+          match8.couple1 = slotData;
+        } else {
+          match8.couple2 = slotData;
         }
       }
     } else if (slot.type === "match" && slot.couple1Id) {
+      // Parejas para JUGAR en 16vos:
       const c1 = couplesMap.get(slot.couple1Id);
       const c1Name = c1?.name || "Pareja 1";
       assignedCount++;
 
-      match.couple1 = { id: slot.couple1Id, name: c1Name };
-      match.isBye = false;
-      match.status = "pending";
+      match16.couple1 = { id: slot.couple1Id, name: c1Name };
+      match16.isBye = false;
+      match16.status = "pending";
 
       if (slot.couple2Id) {
         const c2 = couplesMap.get(slot.couple2Id);
         const c2Name = c2?.name || "Pareja 2";
         assignedCount++;
 
-        match.couple2 = { id: slot.couple2Id, name: c2Name };
+        match16.couple2 = { id: slot.couple2Id, name: c2Name };
 
-        // En la siguiente ronda, el slot muestra el ganador esperado
-        if (allStages.length > 1) {
-          const nextStage = allStages[1];
-          const nextMatches = matchesByStage.get(nextStage) || [];
-          const targetMatchIdx = Math.floor(i / 2);
-          const isSlot1 = i % 2 === 0;
-
-          if (targetMatchIdx < nextMatches.length) {
-            const nextMatch = nextMatches[targetMatchIdx];
-            const slotData: PreviewMatchCouple = {
-              id: null,
-              name: `Ganador P#${match.matchNumber}`,
-              isFeeder: true,
-            };
-            if (isSlot1) {
-              nextMatch.couple1 = slotData;
-            } else {
-              nextMatch.couple2 = slotData;
-            }
+        // En 8vos: Ranura muestra al ganador esperado del partido de 16vos
+        if (match8) {
+          const slotData: PreviewMatchCouple = {
+            id: null,
+            name: `Ganador P#${match16.matchNumber} (16vos)`,
+            isFeeder: true,
+          };
+          if (isSlot1In8) {
+            match8.couple1 = slotData;
+          } else {
+            match8.couple2 = slotData;
           }
         }
       } else {
-        match.couple2 = { id: null, name: "Esperando rival...", isWaiting: true };
+        match16.couple2 = { id: null, name: "Esperando rival en 16vos...", isWaiting: true };
         unpairedPlayCouples.push(slot.couple1Id);
       }
     }
@@ -397,7 +410,7 @@ export function buildManualPlayoffBracketFromSlots(
           couple1_id: c1,
           couple2_id: c2,
           winner_couple_id: isMBye ? m.winnerId ?? c1 : null,
-          score_set1: isMBye ? "BYE (Pasa de ronda)" : null,
+          score_set1: isMBye ? "BYE (Pase directo a 8vos)" : null,
           status: isMBye ? "completed" : "pending",
         });
       }

@@ -436,25 +436,26 @@ export function ManualPlayoffBracketModal({
                       <div className="mt-2 pt-2 border-t border-dark-800/60 text-[11px]">
                         {isUnassigned ? (
                           <span className="text-dark-500 italic">
-                            Sin asignar. Elige &apos;Sembrar&apos; o &apos;Jugar&apos; para depositarla en una llave fija.
+                            Sin asignar. Elige si jugará en 16vos de Final o se siembra en 8vos de Final.
                           </span>
                         ) : isSeed ? (
                           <span className="text-amber-400 font-medium flex items-center gap-1">
                             <Sparkles className="w-3 h-3 flex-shrink-0" />
-                            Sembrada fija en Partido #{location.matchIndex + 1}: pasa directo a la próxima ronda.
+                            Sembrada en 8vos de Final (Partido #{Math.floor(location.matchIndex / 2) + 1}): pasa directo a 8vos y espera rival.
                           </span>
                         ) : location?.isWaiting ? (
                           <span className="text-rose-400 font-medium flex items-center gap-1">
                             <AlertCircle className="w-3 h-3 flex-shrink-0" />
-                            Fijada en Partido #{location.matchIndex + 1} (esperando rival). Marca otra pareja con &apos;Jugar&apos;.
+                            Cruce en 16vos de Final (Partido #{location.matchIndex + 1}) (esperando rival). Marca otra pareja con &apos;Jugar&apos;.
                           </span>
                         ) : (
                           <span className="text-emerald-400 font-medium flex items-center gap-1">
                             <Swords className="w-3 h-3 flex-shrink-0" />
-                            Fijada en Partido #{location.matchIndex + 1} vs{" "}
+                            Cruce en 16vos de Final (Partido #{location.matchIndex + 1}) vs{" "}
                             <span className="underline font-bold text-slate-200">
                               {location.opponentName || "Rival"}
                             </span>
+                            . Ganador avanza a 8vos.
                           </span>
                         )}
                       </div>

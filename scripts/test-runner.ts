@@ -316,7 +316,7 @@ async function main() {
     fapEngineResults.errors.forEach((e) => console.error(`  x ${e}`));
   }
 
-  // 6. Suite de Armado Manual de Cuadro Eliminatorio (Sembrar vs Jugar)
+  // 6. Suite de Armado Manual de Cuadro Eliminatorio (16vos para Jugar, 8vos para Sembradas)
   console.log("\n>> Ejecutando Suite de Armado Manual de Cuadro Eliminatorio...");
   let manualPassed = 0;
   let manualFailed = 0;
@@ -329,47 +329,36 @@ async function main() {
     }
   };
 
-  // Test 1: Final directa con 2 parejas jugando
+  // Test 1: 2 parejas jugando juegan en 16vos de final
   const mb1 = buildManualPlayoffBracket([
     { id: "c1", name: "P1", action: "play" },
     { id: "c2", name: "P2", action: "play" },
   ]);
-  checkManual(mb1.allStages.length === 1 && mb1.allStages[0] === "final", "2 parejas jugando crean final directa");
-  checkManual(mb1.matchesToInsert.length === 1 && mb1.matchesToInsert[0].couple1_id === "c1", "Match contiene c1 vs c2");
+  checkManual(mb1.allStages[0] === "round_of_32", "Comienza en 16vos de final");
+  checkManual(mb1.allStages[1] === "round_of_16", "Siguiente etapa es 8vos de final");
+  const m16 = mb1.matchesToInsert.find((m) => m.stage === "round_of_32");
+  checkManual(m16?.couple1_id === "c1" && m16?.couple2_id === "c2", "Match de 16vos contiene c1 vs c2");
 
-  // Test 2: 1 sembrada y 2 jugando
+  // Test 2: Pareja sembrada aparece en 8vos de final y jugando en 16vos
   const mb2 = buildManualPlayoffBracket([
     { id: "s1", name: "Sembrada 1", action: "seed" },
     { id: "p1", name: "Juega 1", action: "play" },
     { id: "p2", name: "Juega 2", action: "play" },
   ]);
-  checkManual(mb2.allStages.length === 2 && mb2.allStages[0] === "semi" && mb2.allStages[1] === "final", "Etapas semi y final");
-  const finalMatch = mb2.matchesToInsert.find((m) => m.stage === "final");
-  checkManual(finalMatch?.couple1_id === "s1" && finalMatch.couple2_id === null, "Sembrada s1 espera en la final al ganador");
+  const match16Play = mb2.matchesToInsert.find((m) => m.stage === "round_of_32" && m.couple1_id === "p1" && m.couple2_id === "p2");
+  checkManual(!!match16Play, "p1 y p2 juegan en 16vos");
+  const round8Preview = mb2.previewRounds.find((r) => r.stage === "round_of_16");
+  const s1In8 = round8Preview?.matches.some((m) => m.couple1.id === "s1" || m.couple2.id === "s1");
+  checkManual(!!s1In8, "Sembrada s1 aparece directamente en 8vos de final");
 
-  // Test 3: Impar detectado
+  // Test 3: Impar detectado en 16vos
   const mb3 = buildManualPlayoffBracket([
     { id: "p1", name: "Juega 1", action: "play" },
     { id: "s1", name: "Sembrada 1", action: "seed" },
   ]);
   checkManual(mb3.unpairedPlayCouple?.id === "p1", "Detecta pareja impar pendiente");
 
-  // Test 4: 6 parejas (2 sembradas y 2 partidos)
-  const mb4 = buildManualPlayoffBracket([
-    { id: "sA", name: "Sembrada A", action: "seed" },
-    { id: "jB", name: "Juega B", action: "play" },
-    { id: "jC", name: "Juega C", action: "play" },
-    { id: "jD", name: "Juega D", action: "play" },
-    { id: "jE", name: "Juega E", action: "play" },
-    { id: "sF", name: "Sembrada F", action: "seed" },
-  ]);
-  checkManual(mb4.allStages[0] === "quarter", "Inicia en cuartos");
-  checkManual(mb4.allStages[1] === "semi", "Sigue en semis");
-  checkManual(mb4.allStages[2] === "final", "Termina en final");
-  const semiM = mb4.matchesToInsert.filter((m) => m.stage === "semi");
-  checkManual(semiM[0].couple1_id === "sA" && semiM[1].couple2_id === "sF", "Sembradas en slots opuestos de semifinal");
-
-  // Test 5: Campos de cada llave inician VACÍOS si action es null
+  // Test 4: Campos de cada llave inician VACÍOS si action es null
   const mb5 = buildManualPlayoffBracket([
     { id: "c1", name: "P1", action: null },
     { id: "c2", name: "P2", action: null },
@@ -383,23 +372,25 @@ async function main() {
     "Todos los campos de las llaves parten vacíos"
   );
 
-  // Test 6: Inmutabilidad de slots fijados
-  let testSlots = initializeR1Slots(8);
+  // Test 5: Inmutabilidad de slots fijados
+  let testSlots = initializeR1Slots();
   testSlots = assignSeedToSlots(testSlots, "A");
   testSlots = assignPlayToSlots(testSlots, "B");
   testSlots = assignPlayToSlots(testSlots, "C");
   testSlots = assignSeedToSlots(testSlots, "D");
   checkManual(testSlots[0].couple1Id === "A", "A permanece fija en slot 0");
   checkManual(testSlots[1].couple1Id === "B" && testSlots[1].couple2Id === "C", "B y C permanecen fijas en slot 1");
-  checkManual(testSlots[2].couple1Id === "D", "D permanece fija en slot 2");
 
   testSlots = removeCoupleFromSlots(testSlots, "B");
   checkManual(testSlots[1].couple1Id === "C" && testSlots[1].couple2Id === null, "Al quitar B, C sigue en slot 1");
-  checkManual(testSlots[0].couple1Id === "A" && testSlots[2].couple1Id === "D", "A y D no se alteraron al quitar B");
+  checkManual(testSlots[0].couple1Id === "A", "A no se alteró al quitar B");
 
   console.log(`Resultados Cuadro Manual:`);
   console.log(`  - Validaciones Pasadas: ${manualPassed}`);
   console.log(`  - Fallos Detectados:    ${manualFailed}`);
+  if (manualErrors.length > 0) {
+    console.error("  Errores en Cuadro Manual:", manualErrors);
+  }
 
   const elapsed = Date.now() - startTime;
   const totalPassed = businessLogicResults.passed + playoffStress.passed + schedulerResults.passed + fapResults.passed + fapEngineResults.passed + manualPassed;

@@ -64,6 +64,9 @@ export function getStageName(stage: MatchStage | string): string {
   switch (stage) {
     case "zone":
       return "Fase de Zonas";
+    case "round_of_32":
+    case "dieciseisavos":
+      return "16vos de Final";
     case "round_of_16":
     case "octavos":
       return "Octavos de Final";

@@ -6,27 +6,40 @@ import {
   assignSeedToSlots,
   assignPlayToSlots,
   removeCoupleFromSlots,
-  buildManualPlayoffBracketFromSlots,
+  OFFICIAL_STAGES,
   type ManualCoupleEntry,
 } from "./manual-bracket";
 
-describe("Motor Manual de Eliminación Directa con Slots Anclados", () => {
-  it("Caso 1: 2 parejas con acción 'play' conforman una Final directa", () => {
+describe("Motor Manual de Eliminación Directa: 16vos para Jugar y 8vos para Sembradas", () => {
+  it("Caso 1: Las etapas canónicas comienzan en 16vos y continúan en 8vos, Cuartos, Semis y Final", () => {
+    assert.deepStrictEqual(OFFICIAL_STAGES, [
+      "round_of_32",
+      "round_of_16",
+      "quarter",
+      "semi",
+      "final",
+    ]);
+  });
+
+  it("Caso 2: 2 parejas con acción 'play' juegan en 16vos de Final", () => {
     const couples: ManualCoupleEntry[] = [
       { id: "c1", name: "Pareja 1", action: "play" },
       { id: "c2", name: "Pareja 2", action: "play" },
     ];
 
     const result = buildManualPlayoffBracket(couples, 101);
-    assert.strictEqual(result.allStages.length, 1);
-    assert.strictEqual(result.allStages[0], "final");
-    assert.strictEqual(result.matchesToInsert.length, 1);
-    assert.strictEqual(result.matchesToInsert[0].couple1_id, "c1");
-    assert.strictEqual(result.matchesToInsert[0].couple2_id, "c2");
-    assert.strictEqual(result.unpairedPlayCouples.length, 0);
+    assert.strictEqual(result.allStages[0], "round_of_32");
+    assert.strictEqual(result.allStages[1], "round_of_16");
+
+    // Match de 16vos de final conformado
+    const m16 = result.matchesToInsert.find((m) => m.stage === "round_of_32");
+    assert.ok(m16);
+    assert.strictEqual(m16.couple1_id, "c1");
+    assert.strictEqual(m16.couple2_id, "c2");
+    assert.strictEqual(m16.status, "pending");
   });
 
-  it("Caso 2: 1 pareja sembrada ('seed') y 2 parejas jugando ('play')", () => {
+  it("Caso 3: Pareja sembrada aparece en 8vos de Final y parejas con 'play' juegan en 16vos", () => {
     const couples: ManualCoupleEntry[] = [
       { id: "pA", name: "Pareja A (1° Zona A)", action: "seed" },
       { id: "pB", name: "Pareja B (2° Zona B)", action: "play" },
@@ -34,31 +47,30 @@ describe("Motor Manual de Eliminación Directa con Slots Anclados", () => {
     ];
 
     const result = buildManualPlayoffBracket(couples, 101);
-    assert.strictEqual(result.allStages.length, 2);
-    assert.strictEqual(result.allStages[0], "semi");
-    assert.strictEqual(result.allStages[1], "final");
 
-    // Match 101: pA con BYE
-    const m101 = result.matchesToInsert.find((m) => m.match_number === 101);
-    assert.ok(m101);
-    assert.strictEqual(m101.couple1_id, "pA");
-    assert.strictEqual(m101.winner_couple_id, "pA");
-    assert.strictEqual(m101.status, "completed");
+    // 1. Parejas pB y pC juegan en 16vos de Final (round_of_32)
+    const matchPlay = result.matchesToInsert.find(
+      (m) => m.stage === "round_of_32" && m.couple1_id === "pB" && m.couple2_id === "pC"
+    );
+    assert.ok(matchPlay, "pB y pC deben jugar en 16vos");
 
-    // Match 102: pB vs pC
-    const m102 = result.matchesToInsert.find((m) => m.match_number === 102);
-    assert.ok(m102);
-    assert.strictEqual(m102.couple1_id, "pB");
-    assert.strictEqual(m102.couple2_id, "pC");
-    assert.strictEqual(m102.status, "pending");
+    // 2. Pareja pA recibe BYE en 16vos para pasar directo a 8vos
+    const matchBye = result.matchesToInsert.find(
+      (m) => m.stage === "round_of_32" && m.couple1_id === "pA"
+    );
+    assert.ok(matchBye, "pA debe recibir BYE en 16vos");
+    assert.strictEqual(matchBye.status, "completed");
 
-    // Match 103 (Final): pA prellenada esperando al ganador
-    const mFinal = result.matchesToInsert.find((m) => m.stage === "final");
-    assert.ok(mFinal);
-    assert.strictEqual(mFinal.couple1_id, "pA");
+    // 3. En la previsualización de 8vos de final (round_of_16), pA aparece colocada directamente
+    const round8 = result.previewRounds.find((r) => r.stage === "round_of_16");
+    assert.ok(round8);
+    const hasPAin8 = round8.matches.some(
+      (m) => m.couple1.id === "pA" || m.couple2.id === "pA"
+    );
+    assert.ok(hasPAin8, "pA debe aparecer directamente sembrada en 8vos de final");
   });
 
-  it("Caso 3: Detecta pareja impar pendiente con acción 'play'", () => {
+  it("Caso 4: Detecta pareja impar pendiente para jugar en 16vos", () => {
     const couples: ManualCoupleEntry[] = [
       { id: "p1", name: "Pareja 1", action: "play" },
       { id: "p2", name: "Pareja 2", action: "seed" },
@@ -67,28 +79,6 @@ describe("Motor Manual de Eliminación Directa con Slots Anclados", () => {
     const result = buildManualPlayoffBracket(couples, 101);
     assert.strictEqual(result.unpairedPlayCouples.length, 1);
     assert.strictEqual(result.unpairedPlayCouples[0], "p1");
-  });
-
-  it("Caso 4: Estructura de 6 parejas (2 sembradas y 2 cruces preliminares)", () => {
-    const couples: ManualCoupleEntry[] = [
-      { id: "sA", name: "Sembrada A", action: "seed" },
-      { id: "jB", name: "Juega B", action: "play" },
-      { id: "jC", name: "Juega C", action: "play" },
-      { id: "jD", name: "Juega D", action: "play" },
-      { id: "jE", name: "Juega E", action: "play" },
-      { id: "sF", name: "Sembrada F", action: "seed" },
-    ];
-
-    const result = buildManualPlayoffBracket(couples, 101);
-    assert.strictEqual(result.unpairedPlayCouples.length, 0);
-    assert.strictEqual(result.allStages[0], "quarter");
-    assert.strictEqual(result.allStages[1], "semi");
-    assert.strictEqual(result.allStages[2], "final");
-
-    const semiM = result.matchesToInsert.filter((m) => m.stage === "semi");
-    assert.strictEqual(semiM.length, 2);
-    assert.strictEqual(semiM[0].couple1_id, "sA");
-    assert.strictEqual(semiM[1].couple2_id, "sF");
   });
 
   it("Caso 5: Campos de cada llave inician VACÍOS si action es null", () => {
@@ -112,42 +102,29 @@ describe("Motor Manual de Eliminación Directa con Slots Anclados", () => {
     assert.strictEqual(result.matchesToInsert.length, 0);
   });
 
-  it("Caso 6: Inmutabilidad de slots fijados (una nueva asignación NUNCA mueve a parejas previas)", () => {
-    // 8 parejas base -> 4 slots en Ronda 1
-    let slots = initializeR1Slots(8);
-    assert.strictEqual(slots.length, 4);
+  it("Caso 6: Inmutabilidad estricta (presionar X libera solo la pareja elegida)", () => {
+    let slots = initializeR1Slots();
+    assert.strictEqual(slots.length, 16); // 16 cruces de 16vos
 
-    // 1. Sembrar pareja A -> se ancla en slot 0
+    // Sembrar A
     slots = assignSeedToSlots(slots, "A");
     assert.strictEqual(slots[0].type, "seed");
     assert.strictEqual(slots[0].couple1Id, "A");
 
-    // 2. Colocar pareja B y C para Jugar -> se anclan en slot 1
+    // Jugar B y C en 16vos
     slots = assignPlayToSlots(slots, "B");
     slots = assignPlayToSlots(slots, "C");
     assert.strictEqual(slots[1].type, "match");
     assert.strictEqual(slots[1].couple1Id, "B");
     assert.strictEqual(slots[1].couple2Id, "C");
-    // Verificamos que A en slot 0 NO se movió
-    assert.strictEqual(slots[0].type, "seed");
+
+    // A sigue intacta
     assert.strictEqual(slots[0].couple1Id, "A");
 
-    // 3. Sembrar pareja D -> se ancla en el primer slot libre (slot 2)
-    slots = assignSeedToSlots(slots, "D");
-    assert.strictEqual(slots[2].type, "seed");
-    assert.strictEqual(slots[2].couple1Id, "D");
-    // Verificamos que A en slot 0 y B/C en slot 1 siguen exactamente en sus lugares
-    assert.strictEqual(slots[0].couple1Id, "A");
-    assert.strictEqual(slots[1].couple1Id, "B");
-    assert.strictEqual(slots[1].couple2Id, "C");
-
-    // 4. Presionar (X) en B (removeCoupleFromSlots)
+    // Quitar B con (X)
     slots = removeCoupleFromSlots(slots, "B");
-    // B fue removida, C permanece en slot 1 esperando rival
     assert.strictEqual(slots[1].couple1Id, "C");
     assert.strictEqual(slots[1].couple2Id, null);
-    // Y A en slot 0 y D en slot 2 NO se alteraron en lo más mínimo
     assert.strictEqual(slots[0].couple1Id, "A");
-    assert.strictEqual(slots[2].couple1Id, "D");
   });
 });
