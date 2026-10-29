@@ -19,6 +19,8 @@ import { findNextPlayoffMatchSlot, propagatePlayoffWinners, getStageName } from 
 import ZoneCard from "@/components/tournament/ZoneCard";
 import ZoneConformationEditor from "@/components/tournament/ZoneConformationEditor";
 import AutoScheduleModal from "@/components/tournament/AutoScheduleModal";
+import { ManualPlayoffBracketModal } from "@/components/tournament/ManualPlayoffBracketModal";
+import { PlayoffBracketView } from "@/components/tournament/PlayoffBracketView";
 import { normalizeScheduledTime } from "@/lib/tournament/scheduler";
 import { formatDate } from "@/lib/dateUtils";
 import {
@@ -105,6 +107,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
   const [playoffIsBye, setPlayoffIsBye] = useState<boolean>(false);
   const [isClearPlayoffsModalOpen, setIsClearPlayoffsModalOpen] = useState(false);
   const [deletingPlayoffMatchId, setDeletingPlayoffMatchId] = useState<string | null>(null);
+  const [isManualBracketModalOpen, setIsManualBracketModalOpen] = useState(false);
 
   const supabase = createClient();
 
@@ -2204,31 +2207,47 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                       Partidos de Eliminación Directa ({matches.filter((m) => m.stage !== "zone").length})
                     </h4>
                     <p className="text-xs text-dark-400 mt-0.5">
-                      Gestiona los cruces eliminatorios, asigna parejas y carga resultados.
+                      Configura el cuadro de arriba hacia abajo asignando si cada pareja juega o se siembra a la próxima ronda.
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
                       size="sm"
-                      onClick={openCreatePlayoffMatchModal}
+                      onClick={() => setIsManualBracketModalOpen(true)}
                       disabled={isPending}
-                      className="bg-emerald-500 hover:bg-emerald-600 text-dark-950 font-bold text-xs"
+                      className="bg-emerald-500 hover:bg-emerald-600 text-dark-950 font-bold text-xs shadow-md shadow-emerald-500/20"
                     >
-                      <Plus className="w-3.5 h-3.5 mr-1" />
-                      Nuevo Partido
+                      <Trophy className="w-3.5 h-3.5 mr-1.5" />
+                      GENERAR CUADRO DE ELIMINACION DIRECTA
                     </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={handleLoadFAPSuggestion}
-                      disabled={isPending || zoneQualifications.qualified.length < 2}
-                      className="text-xs"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400 mr-1" />
-                      Sugerir Cruces FAP
-                    </Button>
+                    {matches.filter((m) => m.stage !== "zone").length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setIsClearPlayoffsModalOpen(true)}
+                        disabled={isPending}
+                        className="text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 mr-1" />
+                        Vaciar Cuadro
+                      </Button>
+                    )}
                   </div>
                 </div>
+
+                {/* Visor Gráfico Oficial de Llaves de Arriba hacia Abajo */}
+                {matches.filter((m) => m.stage !== "zone").length > 0 && (
+                  <div className="mb-6">
+                    <PlayoffBracketView
+                      matches={matches}
+                      couples={couples}
+                      isAdmin={true}
+                      onMatchClick={(m) => openScoreModal(m)}
+                      title="Cuadro Gráfico de Eliminación Directa"
+                      subtitle="Estructura conformada de arriba hacia abajo. Haz clic en cualquier cruce para registrar o modificar el resultado."
+                    />
+                  </div>
+                )}
 
                 {/* Listado Detallado de Partidos del Cuadro de Eliminación */}
                 {matches.filter((m) => m.stage !== "zone").length > 0 && (
@@ -3248,6 +3267,22 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
               onScheduleComplete={loadData}
             />
           )}
+
+          {/* Modal: Armado Manual de Cuadro Eliminatorio (Sembrar vs Jugar) */}
+          <ManualPlayoffBracketModal
+            isOpen={isManualBracketModalOpen}
+            onClose={() => setIsManualBracketModalOpen(false)}
+            tournamentId={tournamentId}
+            qualifiedPairs={zoneQualifications.qualified}
+            allCouples={couples}
+            onSuccess={() => {
+              loadData();
+              setNotification({
+                type: "success",
+                text: "Cuadro de eliminación directa generado exitosamente.",
+              });
+            }}
+          />
         </>
       )}
     </div>

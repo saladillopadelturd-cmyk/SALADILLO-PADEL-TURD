@@ -25,6 +25,7 @@ import { normalizeScheduledTime } from "@/lib/tournament/scheduler";
 import { formatDate } from "@/lib/dateUtils";
 import ZoneConformationEditor from "@/components/tournament/ZoneConformationEditor";
 import AutoScheduleModal from "@/components/tournament/AutoScheduleModal";
+import { PlayoffBracketView } from "@/components/tournament/PlayoffBracketView";
 import PlayerAvatar from "@/components/player/PlayerAvatar";
 import {
   Calendar,
@@ -1733,17 +1734,36 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                 </Button>
               </Card>
             ) : (
-              <div className="space-y-6">
-                {(["final", "semi", "quarter", "round_of_16", "round_of_32"] as const).map((stg) => {
-                  const stageMatches = matches.filter(
-                    (m) =>
-                      m.stage === stg ||
-                      (stg === "quarter" && (m.stage as string) === "cuartos") ||
-                      (stg === "semi" && (m.stage as string) === "semifinal") ||
-                      (stg === "round_of_16" && (m.stage as string) === "octavos") ||
-                      (stg === "round_of_32" && (m.stage as string) === "dieciseisavos")
-                  );
-                  if (stageMatches.length === 0) return null;
+              <div className="space-y-8">
+                {/* Visualización Gráfica Interactiva del Cuadro de Llaves */}
+                <PlayoffBracketView
+                  matches={matches}
+                  couples={couples}
+                  isAdmin={isAdmin}
+                  onMatchClick={(m) => {
+                    if (isAdmin && m.couple1_id && m.couple2_id) {
+                      openScoreModal(m);
+                    }
+                  }}
+                  title="Cuadro Oficial de Eliminación Directa"
+                  subtitle="Conexión visual de llaves y avance de ganadores hacia la Gran Final."
+                />
+
+                <div className="space-y-6 pt-4 border-t border-dark-800">
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-amber-400" />
+                    Listado Detallado por Instancias
+                  </h3>
+                  {(["final", "semi", "quarter", "round_of_16", "round_of_32"] as const).map((stg) => {
+                    const stageMatches = matches.filter(
+                      (m) =>
+                        m.stage === stg ||
+                        (stg === "quarter" && (m.stage as string) === "cuartos") ||
+                        (stg === "semi" && (m.stage as string) === "semifinal") ||
+                        (stg === "round_of_16" && (m.stage as string) === "octavos") ||
+                        (stg === "round_of_32" && (m.stage as string) === "dieciseisavos")
+                    );
+                    if (stageMatches.length === 0) return null;
 
                   return (
                     <div key={stg} className="space-y-3">
@@ -1812,6 +1832,7 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                     </div>
                   );
                 })}
+                </div>
               </div>
             )}
           </div>

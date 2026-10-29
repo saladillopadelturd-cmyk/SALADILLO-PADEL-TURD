@@ -246,6 +246,91 @@ export async function POST(request: Request) {
     return s;
   };
 
+  // 2.5 GUARDAR CUADRO MANUAL GENERADO
+  if (action === "save_manual_bracket") {
+    const { matches: matchesToSave } = body;
+    if (!Array.isArray(matchesToSave) || matchesToSave.length === 0) {
+      return NextResponse.json(
+        { error: "matches es requerido y debe ser una lista de partidos" },
+        { status: 400 }
+      );
+    }
+
+    // Eliminar partidos de eliminación previos
+    await supabase
+      .from("matches")
+      .delete()
+      .eq("tournament_id", tournamentId)
+      .neq("stage", "zone");
+
+    // Preparar registros
+    const records = matchesToSave.map((m: {
+      stage: unknown;
+      match_number: unknown;
+      couple1_id: unknown;
+      couple2_id: unknown;
+      winner_couple_id?: unknown;
+      score_set1?: unknown;
+      status?: unknown;
+    }) => {
+      const c1 = cleanCoupleId(m.couple1_id);
+      const c2 = cleanCoupleId(m.couple2_id);
+      const isBye = !c2 && !!c1 && (m.status === "completed" || String(m.score_set1 || "").includes("BYE"));
+      const winner = isBye ? c1 : cleanCoupleId(m.winner_couple_id);
+
+      return {
+        tournament_id: tournamentId,
+        stage: cleanStage(m.stage),
+        match_number: Number(m.match_number),
+        couple1_id: c1,
+        couple2_id: c2,
+        winner_couple_id: winner,
+        score_set1: isBye ? "BYE (Pasa de ronda)" : (m.score_set1 as string | null) ?? null,
+        status: isBye ? "completed" : ((m.status as string) || "pending"),
+      };
+    });
+
+    const { data: inserted, error: insErr } = await supabase
+      .from("matches")
+      .insert(records)
+      .select();
+
+    if (insErr) {
+      console.error("Error al guardar cuadro manual:", insErr);
+      return NextResponse.json({ error: insErr.message }, { status: 500 });
+    }
+
+    // Auto-propagar ganadores para asegurar coherencia en llaves
+    const { data: currentMatches } = await supabase
+      .from("matches")
+      .select("*")
+      .eq("tournament_id", tournamentId)
+      .neq("stage", "zone")
+      .order("match_number", { ascending: true });
+
+    if (currentMatches && currentMatches.length > 0) {
+      const { updatesToPersist } = propagatePlayoffWinners(currentMatches);
+      for (const update of updatesToPersist) {
+        const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        if (update.couple1_id !== undefined) payload.couple1_id = update.couple1_id;
+        if (update.couple2_id !== undefined) payload.couple2_id = update.couple2_id;
+        await supabase.from("matches").update(payload).eq("id", update.id);
+      }
+    }
+
+    // Actualizar estado del torneo a playoffs
+    await supabase
+      .from("tournaments")
+      .update({ status: "playoffs", updated_at: new Date().toISOString() })
+      .eq("id", tournamentId);
+
+    return NextResponse.json({
+      success: true,
+      message: "Cuadro de eliminación directa generado exitosamente",
+      matchesCreated: records.length,
+    });
+  }
+
   // 3. EDITAR PARTIDO DE PLAYOFF (CAMBIAR PAREJAS O INSTANCIA)
   if (action === "update_match") {
     if (!matchId) {

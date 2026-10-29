@@ -17,6 +17,10 @@ import {
   type MatchResultInput,
   type ZoneResolvedResults,
 } from "../src/lib/tournament/fap-engine";
+import {
+  buildManualPlayoffBracket,
+  type ManualCoupleEntry,
+} from "../src/lib/tournament/manual-bracket";
 
 function runFAPEngineSuite(): { passed: number; failed: number; errors: string[] } {
   let passed = 0;
@@ -308,9 +312,66 @@ async function main() {
     fapEngineResults.errors.forEach((e) => console.error(`  x ${e}`));
   }
 
+  // 6. Suite de Armado Manual de Cuadro Eliminatorio (Sembrar vs Jugar)
+  console.log("\n>> Ejecutando Suite de Armado Manual de Cuadro Eliminatorio...");
+  let manualPassed = 0;
+  let manualFailed = 0;
+  const manualErrors: string[] = [];
+  const checkManual = (cond: boolean, desc: string) => {
+    if (cond) manualPassed++;
+    else {
+      manualFailed++;
+      manualErrors.push(desc);
+    }
+  };
+
+  // Test 1: Final directa con 2 parejas jugando
+  const mb1 = buildManualPlayoffBracket([
+    { id: "c1", name: "P1", action: "play" },
+    { id: "c2", name: "P2", action: "play" },
+  ]);
+  checkManual(mb1.allStages.length === 1 && mb1.allStages[0] === "final", "2 parejas jugando crean final directa");
+  checkManual(mb1.matchesToInsert.length === 1 && mb1.matchesToInsert[0].couple1_id === "c1", "Match contiene c1 vs c2");
+
+  // Test 2: 1 sembrada y 2 jugando
+  const mb2 = buildManualPlayoffBracket([
+    { id: "s1", name: "Sembrada 1", action: "seed" },
+    { id: "p1", name: "Juega 1", action: "play" },
+    { id: "p2", name: "Juega 2", action: "play" },
+  ]);
+  checkManual(mb2.allStages.length === 2 && mb2.allStages[0] === "semi" && mb2.allStages[1] === "final", "Etapas semi y final");
+  const finalMatch = mb2.matchesToInsert.find((m) => m.stage === "final");
+  checkManual(finalMatch?.couple1_id === "s1" && finalMatch.couple2_id === null, "Sembrada s1 espera en la final al ganador");
+
+  // Test 3: Impar detectado
+  const mb3 = buildManualPlayoffBracket([
+    { id: "p1", name: "Juega 1", action: "play" },
+    { id: "s1", name: "Sembrada 1", action: "seed" },
+  ]);
+  checkManual(mb3.unpairedPlayCouple?.id === "p1", "Detecta pareja impar pendiente");
+
+  // Test 4: 6 parejas (2 sembradas y 2 partidos)
+  const mb4 = buildManualPlayoffBracket([
+    { id: "sA", name: "Sembrada A", action: "seed" },
+    { id: "jB", name: "Juega B", action: "play" },
+    { id: "jC", name: "Juega C", action: "play" },
+    { id: "jD", name: "Juega D", action: "play" },
+    { id: "jE", name: "Juega E", action: "play" },
+    { id: "sF", name: "Sembrada F", action: "seed" },
+  ]);
+  checkManual(mb4.allStages[0] === "quarter", "Inicia en cuartos");
+  checkManual(mb4.allStages[1] === "semi", "Sigue en semis");
+  checkManual(mb4.allStages[2] === "final", "Termina en final");
+  const semiM = mb4.matchesToInsert.filter((m) => m.stage === "semi");
+  checkManual(semiM[0].couple1_id === "sA" && semiM[1].couple2_id === "sF", "Sembradas en slots opuestos de semifinal");
+
+  console.log(`Resultados Cuadro Manual:`);
+  console.log(`  - Validaciones Pasadas: ${manualPassed}`);
+  console.log(`  - Fallos Detectados:    ${manualFailed}`);
+
   const elapsed = Date.now() - startTime;
-  const totalPassed = businessLogicResults.passed + playoffStress.passed + schedulerResults.passed + fapResults.passed + fapEngineResults.passed;
-  const totalFailed = businessLogicResults.failed + playoffStress.failed + schedulerResults.failed + fapResults.failed + fapEngineResults.failed;
+  const totalPassed = businessLogicResults.passed + playoffStress.passed + schedulerResults.passed + fapResults.passed + fapEngineResults.passed + manualPassed;
+  const totalFailed = businessLogicResults.failed + playoffStress.failed + schedulerResults.failed + fapResults.failed + fapEngineResults.failed + manualFailed;
 
   console.log("\n===============================================================");
   console.log("   RESUMEN FINAL DE TESTING Y CALIDAD (QA)");
