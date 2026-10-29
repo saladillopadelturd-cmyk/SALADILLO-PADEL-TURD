@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatPlayerFullName } from "@/lib/tournament/couples";
 import { syncAllTournamentsRankings } from "@/lib/tournament/rankings";
 import { getPlayerPhotosMap } from "@/lib/tournament/player-photos";
-import { Trophy, Medal, User, Sparkles } from "lucide-react";
+import { Trophy, Medal, User } from "lucide-react";
 
 export const revalidate = 0;
 
@@ -49,7 +49,7 @@ export default async function RankingsPage({
   searchParams?: Promise<{ category?: string; gender?: string; rama?: string }>;
 }) {
   const resolvedParams = searchParams ? await searchParams : {};
-  const selectedCategory = resolvedParams.category?.trim() || "all";
+  const requestedCategory = resolvedParams.category?.trim();
 
   // Determinar rama seleccionada: 'Caballeros' (Masculino) o 'Damas' (Femenino)
   const rawGender = (resolvedParams.gender || resolvedParams.rama || "").trim().toLowerCase();
@@ -58,7 +58,7 @@ export default async function RankingsPage({
   const selectedDbGender: "Masculino" | "Femenino" = isDamas ? "Femenino" : "Masculino";
 
   let individualRankings: IndividualRankingItem[] = [];
-  let availableCategories: string[] = [];
+  let availableCategories: string[] = [...DEFAULT_CATEGORIES];
   let totalCaballeros = 0;
   let totalDamas = 0;
   const countByCategory: Record<string, number> = {};
@@ -209,12 +209,20 @@ export default async function RankingsPage({
       ...Array.from(catsSet).filter((c) => !DEFAULT_CATEGORIES.includes(c)),
     ];
 
-    // 9. Filtrar estrictamente por la categoría seleccionada (solo jugadores de esa categoría y género)
+    // 9. Resolver categoría seleccionada: jamás habrá ranking general, siempre discriminado por categoría
+    const defaultCategory = availableCategories[0] || "8va";
+    const activeCategory =
+      requestedCategory &&
+      requestedCategory.toLowerCase() !== "all" &&
+      requestedCategory.toLowerCase() !== "todas"
+        ? requestedCategory
+        : defaultCategory;
+
+    // 10. Filtrar estrictamente por la categoría seleccionada (solo jugadores de esa categoría y género)
     individualRankings = ramaPlayers
       .filter((p) => {
-        if (selectedCategory === "all" || selectedCategory === "Todas") return true;
         const pCat = (p.category || "").toLowerCase().trim();
-        const sCat = selectedCategory.toLowerCase().trim();
+        const sCat = activeCategory.toLowerCase().trim();
         return pCat === sCat;
       })
       .sort((a, b) => {
@@ -229,7 +237,12 @@ export default async function RankingsPage({
     console.error("Error fetching rankings from Supabase:", err);
   }
 
-  const isAllCategory = selectedCategory === "all" || selectedCategory === "Todas";
+  const selectedCategory =
+    requestedCategory &&
+    requestedCategory.toLowerCase() !== "all" &&
+    requestedCategory.toLowerCase() !== "todas"
+      ? requestedCategory
+      : availableCategories[0] || "8va";
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -300,29 +313,6 @@ export default async function RankingsPage({
 
       {/* Selector de Categorías de la Rama Activa (Pills) */}
       <div className="mb-6 flex items-center gap-1.5 bg-dark-900/80 p-1.5 rounded-2xl border border-dark-800 text-xs overflow-x-auto max-w-full">
-        <a
-          href={`/rankings?gender=${selectedGender}&category=all`}
-          className={`px-3.5 py-2 rounded-xl font-extrabold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-            isAllCategory
-              ? isDamas
-                ? "bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-md shadow-rose-500/25"
-                : "bg-gradient-to-r from-emerald-500 to-lime-500 text-dark-950 shadow-md shadow-emerald-500/25"
-              : "text-dark-300 hover:text-white hover:bg-dark-800"
-          }`}
-        >
-          <span>Todas</span>
-          <span
-            className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-              isAllCategory
-                ? isDamas
-                  ? "bg-white/20 text-white"
-                  : "bg-dark-950/30 text-dark-950"
-                : "bg-dark-800 text-dark-400"
-            }`}
-          >
-            {isDamas ? totalDamas : totalCaballeros}
-          </span>
-        </a>
         {availableCategories.map((cat) => {
           const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase();
           const catCount = countByCategory[cat] || 0;
@@ -366,9 +356,7 @@ export default async function RankingsPage({
             <User className="w-5 h-5" />
           </span>
           <h2 className="text-lg sm:text-xl font-black text-white">
-            {isAllCategory
-              ? `Ranking General • Rama ${selectedGender} (${isDamas ? "Femenino" : "Masculino"})`
-              : `Ranking Oficial ${selectedGender} • ${selectedCategory} Categoría`}
+            Ranking Oficial {selectedGender} • {selectedCategory} Categoría
           </h2>
         </div>
         <span
@@ -394,14 +382,10 @@ export default async function RankingsPage({
         <Card className="mt-4 p-12 text-center border-dark-700/80 shadow-xl bg-dark-900/60">
           <User className="w-12 h-12 text-dark-500 mx-auto mb-3" />
           <h3 className="text-lg font-bold text-white mb-1">
-            {isAllCategory
-              ? `Sin rankings registrados aún en Rama ${selectedGender}`
-              : `Sin ${isDamas ? "jugadoras registradas" : "jugadores registrados"} en ${selectedGender} • ${selectedCategory} Categoría aún`}
+            Sin {isDamas ? "jugadoras registradas" : "jugadores registrados"} en {selectedGender} • {selectedCategory} Categoría aún
           </h3>
           <p className="text-dark-400 text-sm max-w-md mx-auto">
-            {isAllCategory
-              ? `Los puntajes de la rama ${selectedGender} se actualizarán en tiempo real a medida que se disputen los torneos correspondientes.`
-              : `Las ${isDamas ? "jugadoras" : "los jugadores"} que pertenezcan a ${selectedCategory} categoría en la rama ${selectedGender.toLowerCase()} aparecerán automáticamente en este ranking.`}
+            {isDamas ? "Las jugadoras" : "Los jugadores"} que pertenezcan a {selectedCategory} categoría en la rama {selectedGender.toLowerCase()} aparecerán automáticamente en este ranking.
           </p>
         </Card>
       ) : (
