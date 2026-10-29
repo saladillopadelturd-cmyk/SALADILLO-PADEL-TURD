@@ -933,29 +933,27 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
           return updated;
         });
 
-        // Si el partido completado es la Gran Final, auto-liquidar los rankings oficiales de inmediato
-        let finalCompleted = false;
-        if (scoringMatch.stage === "final") {
-          try {
-            await fetch("/api/rankings", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ tournamentId, recalculate: true }),
-            });
-            finalCompleted = true;
-          } catch (rankErr) {
-            console.warn("Error auto-liquidando rankings tras la final:", rankErr);
-          }
+        // Cada vez que se anote el resultado de un partido se actualiza el ranking oficial de jugadores
+        let rankingUpdated = false;
+        try {
+          const rankRes = await fetch("/api/rankings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tournamentId, recalculate: true }),
+          });
+          if (rankRes.ok) rankingUpdated = true;
+        } catch (rankErr) {
+          console.warn("Error actualizando rankings oficiales tras registrar resultado:", rankErr);
         }
 
         await loadData();
         setScoringMatch(null);
         setNotification({
           type: "success",
-          text: finalCompleted
-            ? "¡Gran Final completada! Los rankings oficiales por parejas e individual han sido liquidados y actualizados automáticamente."
-            : advancedToNextStage
-            ? "Resultado guardado y pareja ganadora clasificada automáticamente a la siguiente fase del cuadro."
+          text: advancedToNextStage
+            ? "Resultado guardado: la pareja ganadora avanzó automáticamente a la siguiente instancia y el ranking de jugadores fue actualizado."
+            : rankingUpdated
+            ? "Resultado guardado y ranking de jugadores actualizado exitosamente."
             : "Resultado guardado y posiciones actualizadas con éxito.",
         });
       } catch (err: unknown) {
@@ -2242,9 +2240,9 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                       matches={matches}
                       couples={couples}
                       isAdmin={true}
-                      onMatchClick={(m) => openScoreModal(m)}
+                      onMatchClick={(m, winnerId) => openScoreModal(m, winnerId)}
                       title="Cuadro Gráfico de Eliminación Directa"
-                      subtitle="Estructura conformada de arriba hacia abajo. Haz clic en cualquier cruce para registrar o modificar el resultado."
+                      subtitle="Toca una pareja en la llave para elegirla como ganadora y anotar el resultado. Avanzará automáticamente a la siguiente ronda y actualizará el ranking."
                       tournamentName={tournament?.name}
                       categoryName={tournament ? `${tournament.category || ""} ${tournament.gender ? `(${tournament.gender})` : ""}`.trim() : undefined}
                     />

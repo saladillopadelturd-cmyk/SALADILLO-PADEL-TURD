@@ -457,23 +457,25 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
         return updated;
       });
 
-      // Si el partido completado es la Final, auto-liquidar rankings
-      if (scoringMatch.stage === "final") {
-        try {
-          await fetch("/api/rankings", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ tournamentId: id, recalculate: true }),
-          });
-        } catch (rankErr) {
-          console.warn("Error auto-liquidando rankings tras la final:", rankErr);
-        }
+      // Cada vez que se anote el resultado de un partido se actualiza el ranking oficial de jugadores
+      let rankingUpdated = false;
+      try {
+        const rankRes = await fetch("/api/rankings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tournamentId: id, recalculate: true }),
+        });
+        if (rankRes.ok) rankingUpdated = true;
+      } catch (rankErr) {
+        console.warn("Error auto-actualizando rankings tras registrar resultado:", rankErr);
       }
 
       setScoringMatch(null);
       setNotification({
         type: "success",
-        text: "Marcador guardado exitosamente. La pareja ganadora avanzó al siguiente cruce del cuadro.",
+        text: rankingUpdated
+          ? "Marcador guardado exitosamente. La pareja ganadora avanzó al siguiente cruce del cuadro y el ranking de jugadores fue actualizado."
+          : "Marcador guardado exitosamente. La pareja ganadora avanzó al siguiente cruce del cuadro.",
       });
 
       await loadTournamentData();
@@ -1740,13 +1742,13 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                   matches={matches}
                   couples={couples}
                   isAdmin={isAdmin}
-                  onMatchClick={(m) => {
+                  onMatchClick={(m, winnerId) => {
                     if (isAdmin && m.couple1_id && m.couple2_id) {
-                      openScoreModal(m);
+                      openScoreModal(m, winnerId);
                     }
                   }}
                   title="Cuadro Oficial de Eliminación Directa"
-                  subtitle="Conexión visual de llaves y avance de ganadores hacia la Gran Final."
+                  subtitle="Toca una pareja en la llave para elegirla como ganadora y anotar el resultado. Avanzará automáticamente a la siguiente ronda y actualizará el ranking."
                   tournamentName={tournament.name}
                   categoryName={`${tournament.category || ""} ${tournament.gender ? `(${tournament.gender})` : ""}`.trim()}
                 />

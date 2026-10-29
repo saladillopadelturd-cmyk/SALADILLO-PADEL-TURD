@@ -17,7 +17,7 @@ interface PlayoffBracketViewProps {
   matches: Match[];
   couples?: Couple[];
   isAdmin?: boolean;
-  onMatchClick?: (match: Match) => void;
+  onMatchClick?: (match: Match, preselectedWinnerId?: string) => void;
   title?: string;
   subtitle?: string;
   tournamentName?: string;
@@ -492,23 +492,24 @@ export function PlayoffBracketView({
                         className="relative group z-10"
                       >
                         <div
-                          onClick={() => {
-                            if (isClickable && onMatchClick) {
-                              onMatchClick(m);
-                            }
-                          }}
                           className={`bracket-match-card rounded-xl border transition-all duration-200 shadow-md ${
-                            isClickable
-                              ? "cursor-pointer hover:border-amber-400/80 hover:shadow-lg hover:shadow-amber-500/10"
-                              : ""
-                          } ${
                             isCompleted
                               ? "bg-dark-900/90 border-dark-700/80"
                               : "bg-dark-900/70 border-dark-800"
                           }`}
                         >
                           {/* Barra superior de partido */}
-                          <div className="bracket-match-header px-3 py-1.5 border-b border-dark-800/80 flex items-center justify-between text-[11px] bg-dark-950/40 rounded-t-xl">
+                          <div
+                            onClick={() => {
+                              if (isClickable && onMatchClick) {
+                                onMatchClick(m);
+                              }
+                            }}
+                            className={`bracket-match-header px-3 py-1.5 border-b border-dark-800/80 flex items-center justify-between text-[11px] bg-dark-950/40 rounded-t-xl ${
+                              isClickable ? "cursor-pointer hover:bg-dark-800/60 transition-colors" : ""
+                            }`}
+                            title={isClickable ? "Clic para abrir opciones del partido" : undefined}
+                          >
                             <span className="font-bold text-dark-400">
                               Partido #{m.match_number ?? matchIdx + 1}
                             </span>
@@ -532,15 +533,30 @@ export function PlayoffBracketView({
                             </div>
                           </div>
 
-                          {/* Pareja 1 */}
+                          {/* Pareja 1: Tocar para elegir como ganadora y abrir campo de resultado */}
                           <div
-                            className={`bracket-couple-row p-2.5 flex items-center justify-between gap-2 border-b border-dark-800/60 ${
+                            onClick={(e) => {
+                              if (isClickable && onMatchClick && m.couple1_id) {
+                                e.stopPropagation();
+                                onMatchClick(m, m.couple1_id);
+                              }
+                            }}
+                            className={`bracket-couple-row p-2.5 flex items-center justify-between gap-2 border-b border-dark-800/60 transition-all ${
+                              isClickable && m.couple1_id
+                                ? "cursor-pointer hover:bg-emerald-500/20 hover:border-emerald-500/50 active:scale-[0.99]"
+                                : ""
+                            } ${
                               isC1Winner
                                 ? "bracket-row-winner bg-emerald-500/15 text-emerald-300 font-bold"
                                 : m.couple1_id
                                 ? "text-white"
                                 : "text-dark-500 italic"
                             }`}
+                            title={
+                              isClickable && m.couple1_id
+                                ? `Tocar para elegir a ${c1.name} como ganadora y anotar el resultado`
+                                : undefined
+                            }
                           >
                             <div className="flex items-center gap-1.5 min-w-0 flex-1">
                               {isC1Winner && (
@@ -550,16 +566,31 @@ export function PlayoffBracketView({
                                 {c1.name}
                               </span>
                             </div>
-                            {isBye && (
+                            {isBye ? (
                               <span className="text-[10px] font-mono font-bold text-amber-400 px-1.5 py-0.5 rounded bg-amber-500/10 flex-shrink-0">
                                 SEMBRADA
                               </span>
-                            )}
+                            ) : isClickable && m.couple1_id && !isC1Winner ? (
+                              <span className="text-[10px] font-bold text-dark-500 hover:text-emerald-300 opacity-60 hover:opacity-100 flex items-center gap-1 flex-shrink-0 transition-opacity">
+                                <Trophy className="w-3 h-3 text-amber-400/80" />
+                                Ganador
+                              </span>
+                            ) : null}
                           </div>
 
-                          {/* Pareja 2 */}
+                          {/* Pareja 2: Tocar para elegir como ganadora y abrir campo de resultado */}
                           <div
-                            className={`bracket-couple-row p-2.5 flex items-center justify-between gap-2 rounded-b-xl ${
+                            onClick={(e) => {
+                              if (isClickable && onMatchClick && m.couple2_id) {
+                                e.stopPropagation();
+                                onMatchClick(m, m.couple2_id);
+                              }
+                            }}
+                            className={`bracket-couple-row p-2.5 flex items-center justify-between gap-2 rounded-b-xl transition-all ${
+                              isClickable && m.couple2_id
+                                ? "cursor-pointer hover:bg-emerald-500/20 hover:border-emerald-500/50 active:scale-[0.99]"
+                                : ""
+                            } ${
                               isC2Winner
                                 ? "bracket-row-winner bg-emerald-500/15 text-emerald-300 font-bold"
                                 : isBye
@@ -568,6 +599,11 @@ export function PlayoffBracketView({
                                 ? "text-white"
                                 : "text-dark-500 italic"
                             }`}
+                            title={
+                              isClickable && m.couple2_id
+                                ? `Tocar para elegir a ${c2.name} como ganadora y anotar el resultado`
+                                : undefined
+                            }
                           >
                             <div className="flex items-center gap-1.5 min-w-0 flex-1">
                               {isC2Winner && (
@@ -577,6 +613,12 @@ export function PlayoffBracketView({
                                 {c2.name}
                               </span>
                             </div>
+                            {isClickable && m.couple2_id && !isBye && !isC2Winner ? (
+                              <span className="text-[10px] font-bold text-dark-500 hover:text-emerald-300 opacity-60 hover:opacity-100 flex items-center gap-1 flex-shrink-0 transition-opacity">
+                                <Trophy className="w-3 h-3 text-amber-400/80" />
+                                Ganador
+                              </span>
+                            ) : null}
                           </div>
 
                           {/* Marcador si está finalizado */}
