@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatPlayerFullName } from "@/lib/tournament/couples";
 import { syncAllTournamentsRankings } from "@/lib/tournament/rankings";
 import { getPlayerPhotosMap } from "@/lib/tournament/player-photos";
+import AboutRankingButton from "@/components/ranking/AboutRankingButton";
 import { Trophy, Medal, User } from "lucide-react";
 
 export const revalidate = 0;
@@ -261,11 +262,12 @@ export default async function RankingsPage({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col items-start md:items-end gap-2">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             Actualizado en vivo
           </div>
+          <AboutRankingButton />
         </div>
       </div>
 
