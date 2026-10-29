@@ -19,12 +19,10 @@ import {
   propagatePlayoffWinners,
   getStageName,
   findNextPlayoffMatchSlot,
-  generateSeededPlayoffBracket,
   type QualifiedPair,
 } from "@/lib/tournament/elimination";
 import { normalizeScheduledTime } from "@/lib/tournament/scheduler";
 import { formatDate } from "@/lib/dateUtils";
-import Bracket from "@/components/tournament/Bracket";
 import ZoneConformationEditor from "@/components/tournament/ZoneConformationEditor";
 import AutoScheduleModal from "@/components/tournament/AutoScheduleModal";
 import PlayerAvatar from "@/components/player/PlayerAvatar";
@@ -717,95 +715,6 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
     }
   };
 
-  const handleBracketMatchClick = async (
-    matchId: string,
-    winningPairId?: string,
-    matchData?: { pair1: string; pair2: string; winner?: string }
-  ) => {
-    // 1. Si el partido ya existe en la BD (cuadro oficial en fixture), abrir directamente el modal
-    const existingMatch = matches.find((m) => m.id === matchId);
-    if (existingMatch) {
-      openScoreModal(existingMatch, winningPairId);
-      return;
-    }
-
-    // 2. Si es un cruce de "Llaves Clasificatorias" proyectado en memoria:
-    if (!tournament) return;
-
-    const p1 = matchData?.pair1;
-    const p2 = matchData?.pair2;
-    const selectedWinner = winningPairId || p1;
-
-    // Si no son parejas reales válidas, no abrir modal
-    if (!p1 || !p2 || p1 === "Por definir" || p2 === "Por definir" || p1 === "BYE" || p2 === "BYE") {
-      return;
-    }
-
-    setIsGeneratingPlayoffs(true);
-    setNotification({
-      type: "info",
-      text: "Habilitando cuadro oficial para cargar resultado...",
-    });
-
-    try {
-      const res = await fetch("/api/playoffs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tournamentId: id,
-          force: true,
-        }),
-      });
-
-      const resData = await res.json();
-      if (!res.ok) {
-        throw new Error(resData.error || "Error al inicializar cuadro de playoffs");
-      }
-
-      // Obtener los nuevos partidos de playoffs recién insertados en la BD
-      const { data: freshMatches, error: matchesErr } = await supabase
-        .from("matches")
-        .select("*, couple1:couples!matches_couple1_id_fkey(*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*)), couple2:couples!matches_couple2_id_fkey(*, player1:players!couples_player1_id_fkey(*), player2:players!couples_player2_id_fkey(*))")
-        .eq("tournament_id", id)
-        .order("scheduled_time", { ascending: true, nullsFirst: false });
-
-      if (matchesErr || !freshMatches) {
-        throw new Error(matchesErr?.message || "Error al cargar partidos de playoffs");
-      }
-
-      setMatches(freshMatches);
-
-      // Buscar el partido que corresponde al cruce clickeado
-      const matchingMatch = freshMatches.find(
-        (m) =>
-          m.stage !== "zone" &&
-          ((m.couple1_id === p1 && m.couple2_id === p2) ||
-           (m.couple1_id === p2 && m.couple2_id === p1) ||
-           (selectedWinner && (m.couple1_id === selectedWinner || m.couple2_id === selectedWinner)))
-      );
-
-      if (matchingMatch) {
-        setNotification({
-          type: "success",
-          text: "¡Cuadro oficial habilitado! Anotá el resultado del partido.",
-        });
-        openScoreModal(matchingMatch, selectedWinner);
-      } else {
-        const firstPlayoff = freshMatches.find((m) => m.stage !== "zone" && m.status !== "completed");
-        if (firstPlayoff) {
-          openScoreModal(firstPlayoff, selectedWinner);
-        }
-      }
-
-      await loadTournamentData();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Error al conformar el cuadro eliminatorio";
-      setNotification({ type: "error", text: msg });
-    } finally {
-      setIsGeneratingPlayoffs(false);
-    }
-  };
-
   useEffect(() => {
     loadTournamentData();
 
@@ -939,162 +848,6 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
 
     return { allQualifiedPairs: qualified, hasPlayoffMatchesInDb: hasPlayoffs };
   }, [matches, zones, zoneCouplesMap, couples, displayMatches]);
-
-  // Nombres de parejas para el cuadro (apellidos de los jugadores)
-  const bracketPairNames = useMemo(() => {
-    const names: Record<string, string> = {};
-    names["BYE"] = "BYE (Pasa de ronda)";
-    names["Por definir"] = "Por definir";
-
-    couples.forEach((c) => {
-      names[c.id] = getCoupleLastNames(c);
-    });
-
-    return names;
-  }, [couples]);
-
-  // Incondicional: Estructura del cuadro eliminatorio para pestaña playoffs
-  const bracketRounds = useMemo(() => {
-    const qCount = allQualifiedPairs.length || couples.length || 8;
-    let stageSequence: { stage: string; count: number }[] = [];
-
-    if (qCount > 16) {
-      stageSequence = [
-        { stage: "round_of_32", count: 16 },
-        { stage: "round_of_16", count: 8 },
-        { stage: "quarter", count: 4 },
-        { stage: "semi", count: 2 },
-        { stage: "final", count: 1 },
-      ];
-    } else if (qCount > 8) {
-      stageSequence = [
-        { stage: "round_of_16", count: 8 },
-        { stage: "quarter", count: 4 },
-        { stage: "semi", count: 2 },
-        { stage: "final", count: 1 },
-      ];
-    } else if (qCount > 4) {
-      stageSequence = [
-        { stage: "quarter", count: 4 },
-        { stage: "semi", count: 2 },
-        { stage: "final", count: 1 },
-      ];
-    } else {
-      stageSequence = [
-        { stage: "semi", count: 2 },
-        { stage: "final", count: 1 },
-      ];
-    }
-
-    const playoffMatches = displayMatches
-      .filter((m) => m.stage !== "zone")
-      .sort((a, b) => {
-        if (a.match_number != null && b.match_number != null && a.match_number !== b.match_number) {
-          return a.match_number - b.match_number;
-        }
-        if (a.created_at && b.created_at && a.created_at !== b.created_at) {
-          return a.created_at.localeCompare(b.created_at);
-        }
-        return a.id.localeCompare(b.id);
-      });
-
-    const matchesByStage: Record<string, Match[]> = {};
-    playoffMatches.forEach((m) => {
-      const stageStr = m.stage as string;
-      const stageNorm =
-        stageStr === "cuartos"
-          ? "quarter"
-          : stageStr === "octavos"
-          ? "round_of_16"
-          : stageStr === "semifinal"
-          ? "semi"
-          : stageStr === "dieciseisavos"
-          ? "round_of_32"
-          : m.stage;
-      if (!matchesByStage[stageNorm]) matchesByStage[stageNorm] = [];
-      matchesByStage[stageNorm].push(m);
-    });
-
-    const roundsResult = stageSequence.map(({ stage, count }) => {
-      const dbMatches = matchesByStage[stage] || [];
-      const baseNum =
-        stage === "round_of_32" || stage === "dieciseisavos"
-          ? 100
-          : stage === "round_of_16" || stage === "octavos"
-          ? 120
-          : stage === "quarter" || stage === "cuartos"
-          ? 140
-          : stage === "semi" || stage === "semifinal"
-          ? 150
-          : 160;
-
-      // Ranuras fijas en el cuadro para esta ronda
-      const slotMatches: ({
-        id?: string;
-        pair1: string;
-        pair2: string;
-        winner?: string;
-        score?: string;
-        status?: string;
-      } | null)[] = new Array(count).fill(null);
-
-      const unassignedMatches: Match[] = [];
-
-      // 1. Asignar primero cada partido que coincida exactamente con su ranura fija (match_number = baseNum + slotIndex + 1)
-      dbMatches.forEach((m) => {
-        if (m.match_number != null) {
-          const slotIndex = m.match_number - baseNum - 1;
-          if (slotIndex >= 0 && slotIndex < count && !slotMatches[slotIndex]) {
-            const scoreStr = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
-            slotMatches[slotIndex] = {
-              id: m.id,
-              pair1: m.couple1_id ?? "Por definir",
-              pair2: m.couple2_id ?? (m.score_set1?.includes("BYE") ? "BYE" : "Por definir"),
-              winner: m.winner_couple_id ?? undefined,
-              score: scoreStr || undefined,
-              status: m.status,
-            };
-            return;
-          }
-        }
-        unassignedMatches.push(m);
-      });
-
-      // 2. Para partidos de plantillas FAP o secuenciales, ubicarlos ordenadamente en los slots libres
-      unassignedMatches.forEach((m) => {
-        const freeIdx = slotMatches.findIndex((s) => s === null);
-        if (freeIdx !== -1) {
-          const scoreStr = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
-          slotMatches[freeIdx] = {
-            id: m.id,
-            pair1: m.couple1_id ?? "Por definir",
-            pair2: m.couple2_id ?? (m.score_set1?.includes("BYE") ? "BYE" : "Por definir"),
-            winner: m.winner_couple_id ?? undefined,
-            score: scoreStr || undefined,
-            status: m.status,
-          };
-        }
-      });
-
-      // 3. Completar los slots vacíos como "Por definir" manteniéndolos fijos en su posición
-      const stageMatches = slotMatches.map((slotM, i) => {
-        if (slotM) return slotM;
-        return {
-          id: `slot_${stage}_${i}`,
-          pair1: "Por definir",
-          pair2: "Por definir",
-          status: "pending",
-        };
-      });
-
-      return {
-        round: stage,
-        matches: stageMatches,
-      };
-    });
-
-    return roundsResult;
-  }, [displayMatches, allQualifiedPairs.length, couples.length]);
 
   if (loading) {
     return (
@@ -1965,29 +1718,101 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
               )}
             </div>
 
-            {/* Dibujo del Cuadro */}
-            {bracketRounds.length === 0 ? (
+            {/* Listado de Cruces Eliminatorios */}
+            {matches.filter((m) => m.stage !== "zone").length === 0 ? (
               <Card className="p-12 text-center text-dark-400">
                 <Trophy className="w-12 h-12 text-dark-600 mx-auto mb-3" />
                 <h3 className="text-base font-bold text-white mb-1">
-                  Aún no se pueden conformar las llaves eliminatorias
+                  Aún no se han conformado los cruces eliminatorios
                 </h3>
                 <p className="text-sm max-w-md mx-auto mb-4">
-                  Para dibujar el cuadro de eliminación, primero debes configurar las zonas y contar con al menos 2 parejas clasificadas.
+                  Los cruces de eliminación directa se definirán al concluir la fase de zonas con las parejas clasificadas.
                 </p>
                 <Button onClick={() => setActiveTab("zonas")} variant="secondary">
                   Ir a Zonas
                 </Button>
               </Card>
             ) : (
-              <Card className="p-6 overflow-x-auto border-dark-800 bg-dark-950/40">
-                <Bracket
-                  rounds={bracketRounds}
-                  pairNames={bracketPairNames}
-                  isAdmin={isAdmin ?? true}
-                  onMatchClick={handleBracketMatchClick}
-                />
-              </Card>
+              <div className="space-y-6">
+                {(["final", "semi", "quarter", "round_of_16", "round_of_32"] as const).map((stg) => {
+                  const stageMatches = matches.filter(
+                    (m) =>
+                      m.stage === stg ||
+                      (stg === "quarter" && (m.stage as string) === "cuartos") ||
+                      (stg === "semi" && (m.stage as string) === "semifinal") ||
+                      (stg === "round_of_16" && (m.stage as string) === "octavos") ||
+                      (stg === "round_of_32" && (m.stage as string) === "dieciseisavos")
+                  );
+                  if (stageMatches.length === 0) return null;
+
+                  return (
+                    <div key={stg} className="space-y-3">
+                      <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <Trophy className="w-4 h-4 text-amber-400" />
+                        {getStageName(stg)} ({stageMatches.length})
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {stageMatches.map((m) => {
+                          const p1Name = m.couple1_id ? coupleNamesMap[m.couple1_id] || "Pareja 1" : "Por definir";
+                          const p2Name = m.couple2_id
+                            ? coupleNamesMap[m.couple2_id] || "Pareja 2"
+                            : m.score_set1?.includes("BYE")
+                            ? "BYE (Pasa de ronda)"
+                            : "Por definir";
+                          const isCompleted = m.status === "completed";
+                          const score = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
+
+                          return (
+                            <Card
+                              key={m.id}
+                              onClick={() => {
+                                if (isAdmin && m.couple1_id && m.couple2_id) {
+                                  openScoreModal(m);
+                                }
+                              }}
+                              className={`p-4 border-dark-800 bg-dark-900/60 ${
+                                isAdmin && m.couple1_id && m.couple2_id
+                                  ? "cursor-pointer hover:border-emerald-500/50 hover:bg-dark-900/90 transition-all"
+                                  : ""
+                              }`}
+                            >
+                              <div className="flex items-center justify-between text-xs text-dark-400 mb-2">
+                                <span className="font-semibold text-slate-300">
+                                  {m.match_number ? `Partido #${m.match_number}` : getStageName(stg)}
+                                </span>
+                                {isCompleted ? (
+                                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-bold border border-emerald-500/30">
+                                    Finalizado
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full bg-dark-800 text-dark-300 font-medium">
+                                    Pendiente
+                                  </span>
+                                )}
+                              </div>
+                              <div className="space-y-1.5 text-sm">
+                                <div className={`flex items-center justify-between ${m.winner_couple_id === m.couple1_id ? "text-emerald-300 font-bold" : "text-white"}`}>
+                                  <span className="truncate">{p1Name}</span>
+                                  {m.winner_couple_id === m.couple1_id && <Trophy className="w-3.5 h-3.5 text-amber-400" />}
+                                </div>
+                                <div className={`flex items-center justify-between ${m.winner_couple_id === m.couple2_id ? "text-emerald-300 font-bold" : "text-white"}`}>
+                                  <span className="truncate">{p2Name}</span>
+                                  {m.winner_couple_id === m.couple2_id && <Trophy className="w-3.5 h-3.5 text-amber-400" />}
+                                </div>
+                              </div>
+                              {score && (
+                                <div className="mt-2 pt-2 border-t border-dark-800 text-xs font-mono font-bold text-amber-300">
+                                  {score}
+                                </div>
+                              )}
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </TabsContent>

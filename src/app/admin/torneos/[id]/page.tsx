@@ -19,7 +19,6 @@ import { findNextPlayoffMatchSlot, propagatePlayoffWinners, getStageName } from 
 import ZoneCard from "@/components/tournament/ZoneCard";
 import ZoneConformationEditor from "@/components/tournament/ZoneConformationEditor";
 import AutoScheduleModal from "@/components/tournament/AutoScheduleModal";
-import Bracket from "@/components/tournament/Bracket";
 import { normalizeScheduledTime } from "@/lib/tournament/scheduler";
 import { formatDate } from "@/lib/dateUtils";
 import {
@@ -106,15 +105,6 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
   const [playoffIsBye, setPlayoffIsBye] = useState<boolean>(false);
   const [isClearPlayoffsModalOpen, setIsClearPlayoffsModalOpen] = useState(false);
   const [deletingPlayoffMatchId, setDeletingPlayoffMatchId] = useState<string | null>(null);
-
-  // Estados para Selección Rápida de Pareja al hacer clic en "Por definir" en el cuadro
-  const [isSlotPickerOpen, setIsSlotPickerOpen] = useState(false);
-  const [activeSlotTarget, setActiveSlotTarget] = useState<{
-    match: { id?: string; pair1: string; pair2: string; winner?: string; score?: string; status?: string };
-    stage: string;
-    matchIndex: number;
-    slot: 1 | 2;
-  } | null>(null);
 
   const supabase = createClient();
 
@@ -259,18 +249,6 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     return propagatePlayoffWinners(zoneMatches);
   }, [matches]);
 
-  const bracketPairNames = useMemo(() => {
-    const names: Record<string, string> = {};
-    names["BYE"] = "BYE (Pasa de ronda)";
-    names["Por definir"] = "Por definir";
-
-    couples.forEach((c) => {
-      names[c.id] = getCoupleLastNames(c);
-    });
-
-    return names;
-  }, [couples]);
-
   // Cálculo oficial de parejas clasificadas y eliminadas por zona:
   // - En zonas de 4 parejas: clasifican las 3 mejores (1°, 2°, 3°). La 4ª queda eliminada.
   // - En zonas de 3 parejas: clasifican las 2 mejores (1°, 2°). La 3ª queda eliminada.
@@ -358,151 +336,6 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
 
     return { qualified, eliminated };
   }, [zones, zoneCouplesMap, matches, couples]);
-
-  // Cuadro de Eliminación: se dibuja siempre la estructura completa del árbol (Bracket)
-  // combinando los partidos ya creados en la BD con los slots pendientes para asignación manual.
-  const bracketRounds = useMemo(() => {
-    const qCount = zoneQualifications.qualified.length || couples.length || 8;
-    let stageSequence: { stage: string; count: number }[] = [];
-
-    if (qCount > 16) {
-      stageSequence = [
-        { stage: "round_of_32", count: 16 },
-        { stage: "round_of_16", count: 8 },
-        { stage: "quarter", count: 4 },
-        { stage: "semi", count: 2 },
-        { stage: "final", count: 1 },
-      ];
-    } else if (qCount > 8) {
-      stageSequence = [
-        { stage: "round_of_16", count: 8 },
-        { stage: "quarter", count: 4 },
-        { stage: "semi", count: 2 },
-        { stage: "final", count: 1 },
-      ];
-    } else if (qCount > 4) {
-      stageSequence = [
-        { stage: "quarter", count: 4 },
-        { stage: "semi", count: 2 },
-        { stage: "final", count: 1 },
-      ];
-    } else {
-      stageSequence = [
-        { stage: "semi", count: 2 },
-        { stage: "final", count: 1 },
-      ];
-    }
-
-    const playoffMatches = displayMatches
-      .filter((m) => m.stage !== "zone")
-      .sort((a, b) => {
-        if (a.match_number != null && b.match_number != null && a.match_number !== b.match_number) {
-          return a.match_number - b.match_number;
-        }
-        if (a.created_at && b.created_at && a.created_at !== b.created_at) {
-          return a.created_at.localeCompare(b.created_at);
-        }
-        return a.id.localeCompare(b.id);
-      });
-
-    // Agrupar partidos reales de la BD por etapa
-    const matchesByStage: Record<string, Match[]> = {};
-    playoffMatches.forEach((m) => {
-      const stageStr = m.stage as string;
-      const stageNorm =
-        stageStr === "cuartos"
-          ? "quarter"
-          : stageStr === "octavos"
-          ? "round_of_16"
-          : stageStr === "semifinal"
-          ? "semi"
-          : stageStr === "dieciseisavos"
-          ? "round_of_32"
-          : m.stage;
-      if (!matchesByStage[stageNorm]) matchesByStage[stageNorm] = [];
-      matchesByStage[stageNorm].push(m);
-    });
-
-    const roundsResult = stageSequence.map(({ stage, count }) => {
-      const dbMatches = matchesByStage[stage] || [];
-      const baseNum =
-        stage === "round_of_32" || stage === "dieciseisavos"
-          ? 100
-          : stage === "round_of_16" || stage === "octavos"
-          ? 120
-          : stage === "quarter" || stage === "cuartos"
-          ? 140
-          : stage === "semi" || stage === "semifinal"
-          ? 150
-          : 160;
-
-      // Ranuras fijas en el cuadro para esta ronda
-      const slotMatches: ({
-        id?: string;
-        pair1: string;
-        pair2: string;
-        winner?: string;
-        score?: string;
-        status?: string;
-      } | null)[] = new Array(count).fill(null);
-
-      const unassignedMatches: Match[] = [];
-
-      // 1. Asignar primero cada partido que coincida exactamente con su ranura fija (match_number = baseNum + slotIndex + 1)
-      dbMatches.forEach((m) => {
-        if (m.match_number != null) {
-          const slotIndex = m.match_number - baseNum - 1;
-          if (slotIndex >= 0 && slotIndex < count && !slotMatches[slotIndex]) {
-            const scoreStr = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
-            slotMatches[slotIndex] = {
-              id: m.id,
-              pair1: m.couple1_id ?? "Por definir",
-              pair2: m.couple2_id ?? (m.score_set1?.includes("BYE") ? "BYE" : "Por definir"),
-              winner: m.winner_couple_id ?? undefined,
-              score: scoreStr || undefined,
-              status: m.status,
-            };
-            return;
-          }
-        }
-        unassignedMatches.push(m);
-      });
-
-      // 2. Para partidos de plantillas FAP o secuenciales, ubicarlos ordenadamente en los slots libres
-      unassignedMatches.forEach((m) => {
-        const freeIdx = slotMatches.findIndex((s) => s === null);
-        if (freeIdx !== -1) {
-          const scoreStr = [m.score_set1, m.score_set2, m.score_super_tb].filter(Boolean).join(" | ");
-          slotMatches[freeIdx] = {
-            id: m.id,
-            pair1: m.couple1_id ?? "Por definir",
-            pair2: m.couple2_id ?? (m.score_set1?.includes("BYE") ? "BYE" : "Por definir"),
-            winner: m.winner_couple_id ?? undefined,
-            score: scoreStr || undefined,
-            status: m.status,
-          };
-        }
-      });
-
-      // 3. Completar los slots vacíos como "Por definir" manteniéndolos fijos en su posición
-      const stageMatches = slotMatches.map((slotM, i) => {
-        if (slotM) return slotM;
-        return {
-          id: `slot_${stage}_${i}`,
-          pair1: "Por definir",
-          pair2: "Por definir",
-          status: "pending",
-        };
-      });
-
-      return {
-        round: stage,
-        matches: stageMatches,
-      };
-    });
-
-    return roundsResult;
-  }, [displayMatches, zoneQualifications.qualified.length, couples.length]);
 
   // Configuración interactiva de Zonas para el sorteo
   const [targetZoneSize, setTargetZoneSize] = useState<number>(4);
@@ -663,172 +496,6 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     setPlayoffCouple2Id(m.couple2_id || "");
     setPlayoffIsBye(Boolean(m.score_set1?.includes("BYE") || (!m.couple2_id && m.status === "completed")));
     setIsPlayoffMatchModalOpen(true);
-  };
-
-  const handleBracketAssignClick = (
-    bracketMatch: { id?: string; pair1: string; pair2: string; winner?: string; status?: string },
-    stage: string,
-    matchIndex: number
-  ) => {
-    let existingMatch: Match | undefined;
-    if (bracketMatch.id && !bracketMatch.id.startsWith("slot_") && !bracketMatch.id.startsWith("proj_")) {
-      existingMatch = matches.find((m) => m.id === bracketMatch.id);
-    }
-    if (!existingMatch) {
-      const playoffMatchesThisStage = matches
-        .filter(
-          (m) =>
-            m.stage === stage ||
-            (stage === "quarter" && (m.stage as string) === "cuartos") ||
-            (stage === "semi" && (m.stage as string) === "semifinal") ||
-            (stage === "round_of_16" && (m.stage as string) === "octavos") ||
-            (stage === "round_of_32" && (m.stage as string) === "dieciseisavos")
-        )
-        .sort((a, b) => (a.match_number ?? 999) - (b.match_number ?? 999));
-      existingMatch = playoffMatchesThisStage[matchIndex];
-    }
-
-    if (existingMatch) {
-      openEditPlayoffMatchModal(existingMatch);
-    } else {
-      setEditingPlayoffMatch(null);
-      setPlayoffStage(stage);
-      const baseNum =
-        stage === "round_of_32" || stage === "dieciseisavos"
-          ? 100
-          : stage === "round_of_16" || stage === "octavos"
-          ? 120
-          : stage === "quarter" || stage === "cuartos"
-          ? 140
-          : stage === "semi" || stage === "semifinal"
-          ? 150
-          : 160;
-      setPlayoffMatchNumber(String(baseNum + matchIndex + 1));
-      setPlayoffCouple1Id(
-        bracketMatch.pair1 && bracketMatch.pair1 !== "Por definir" && bracketMatch.pair1 !== "BYE"
-          ? bracketMatch.pair1
-          : ""
-      );
-      setPlayoffCouple2Id(
-        bracketMatch.pair2 && bracketMatch.pair2 !== "Por definir" && bracketMatch.pair2 !== "BYE"
-          ? bracketMatch.pair2
-          : ""
-      );
-      setPlayoffIsBye(bracketMatch.pair2 === "BYE");
-      setIsPlayoffMatchModalOpen(true);
-    }
-  };
-
-  // Al hacer clic en un cuadro "Por definir": se abre inmediatamente el listado de parejas
-  const handleBracketSlotClick = (
-    bracketMatch: { id?: string; pair1: string; pair2: string; winner?: string; score?: string; status?: string },
-    stage: string,
-    matchIndex: number,
-    slot: 1 | 2
-  ) => {
-    setActiveSlotTarget({ match: bracketMatch, stage, matchIndex, slot });
-    setIsSlotPickerOpen(true);
-  };
-
-  // Al elegir una pareja de la lista: queda definida en ese cuadro fijo y se cierra el listado
-  const handleSelectCoupleForSlot = async (selectedPairId: string) => {
-    if (!activeSlotTarget || !tournamentId) return;
-    const { match, stage, matchIndex, slot } = activeSlotTarget;
-
-    // Cerrar inmediatamente el listado
-    setIsSlotPickerOpen(false);
-    setActiveSlotTarget(null);
-
-    const baseNum =
-      stage === "round_of_32" || stage === "dieciseisavos"
-        ? 100
-        : stage === "round_of_16" || stage === "octavos"
-        ? 120
-        : stage === "quarter" || stage === "cuartos"
-        ? 140
-        : stage === "semi" || stage === "semifinal"
-        ? 150
-        : 160;
-    const targetMatchNumber = baseNum + matchIndex + 1;
-
-    let existingMatch: Match | undefined;
-    if (match.id && !match.id.startsWith("slot_") && !match.id.startsWith("proj_")) {
-      existingMatch = matches.find((m) => m.id === match.id);
-    }
-    if (!existingMatch) {
-      const stageNorm = stage;
-      existingMatch = matches.find(
-        (m) =>
-          (m.stage === stageNorm ||
-            (stageNorm === "quarter" && (m.stage as string) === "cuartos") ||
-            (stageNorm === "semi" && (m.stage as string) === "semifinal") ||
-            (stageNorm === "round_of_16" && (m.stage as string) === "octavos") ||
-            (stageNorm === "round_of_32" && (m.stage as string) === "dieciseisavos")) &&
-          m.match_number === targetMatchNumber
-      );
-    }
-
-    const isBye = selectedPairId === "BYE";
-    const pairIdToSave = selectedPairId === "Por definir" || selectedPairId === "BYE" ? null : selectedPairId;
-
-    startTransition(async () => {
-      try {
-        if (existingMatch) {
-          const c1 = slot === 1 ? pairIdToSave : existingMatch.couple1_id;
-          const c2 = isBye ? null : (slot === 2 ? pairIdToSave : existingMatch.couple2_id);
-          const matchIsBye = isBye || Boolean(existingMatch.score_set1?.includes("BYE"));
-
-          const res = await fetch("/api/playoffs", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              tournamentId,
-              action: "update_match",
-              matchId: existingMatch.id,
-              stage,
-              match_number: targetMatchNumber,
-              couple1_id: c1,
-              couple2_id: c2,
-              isBye: matchIsBye,
-            }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || "Error al actualizar cruce");
-
-          if (data.match) {
-            setMatches((prev) => prev.map((m) => (m.id === data.match.id ? { ...m, ...data.match } : m)));
-          }
-        } else {
-          const c1 = slot === 1 ? pairIdToSave : null;
-          const c2 = isBye ? null : (slot === 2 ? pairIdToSave : null);
-
-          const res = await fetch("/api/playoffs", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              tournamentId,
-              action: "create_match",
-              stage,
-              match_number: targetMatchNumber,
-              couple1_id: c1,
-              couple2_id: c2,
-              isBye,
-            }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || "Error al asignar cruce");
-
-          if (data.match) {
-            setMatches((prev) => [...prev.filter((m) => m.id !== data.match.id), data.match]);
-          }
-        }
-
-        await loadData();
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Error al asignar pareja";
-        setNotification({ type: "error", text: msg });
-      }
-    });
   };
 
   const handleSavePlayoffMatch = async () => {
@@ -2529,67 +2196,39 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                   )}
                 </div>
 
-                {/* Cuadro Gráfico (Bracket) */}
-                <Card className="p-6 overflow-x-auto border-dark-800 bg-dark-950/40">
-                  <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                    <div>
-                      <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                        <Trophy className="w-4 h-4 text-amber-400" />
-                        Esquema Visual de Llaves (Cuadro de Eliminación)
-                      </h4>
-                      <p className="text-xs text-dark-400 mt-0.5">
-                        El administrador asigna manualmente las parejas a cada partido usando el botón &quot;Asignar Parejas&quot; o haciendo clic sobre el cruce.
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        onClick={openCreatePlayoffMatchModal}
-                        disabled={isPending}
-                        className="bg-emerald-500 hover:bg-emerald-600 text-dark-950 font-bold text-xs"
-                      >
-                        <Plus className="w-3.5 h-3.5 mr-1" />
-                        Nuevo Partido
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={handleLoadFAPSuggestion}
-                        disabled={isPending || zoneQualifications.qualified.length < 2}
-                        className="text-xs"
-                      >
-                        <Sparkles className="w-3.5 h-3.5 text-amber-400 mr-1" />
-                        Sugerir Cruces FAP
-                      </Button>
-                    </div>
+                {/* Gestión de Partidos de Eliminación */}
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2 bg-dark-900/60 p-4 rounded-xl border border-dark-800">
+                  <div>
+                    <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      <Trophy className="w-4 h-4 text-amber-400" />
+                      Partidos de Eliminación Directa ({matches.filter((m) => m.stage !== "zone").length})
+                    </h4>
+                    <p className="text-xs text-dark-400 mt-0.5">
+                      Gestiona los cruces eliminatorios, asigna parejas y carga resultados.
+                    </p>
                   </div>
-                  <Bracket
-                    rounds={bracketRounds}
-                    pairNames={bracketPairNames}
-                    isAdmin={true}
-                    onAssignClick={handleBracketAssignClick}
-                    onAssignSlotClick={handleBracketSlotClick}
-                    onMatchClick={(matchId, winningPairId, matchData) => {
-                      let found = matches.find((m) => m.id === matchId);
-                      if (!found && matchData) {
-                        found = matches.find(
-                          (m) =>
-                            m.stage !== "zone" &&
-                            ((m.couple1_id === matchData.pair1 && m.couple2_id === matchData.pair2) ||
-                             (m.couple1_id === matchData.pair2 && m.couple2_id === matchData.pair1))
-                        );
-                      }
-                      if (found) {
-                        openScoreModal(found, winningPairId);
-                      } else if (matchData) {
-                        const roundObj = bracketRounds.find((r) => r.matches.some((m) => m.id === matchId));
-                        const stage = roundObj ? roundObj.round : "quarter";
-                        const matchIndex = roundObj ? roundObj.matches.findIndex((m) => m.id === matchId) : 0;
-                        handleBracketAssignClick(matchData, stage, matchIndex >= 0 ? matchIndex : 0);
-                      }
-                    }}
-                  />
-                </Card>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={openCreatePlayoffMatchModal}
+                      disabled={isPending}
+                      className="bg-emerald-500 hover:bg-emerald-600 text-dark-950 font-bold text-xs"
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-1" />
+                      Nuevo Partido
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleLoadFAPSuggestion}
+                      disabled={isPending || zoneQualifications.qualified.length < 2}
+                      className="text-xs"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400 mr-1" />
+                      Sugerir Cruces FAP
+                    </Button>
+                  </div>
+                </div>
 
                 {/* Listado Detallado de Partidos del Cuadro de Eliminación */}
                 {matches.filter((m) => m.stage !== "zone").length > 0 && (
@@ -3566,116 +3205,6 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                 >
                   {isPending ? "Guardando..." : editingPlayoffMatch ? "Guardar Cambios" : "Crear Partido"}
                 </Button>
-              </div>
-            </div>
-          </Modal>
-
-          {/* Modal: Selección Rápida de Pareja (SOLO el listado de parejas) al hacer clic en "Por definir" en el cuadro */}
-          <Modal
-            isOpen={isSlotPickerOpen}
-            onClose={() => {
-              setIsSlotPickerOpen(false);
-              setActiveSlotTarget(null);
-            }}
-            size="md"
-            title={
-              activeSlotTarget
-                ? `Elegir ${activeSlotTarget.slot === 1 ? "Pareja 1" : "Pareja 2"} - ${
-                    activeSlotTarget.stage === "round_of_32"
-                      ? "16avos"
-                      : activeSlotTarget.stage === "round_of_16"
-                      ? "Octavos"
-                      : activeSlotTarget.stage === "quarter"
-                      ? "Cuartos"
-                      : activeSlotTarget.stage === "semi"
-                      ? "Semifinal"
-                      : "Final"
-                  } (Partido #${activeSlotTarget.matchIndex + 1})`
-                : "Seleccionar Pareja"
-            }
-          >
-            <div className="space-y-2">
-              <p className="text-xs text-dark-400 mb-2">
-                Hacé clic sobre una pareja para definirla en este cuadro:
-              </p>
-
-              <div className="max-h-[60vh] overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
-                {(zoneQualifications.qualified.length > 0
-                  ? zoneQualifications.qualified
-                  : couples.map((c, i) => ({
-                      pairId: c.id,
-                      coupleObj: c,
-                      zoneName: "General",
-                      position: i + 1,
-                      isAssigned: matches.some(
-                        (m) => m.stage !== "zone" && (m.couple1_id === c.id || m.couple2_id === c.id)
-                      ),
-                      assignedMatchNumber: matches.find(
-                        (m) => m.stage !== "zone" && (m.couple1_id === c.id || m.couple2_id === c.id)
-                      )?.match_number,
-                    }))
-                ).map((q) => {
-                  const isCurrentInThisSlot =
-                    activeSlotTarget?.slot === 1
-                      ? q.pairId === activeSlotTarget?.match.pair1
-                      : q.pairId === activeSlotTarget?.match.pair2;
-                  const coupleName = q.coupleObj ? getCoupleLastNames(q.coupleObj) : getCoupleLabel(q.coupleObj);
-
-                  return (
-                    <button
-                      key={q.pairId}
-                      type="button"
-                      onClick={() => handleSelectCoupleForSlot(q.pairId)}
-                      className={`w-full p-3 rounded-xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer ${
-                        isCurrentInThisSlot
-                          ? "bg-emerald-500/20 border-emerald-500 text-white font-bold ring-1 ring-emerald-500/40"
-                          : "bg-dark-950/70 border-dark-800 hover:border-emerald-400/80 hover:bg-dark-900 text-white hover:scale-[1.01]"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span
-                          className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${
-                            q.position === 1
-                              ? "bg-amber-400/20 text-amber-300 border border-amber-400/40"
-                              : q.position === 2
-                              ? "bg-slate-300/20 text-slate-200 border border-slate-300/40"
-                              : "bg-amber-700/20 text-amber-400 border border-amber-700/40"
-                          }`}
-                        >
-                          {q.position}°
-                        </span>
-                        <div className="truncate">
-                          <span className="text-xs text-dark-400 mr-1.5 font-bold">{q.zoneName}:</span>
-                          <span className="font-semibold text-sm text-white">{coupleName}</span>
-                        </div>
-                      </div>
-
-                      {q.isAssigned && !isCurrentInThisSlot && (
-                        <span className="text-[10px] text-sky-300 bg-sky-500/15 px-2 py-0.5 rounded border border-sky-500/30 flex-shrink-0">
-                          {q.assignedMatchNumber ? `En M#${q.assignedMatchNumber}` : "Asignada"}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-
-                {/* Opción BYE */}
-                <button
-                  type="button"
-                  onClick={() => handleSelectCoupleForSlot("BYE")}
-                  className="w-full p-3 rounded-xl border border-dashed border-amber-500/40 hover:border-amber-400 bg-amber-500/10 hover:bg-amber-500/20 text-left flex items-center justify-between text-xs text-amber-300 font-bold transition-all cursor-pointer"
-                >
-                  <span>⚡ BYE (Pase directo sin rival)</span>
-                </button>
-
-                {/* Opción Dejar por definir */}
-                <button
-                  type="button"
-                  onClick={() => handleSelectCoupleForSlot("Por definir")}
-                  className="w-full p-2.5 rounded-xl border border-dashed border-dark-800 hover:border-dark-700 text-xs text-dark-400 hover:text-dark-300 text-center transition-all cursor-pointer"
-                >
-                  Dejar como &quot;Por definir&quot;
-                </button>
               </div>
             </div>
           </Modal>

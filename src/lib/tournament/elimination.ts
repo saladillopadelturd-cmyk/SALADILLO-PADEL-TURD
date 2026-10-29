@@ -29,17 +29,6 @@ export interface PlayoffMatchSlot {
   nextMatchIndex?: number;
 }
 
-export interface BracketRoundView {
-  round: string;
-  stage: MatchStage;
-  matches: {
-    pair1: string;
-    pair2: string;
-    winner?: string;
-    score?: string;
-  }[];
-}
-
 /**
  * Devuelve la potencia de 2 mayor o igual a n (4, 8, 16, 32...).
  */
@@ -605,49 +594,6 @@ export function generateSeededPlayoffBracket(
     firstRoundMatches,
     allStages,
   };
-}
-
-/**
- * Función compatible con Bracket.tsx para renderizar visualmente el cuadro.
- */
-export function generateEliminationBracket(
-  qualifiedPairs: { pairId: string; zonePosition: number; zoneName: string }[]
-): { round: string; matches: { pair1: string; pair2: string }[] }[] {
-  const pairsWithStats: QualifiedPair[] = qualifiedPairs.map((p) => ({
-    pairId: p.pairId,
-    zoneName: p.zoneName,
-    zonePosition: p.zonePosition,
-    points: 0,
-    gameDifference: 0,
-  }));
-
-  const bracketData = generateSeededPlayoffBracket(pairsWithStats);
-  const rounds: { round: string; matches: { pair1: string; pair2: string }[] }[] = [];
-
-  let currentMatches = bracketData.firstRoundMatches.map((m) => ({
-    pair1: m.couple1Id,
-    pair2: m.couple2Id,
-  }));
-
-  for (const stage of bracketData.allStages) {
-    if (currentMatches.length === 0) break;
-
-    rounds.push({
-      round: stage,
-      matches: currentMatches,
-    });
-
-    const nextMatches: { pair1: string; pair2: string }[] = [];
-    for (let i = 0; i < currentMatches.length; i += 2) {
-      nextMatches.push({
-        pair1: `Ganador M${i + 1}`,
-        pair2: `Ganador M${i + 2}`,
-      });
-    }
-    currentMatches = nextMatches;
-  }
-
-  return rounds;
 }
 
 /**
