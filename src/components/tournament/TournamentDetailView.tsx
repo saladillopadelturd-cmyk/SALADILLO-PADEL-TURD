@@ -1467,16 +1467,6 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                   En eliminación directa, los cruces de cada fase se conforman automáticamente a medida que las parejas ganan sus partidos.
                 </p>
               </div>
-              {isAdmin && matches.length > 0 && (
-                <Button
-                  size="sm"
-                  onClick={() => setIsAutoScheduleOpen(true)}
-                  className="flex items-center gap-2 font-bold shadow-md bg-gradient-to-r from-emerald-500 to-sky-500 hover:from-emerald-600 hover:to-sky-600 text-dark-950 self-start sm:self-auto"
-                >
-                  <Sparkles className="w-4 h-4 text-dark-950" />
-                  Programador Automático
-                </Button>
-              )}
             </div>
 
             {/* Filtros de Fixture */}

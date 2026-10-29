@@ -1840,33 +1840,12 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                   <div className="flex items-center gap-2 flex-wrap">
                     <Button
                       size="sm"
-                      onClick={() => setIsAutoScheduleOpen(true)}
-                      disabled={isPending || matches.length === 0}
-                      className="flex items-center gap-1.5 font-bold shadow-md bg-gradient-to-r from-emerald-500 to-sky-500 hover:from-emerald-600 hover:to-sky-600 text-dark-950"
+                      onClick={() => setIsManualBracketModalOpen(true)}
+                      disabled={isPending}
+                      className="flex items-center gap-1.5 font-bold bg-emerald-500 hover:bg-emerald-600 text-dark-950 shadow-md shadow-emerald-500/20"
                     >
-                      <Sparkles className="w-4 h-4 text-dark-950" />
-                      Programador Automático
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={handleGenerateZoneMatches}
-                      disabled={isPending || zones.length === 0}
-                      className="flex items-center gap-1.5"
-                      title="Regenerar fixture de zonas respetando el orden oficial (4 partidos en zonas de 4)"
-                    >
-                      <RotateCcw className="w-4 h-4 text-emerald-400" />
-                      Regenerar Fixture de Zonas
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={handleGeneratePlayoffs}
-                      disabled={isPending || zones.length === 0}
-                      className="flex items-center gap-1.5"
-                    >
-                      <Sparkles className="w-4 h-4 text-amber-400" />
-                      Generar Cuadro Playoffs
+                      <Trophy className="w-4 h-4 text-dark-950" />
+                      GENERAR CUADRO DE ELIMINACION DIRECTA
                     </Button>
                   </div>
                 </div>
