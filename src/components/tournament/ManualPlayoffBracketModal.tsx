@@ -12,6 +12,9 @@ import {
   X,
   RefreshCw,
   RotateCcw,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
@@ -62,8 +65,26 @@ export function ManualPlayoffBracketModal({
   const [pairsList, setPairsList] = useState<ManualCoupleEntry[]>([]);
   // Slots anclados y fijos de Ronda 1
   const [r1Slots, setR1Slots] = useState<AnchoredMatchSlot[]>([]);
+  // Nivel de Zoom para explorar el cuadro completo o ver de cerca
+  const [zoomLevel, setZoomLevel] = useState<number>(0.8);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const handleZoomIn = () => {
+    setZoomLevel((prev) => Math.min(1.5, Math.round((prev + 0.15) * 100) / 100));
+  };
+
+  const handleZoomOut = () => {
+    setZoomLevel((prev) => Math.max(0.45, Math.round((prev - 0.15) * 100) / 100));
+  };
+
+  const handleZoomReset = () => {
+    setZoomLevel(1.0);
+  };
+
+  const handleZoomFull = () => {
+    setZoomLevel(0.55);
+  };
 
   // Inicializar parejas clasificadas y slots vacíos
   useEffect(() => {
@@ -466,25 +487,77 @@ export function ManualPlayoffBracketModal({
             </div>
           </div>
 
-          {/* Columna Derecha: Previsualización Gráfica con Llaves Ancladas */}
+          {/* Columna Derecha: Previsualización Gráfica con Llaves Ancladas y Controles de Zoom */}
           <div className="lg:col-span-7 flex flex-col h-full overflow-hidden p-4 space-y-3 bg-dark-950/60">
-            <div className="flex items-center justify-between flex-shrink-0">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 flex-shrink-0">
               <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                 <Trophy className="w-4 h-4 text-amber-400" />
                 Previsualización Gráfica del Cuadro Resultante
               </span>
-              <span className="text-[11px] text-dark-400">
-                Presiona (X) en cualquier pareja para liberarla
-              </span>
+
+              {/* Controles de Zoom (Alejar para ver cuadro completo / Acercar para ver detalle) */}
+              <div className="flex items-center gap-1 bg-dark-900 border border-dark-800 rounded-lg p-1 self-start sm:self-auto shadow-sm">
+                <button
+                  type="button"
+                  onClick={handleZoomOut}
+                  disabled={zoomLevel <= 0.45}
+                  className="p-1 rounded text-dark-400 hover:text-white hover:bg-dark-800 disabled:opacity-25 transition-colors"
+                  title="Alejar (ver más instancias del torneo)"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-[11px] font-mono font-bold text-amber-400 px-1 min-w-[38px] text-center">
+                  {Math.round(zoomLevel * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={handleZoomIn}
+                  disabled={zoomLevel >= 1.5}
+                  className="p-1 rounded text-dark-400 hover:text-white hover:bg-dark-800 disabled:opacity-25 transition-colors"
+                  title="Acercar (ver instancias de cerca)"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+                <div className="w-px h-3.5 bg-dark-800 mx-0.5" />
+                <button
+                  type="button"
+                  onClick={handleZoomFull}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                    zoomLevel <= 0.6
+                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                      : "text-dark-400 hover:text-white hover:bg-dark-800"
+                  }`}
+                  title="Ver cuadro completo del torneo de un solo vistazo"
+                >
+                  Cuadro Completo
+                </button>
+                <button
+                  type="button"
+                  onClick={handleZoomReset}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                    zoomLevel === 1.0
+                      ? "bg-sky-500/20 text-sky-300 border border-sky-500/30"
+                      : "text-dark-400 hover:text-white hover:bg-dark-800"
+                  }`}
+                  title="Restablecer tamaño normal (100%)"
+                >
+                  100%
+                </button>
+              </div>
             </div>
 
-            <div className="flex-1 overflow-x-auto overflow-y-auto border border-dark-800 rounded-xl bg-dark-900/40 p-4">
+            <div className="flex-1 overflow-x-auto overflow-y-auto border border-dark-800 rounded-xl bg-dark-900/40 p-4 relative">
               {!bracketResult || bracketResult.previewRounds.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-dark-500 text-xs">
                   Cargando estructura del cuadro...
                 </div>
               ) : (
-                <div className="inline-flex gap-6 min-w-full items-stretch py-2">
+                <div
+                  className="inline-flex gap-6 min-w-full items-stretch py-2 origin-top-left transition-all duration-150"
+                  style={{
+                    zoom: zoomLevel,
+                  }}
+                >
                   {bracketResult.previewRounds.map((roundGroup) => {
                     return (
                       <div
