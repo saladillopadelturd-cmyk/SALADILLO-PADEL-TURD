@@ -1,5 +1,6 @@
 import type { Match } from "@/types/tournament";
 import { parseCategoryLevel, isSumaCategory } from "./couples";
+import { calculateRoundRobinStandings, getQualifiedPairs } from "./standings";
 
 /**
  * Estructura de distribución porcentual oficial de puntos según la ronda final
@@ -123,7 +124,11 @@ export interface IndividualRankingRecord {
 export function calculateTournamentStageStats(
   matches: Match[],
   couples: { id: string; player1_id: string; player2_id: string }[],
-  pointsAwarded: number = 1000
+  pointsAwarded: number = 1000,
+  options?: {
+    qualifiedCoupleIds?: Iterable<string>;
+    seededToR16CoupleIds?: Iterable<string>;
+  }
 ): Record<string, CoupleTournamentStats> {
   const statsMap: Record<string, CoupleTournamentStats> = {};
   const P = pointsAwarded > 0 ? pointsAwarded : 1000;
@@ -156,7 +161,13 @@ export function calculateTournamentStageStats(
     zoneWinsMap[c.id] = 0;
   });
 
-  // 1. Identificar si hay partidos de playoffs y qué parejas ingresaron al cuadro principal
+  // 1. Identificar si hay parejas clasificadas a eliminación directa (playoffs)
+  if (options?.qualifiedCoupleIds) {
+    for (const qId of options.qualifiedCoupleIds) {
+      if (statsMap[qId]) qualifiedToPlayoffs.add(qId);
+    }
+  }
+
   matches.forEach((m) => {
     const isPlayoffStage =
       m.stage !== "zone" &&
@@ -168,6 +179,30 @@ export function calculateTournamentStageStats(
       const c2 = m.couple2_id || m.pair2_id;
       if (c1 && statsMap[c1]) qualifiedToPlayoffs.add(c1);
       if (c2 && statsMap[c2]) qualifiedToPlayoffs.add(c2);
+    }
+  });
+
+  // Piso garantizado para las parejas clasificadas a eliminación directa:
+  // "Parejas clasificadas a eliminación directa: abandonan puntaje de zona y adoptan el puntaje de la ronda que alcancen (mínimo asegurado: la primera ronda del cuadro eliminatorio)."
+  const seededR16Set = new Set(options?.seededToR16CoupleIds || []);
+  const hasR32Matches = matches.some((m) => m.stage === "round_of_32" || (m as any).round === "dieciseisavos");
+  const isLargeDraw = qualifiedToPlayoffs.size > 16 || hasR32Matches;
+
+  qualifiedToPlayoffs.forEach((cId) => {
+    if (!statsMap[cId]) return;
+    const isSeeded = seededR16Set.has(cId);
+    if (!isLargeDraw || isSeeded) {
+      if (statsMap[cId].pointsEarned < ptsR16) {
+        statsMap[cId].highestStage = "round_of_16";
+        statsMap[cId].pointsEarned = ptsR16;
+        statsMap[cId].finalPosition = 9;
+      }
+    } else {
+      if (statsMap[cId].pointsEarned < ptsR32) {
+        statsMap[cId].highestStage = "round_of_32";
+        statsMap[cId].pointsEarned = ptsR32;
+        statsMap[cId].finalPosition = 17;
+      }
     }
   });
 
@@ -502,8 +537,67 @@ export async function syncAllTournamentsRankings(supabase: any) {
         .eq("id", tour.id);
     }
 
+    // Resolver parejas clasificadas a eliminación directa (playoffs)
+    const qualifiedCoupleIds = new Set<string>();
+    const seededToR16CoupleIds = new Set<string>();
+
+    // 1) Parejas en partidos de playoffs existentes en la base de datos
+    matches.forEach((m: any) => {
+      const isPlayoffStage =
+        m.stage !== "zone" &&
+        m.stage !== "third_place" &&
+        m.round !== "tercer_puesto";
+      if (isPlayoffStage) {
+        const c1 = m.couple1_id || m.pair1_id;
+        const c2 = m.couple2_id || m.pair2_id;
+        if (c1) qualifiedCoupleIds.add(c1);
+        if (c2) qualifiedCoupleIds.add(c2);
+        if (m.stage === "round_of_16" || m.round === "octavos") {
+          if (c1) seededToR16CoupleIds.add(c1);
+          if (c2) seededToR16CoupleIds.add(c2);
+        }
+      }
+    });
+
+    // 2) Resolver parejas clasificadas de zonas si la fase de grupos se disputó
+    try {
+      const [{ data: zonesData }, { data: zcData }] = await Promise.all([
+        supabase.from("zones").select("*").eq("tournament_id", tour.id).order("zone_number", { ascending: true }),
+        supabase.from("zone_couples").select("zone_id, couple_id"),
+      ]);
+
+      if (zonesData && zonesData.length > 0) {
+        const zoneCouplesMap = new Map<string, string[]>();
+        (zcData || []).forEach((zc: any) => {
+          const list = zoneCouplesMap.get(zc.zone_id) || [];
+          list.push(zc.couple_id);
+          zoneCouplesMap.set(zc.zone_id, list);
+        });
+
+        for (const zone of zonesData) {
+          let pairIds = zoneCouplesMap.get(zone.id) || [];
+          if (pairIds.length === 0) {
+            pairIds = couples.filter((c: any) => c.zone_id === zone.id).map((c: any) => c.id);
+          }
+          if (pairIds.length === 0) continue;
+          const matchesThisZone = matches.filter((m: any) => m.zone_id === zone.id);
+          const standings = calculateRoundRobinStandings(matchesThisZone, pairIds);
+          const qualified = getQualifiedPairs(standings);
+          qualified.forEach((q: any) => {
+            const qId = q.couple_id || q.pair_id;
+            if (qId) qualifiedCoupleIds.add(qId);
+          });
+        }
+      }
+    } catch (zoneErr) {
+      console.warn("Aviso resolviendo clasificados de zonas para rankings:", zoneErr);
+    }
+
     const tournamentPoints = tour.points_awarded || 1000;
-    const statsMap = calculateTournamentStageStats(matches, couples, tournamentPoints);
+    const statsMap = calculateTournamentStageStats(matches, couples, tournamentPoints, {
+      qualifiedCoupleIds,
+      seededToR16CoupleIds,
+    });
 
     for (const couple of couples) {
       const stats = statsMap[couple.id];
@@ -580,6 +674,14 @@ export async function syncAllTournamentsRankings(supabase: any) {
   }
 
   // 4. Persistir registros consolidados en la tabla rankings de Supabase mediante upsert atómico
+  let dbClient = supabase;
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    dbClient = createAdminClient();
+  } catch {
+    // Si no está disponible en este entorno, usar el cliente proporcionado
+  }
+
   try {
     const coupleRows = Array.from(coupleRankingsMap.values()).map((r) => ({
       ...r,
@@ -587,7 +689,7 @@ export async function syncAllTournamentsRankings(supabase: any) {
     }));
     if (coupleRows.length > 0) {
       for (let i = 0; i < coupleRows.length; i += 100) {
-        await supabase
+        await dbClient
           .from("rankings")
           .upsert(coupleRows.slice(i, i + 100), { onConflict: "ranking_type,couple_key,category" });
       }
@@ -599,7 +701,7 @@ export async function syncAllTournamentsRankings(supabase: any) {
     }));
     if (indivRows.length > 0) {
       for (let i = 0; i < indivRows.length; i += 100) {
-        await supabase
+        await dbClient
           .from("rankings")
           .upsert(indivRows.slice(i, i + 100), { onConflict: "ranking_type,player_id,category" });
       }
@@ -608,7 +710,7 @@ export async function syncAllTournamentsRankings(supabase: any) {
     console.warn("Aviso al persistir en rankings (fallback a update/insert):", err);
 
     for (const coupleRec of coupleRankingsMap.values()) {
-      const { data: existing } = await supabase
+      const { data: existing } = await dbClient
         .from("rankings")
         .select("id")
         .eq("ranking_type", "couple")
@@ -616,7 +718,7 @@ export async function syncAllTournamentsRankings(supabase: any) {
         .maybeSingle();
 
       if (existing) {
-        await supabase
+        await dbClient
           .from("rankings")
           .update({
             category: coupleRec.category,
@@ -628,7 +730,7 @@ export async function syncAllTournamentsRankings(supabase: any) {
           })
           .eq("id", existing.id);
       } else {
-        await supabase.from("rankings").insert({
+        await dbClient.from("rankings").insert({
           ...coupleRec,
           updated_at: new Date().toISOString(),
         });
@@ -636,7 +738,7 @@ export async function syncAllTournamentsRankings(supabase: any) {
     }
 
     for (const indivRec of individualRankingsMap.values()) {
-      const { data: existing } = await supabase
+      const { data: existing } = await dbClient
         .from("rankings")
         .select("id")
         .eq("ranking_type", "individual")
@@ -644,7 +746,7 @@ export async function syncAllTournamentsRankings(supabase: any) {
         .maybeSingle();
 
       if (existing) {
-        await supabase
+        await dbClient
           .from("rankings")
           .update({
             category: indivRec.category,
@@ -656,7 +758,7 @@ export async function syncAllTournamentsRankings(supabase: any) {
           })
           .eq("id", existing.id);
       } else {
-        await supabase.from("rankings").insert({
+        await dbClient.from("rankings").insert({
           ...indivRec,
           updated_at: new Date().toISOString(),
         });

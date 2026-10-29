@@ -84,10 +84,11 @@ export default async function RankingsPage({
   }
 
   try {
-    // 1. Sincronizar únicamente si la tabla rankings está vacía (p.ej. arranque inicial del sistema)
-    const { count: rankCount } = await supabase.from("rankings").select("*", { count: "exact", head: true });
-    if (!rankCount || rankCount === 0) {
+    // 1. Sincronizar rankings oficiales acumulados en tiempo real (torneos en curso y finalizados)
+    try {
       await syncAllTournamentsRankings(supabase);
+    } catch (syncErr) {
+      console.warn("Aviso en sincronización en vivo de rankings:", syncErr);
     }
 
     // 2. Traer jugadores y fotografías de perfil para resolución completa

@@ -226,11 +226,11 @@ export async function POST(request: Request) {
 
   const { tournamentId, recalculate = false, syncAll = false } = body;
 
-  if (syncAll || !tournamentId) {
+  if (syncAll || !tournamentId || recalculate) {
     const syncRes = await syncAllTournamentsRankings(supabase);
     return NextResponse.json({
       success: true,
-      message: "Rankings globales de todos los torneos sincronizados exitosamente",
+      message: "Rankings oficiales sincronizados exitosamente en tiempo real",
       result: syncRes,
     });
   }
@@ -246,7 +246,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 });
   }
 
-  // 2. Verificar que la final esté completada
+  // Si el torneo está en curso o aún no tiene final, sincronizar de inmediato sus puntos de zona/playoffs
   const { data: finalMatches } = await supabase
     .from("matches")
     .select("*")
@@ -255,10 +255,12 @@ export async function POST(request: Request) {
     .eq("status", "completed");
 
   if (!finalMatches || finalMatches.length === 0) {
-    return NextResponse.json(
-      { error: "El torneo aún no tiene un partido final completado para liquidar rankings" },
-      { status: 400 }
-    );
+    const syncRes = await syncAllTournamentsRankings(supabase);
+    return NextResponse.json({
+      success: true,
+      message: "Puntos del torneo en curso actualizados en tiempo real en los rankings oficiales",
+      result: syncRes,
+    });
   }
 
   const finalMatch = finalMatches[0];
