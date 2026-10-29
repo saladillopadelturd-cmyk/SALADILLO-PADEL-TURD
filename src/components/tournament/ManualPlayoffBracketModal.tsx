@@ -73,6 +73,43 @@ export function ManualPlayoffBracketModal({
   const [zoomLevel, setZoomLevel] = useState<number>(0.8);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+  const isInitializedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      isInitializedRef.current = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      isInitializedRef.current = true;
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [isOpen]);
+
+  // En cada cambio que se haga en el cuadro (sembrar, jugar, reordenar, eliminar con X), se guarda su estado actual
+  useEffect(() => {
+    if (!isOpen || !tournamentId || pairsList.length === 0 || !isInitializedRef.current) return;
+
+    try {
+      if (typeof window !== "undefined") {
+        const payload = {
+          slots: r1Slots,
+          pairs: pairsList,
+          timestamp: Date.now(),
+        };
+        localStorage.setItem(`spt_manual_bracket_${tournamentId}`, JSON.stringify(payload));
+        const now = new Date();
+        const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now
+          .getMinutes()
+          .toString()
+          .padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")}`;
+        setLastSavedTime(timeStr);
+      }
+    } catch (err) {
+      console.warn("No se pudo auto-guardar el estado actual del cuadro", err);
+    }
+  }, [r1Slots, pairsList, isOpen, tournamentId]);
 
   const handleZoomIn = () => {
     setZoomLevel((prev) => Math.min(1.5, Math.round((prev + 0.15) * 100) / 100));
@@ -519,9 +556,17 @@ export function ManualPlayoffBracketModal({
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 Generador Manual de Cuadro de Eliminación Directa
               </h2>
-              <p className="text-xs text-dark-400">
-                Las llaves se van completando de arriba hacia abajo. Marca &apos;Sembrar&apos; para 8vos o &apos;Jugar&apos; para disputar 16vos.
-              </p>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                <p className="text-xs text-dark-400">
+                  Las llaves se van completando de arriba hacia abajo. Marca &apos;Sembrar&apos; para 8vos o &apos;Jugar&apos; para disputar 16vos.
+                </p>
+                {lastSavedTime && (
+                  <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                    Estado guardado ({lastSavedTime})
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           <button
@@ -958,11 +1003,16 @@ export function ManualPlayoffBracketModal({
 
         {/* Barra de Acciones Inferior */}
         <div className="px-6 py-4 bg-dark-900 border-t border-dark-800 flex items-center justify-between flex-shrink-0 gap-3">
-          <div className="text-xs text-dark-400 flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          <div className="text-xs text-dark-400 flex items-center gap-2 flex-wrap">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
             <span>
               {assignedCount} de {pairsList.length} parejas asignadas ({bracketResult?.matchesToInsert.length ?? 0} cruces conformados).
             </span>
+            {lastSavedTime && (
+              <span className="text-[11px] text-emerald-400 font-mono">
+                • Cambios guardados ({lastSavedTime})
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2">

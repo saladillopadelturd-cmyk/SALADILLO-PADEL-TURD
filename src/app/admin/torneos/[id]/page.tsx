@@ -595,6 +595,14 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Error al vaciar cuadro");
 
+        try {
+          if (typeof window !== "undefined") {
+            localStorage.removeItem(`spt_manual_bracket_${tournamentId}`);
+          }
+        } catch (e) {
+          console.warn("Error limpiando almacenamiento de cuadro manual", e);
+        }
+
         setIsClearPlayoffsModalOpen(false);
         await loadData();
         setNotification({ type: "success", text: "Cuadro de eliminación vaciado exitosamente." });
