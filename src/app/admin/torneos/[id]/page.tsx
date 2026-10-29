@@ -2155,23 +2155,12 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                     <Button
                       variant="primary"
                       size="sm"
-                      onClick={openCreatePlayoffMatchModal}
+                      onClick={() => setIsManualBracketModalOpen(true)}
                       disabled={isPending}
-                      className="flex items-center gap-1.5 font-bold bg-emerald-500 hover:bg-emerald-600 text-dark-950 shadow-md"
+                      className="flex items-center gap-1.5 font-bold bg-emerald-500 hover:bg-emerald-600 text-dark-950 shadow-md shadow-emerald-500/20"
                     >
-                      <Plus className="w-4 h-4 text-dark-950" />
-                      Armar Partido
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={handleLoadFAPSuggestion}
-                      disabled={isPending || zoneQualifications.qualified.length < 2}
-                      title="Carga la plantilla oficial FAP de acuerdo a la cantidad de parejas del torneo como base editable"
-                      className="flex items-center gap-1.5 text-xs border-dark-700 hover:border-amber-400/50"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                      Sugerir Cruces FAP
+                      <Trophy className="w-4 h-4 text-dark-950" />
+                      GENERAR CUADRO DE ELIMINACION DIRECTA
                     </Button>
                     {matches.filter((m) => m.stage !== "zone").length > 0 && (
                       <Button
@@ -2304,42 +2293,6 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                   )}
                 </div>
 
-                {/* Gestión de Partidos de Eliminación */}
-                <div className="flex items-center justify-between mb-4 flex-wrap gap-2 bg-dark-900/60 p-4 rounded-xl border border-dark-800">
-                  <div>
-                    <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                      <Trophy className="w-4 h-4 text-amber-400" />
-                      Partidos de Eliminación Directa ({matches.filter((m) => m.stage !== "zone").length})
-                    </h4>
-                    <p className="text-xs text-dark-400 mt-0.5">
-                      Configura el cuadro de arriba hacia abajo asignando si cada pareja juega o se siembra a la próxima ronda.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => setIsManualBracketModalOpen(true)}
-                      disabled={isPending}
-                      className="bg-emerald-500 hover:bg-emerald-600 text-dark-950 font-bold text-xs shadow-md shadow-emerald-500/20"
-                    >
-                      <Trophy className="w-3.5 h-3.5 mr-1.5" />
-                      GENERAR CUADRO DE ELIMINACION DIRECTA
-                    </Button>
-                    {matches.filter((m) => m.stage !== "zone").length > 0 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setIsClearPlayoffsModalOpen(true)}
-                        disabled={isPending}
-                        className="text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 mr-1" />
-                        Vaciar Cuadro
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
                 {/* Visor Gráfico Oficial de Llaves de Arriba hacia Abajo */}
                 {matches.filter((m) => m.stage !== "zone").length > 0 && (
                   <div className="mb-6">
@@ -2364,15 +2317,6 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                         <Calendar className="w-4 h-4 text-sky-400" />
                         Partidos de Eliminación Conformados ({matches.filter((m) => m.stage !== "zone").length})
                       </h4>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={openCreatePlayoffMatchModal}
-                        className="text-xs text-emerald-400 hover:text-emerald-300"
-                      >
-                        <Plus className="w-3.5 h-3.5 mr-1" />
-                        Agregar otro partido
-                      </Button>
                     </div>
 
                     <div className="grid grid-cols-1 gap-3">
