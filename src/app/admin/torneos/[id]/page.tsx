@@ -974,6 +974,9 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     if (!scoringMatch) return;
     startTransition(async () => {
       try {
+        const previousWinnerId = scoringMatch.winner_couple_id;
+
+        // 1. Resetear el marcador del partido a programado/pendiente
         const { error } = await supabase
           .from("matches")
           .update({
@@ -988,11 +991,115 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
 
         if (error) throw error;
 
+        // 2. Si el partido era de Playoffs, hacer retroceder a la pareja ganadora de la siguiente instancia
+        let nextTargetMatchId: string | null = null;
+        let nextTargetSlotField: "couple1_id" | "couple2_id" | null = null;
+
+        if (scoringMatch.stage !== "zone" && previousWinnerId) {
+          const nextSlot = findNextPlayoffMatchSlot(matches, scoringMatch);
+          if (nextSlot) {
+            nextTargetMatchId = nextSlot.targetMatchId;
+            nextTargetSlotField = nextSlot.slotField;
+            const targetMatch = matches.find((m) => m.id === nextSlot.targetMatchId);
+
+            const resetPayload: Record<string, unknown> = {
+              [nextSlot.slotField]: null,
+              updated_at: new Date().toISOString(),
+            };
+
+            // Si en el cruce siguiente ya figuraba como ganador o jugado, resetear en cascada
+            if (targetMatch && targetMatch.winner_couple_id === previousWinnerId) {
+              resetPayload.winner_couple_id = null;
+              resetPayload.status = "pending";
+              resetPayload.score_set1 = null;
+              resetPayload.score_set2 = null;
+              resetPayload.score_super_tb = null;
+            }
+
+            await supabase
+              .from("matches")
+              .update(resetPayload)
+              .eq("id", nextSlot.targetMatchId);
+          }
+        }
+
+        // 3. Si era zona de 4 parejas, propagar el reseteo
+        if (scoringMatch.stage === "zone" && scoringMatch.zone_id) {
+          const simulatedMatches = matches.map((m) =>
+            m.id === scoringMatch.id
+              ? {
+                  ...m,
+                  score_set1: null,
+                  score_set2: null,
+                  score_super_tb: null,
+                  winner_couple_id: null,
+                  status: "scheduled" as const,
+                }
+              : m
+          );
+          const { updatesToPersist: zoneUpdates } = propagateZoneMatches(simulatedMatches);
+          for (const upd of zoneUpdates) {
+            const p: Record<string, unknown> = { updated_at: new Date().toISOString() };
+            if (upd.couple1_id !== undefined) p.couple1_id = upd.couple1_id;
+            if (upd.couple2_id !== undefined) p.couple2_id = upd.couple2_id;
+            if (upd.resetScore) {
+              p.winner_couple_id = null;
+              p.status = "pending";
+              p.score_set1 = null;
+              p.score_set2 = null;
+              p.score_super_tb = null;
+            }
+            await supabase.from("matches").update(p).eq("id", upd.matchId);
+          }
+        }
+
+        // 4. Actualización optimista inmediata en memoria
+        setMatches((prev) => {
+          let updated = prev.map((m) =>
+            m.id === scoringMatch.id
+              ? {
+                  ...m,
+                  score_set1: null,
+                  score_set2: null,
+                  score_super_tb: null,
+                  winner_couple_id: null,
+                  status: "scheduled" as const,
+                }
+              : m
+          );
+          if (nextTargetMatchId && nextTargetSlotField) {
+            updated = updated.map((m) =>
+              m.id === nextTargetMatchId
+                ? {
+                    ...m,
+                    [nextTargetSlotField!]: null,
+                  }
+                : m
+            );
+          }
+          return updated;
+        });
+
+        // 5. Descontar inmediatamente los puntos sumados en el ranking de jugadores
+        let rankRecalculated = false;
+        try {
+          const rankRes = await fetch("/api/rankings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tournamentId, recalculate: true }),
+          });
+          if (rankRes.ok) rankRecalculated = true;
+        } catch (rankErr) {
+          console.warn("Error recalculando rankings tras eliminar resultado:", rankErr);
+        }
+
         await loadData();
         setScoringMatch(null);
         setNotification({
           type: "success",
-          text: "El partido fue restablecido a Programado y el marcador fue puesto en cero.",
+          text: rankRecalculated
+            ? "Resultado eliminado: la pareja retrocedió a la instancia anterior y los puntos sumados fueron descontados del ranking de jugadores."
+            : "Resultado eliminado y pareja retrocedida a la instancia anterior con éxito.",
         });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Error al restablecer el partido";
