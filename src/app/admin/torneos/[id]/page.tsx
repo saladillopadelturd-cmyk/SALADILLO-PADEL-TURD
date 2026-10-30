@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect, useCallback, useMemo, useTransition, Suspense } from "react";
+import { use, useState, useEffect, useCallback, useMemo, useTransition, Suspense, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Card from "@/components/ui/Card";
@@ -110,6 +110,21 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
   const [isManualBracketModalOpen, setIsManualBracketModalOpen] = useState(false);
 
   const supabase = createClient();
+
+  const isZonePhaseCompleted = useMemo(() => {
+    const zoneMatches = matches.filter((m) => m.stage === "zone");
+    return zoneMatches.length > 0 && zoneMatches.every((m) => m.status === "completed");
+  }, [matches]);
+
+  const hasAutoSwitchedTab = useRef(false);
+
+  // Cuando la fase de zonas concluye y el admin entra a la pagina sin tab en URL, mostrar cuadro primero
+  useEffect(() => {
+    if (!searchParams.get("tab") && !hasAutoSwitchedTab.current && isZonePhaseCompleted) {
+      hasAutoSwitchedTab.current = true;
+      setActiveTab("playoffs");
+    }
+  }, [isZonePhaseCompleted, searchParams]);
 
   // Sync tab with URL parameter when parameter changes
   useEffect(() => {
@@ -1975,121 +1990,34 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                   </div>
                 </div>
 
-                {/* Panel de Parejas Clasificadas y Eliminadas por Zona */}
-                <div className="bg-dark-900/60 p-5 rounded-2xl border border-dark-800 space-y-4">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div>
-                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                        <Users className="w-4 h-4 text-emerald-400" />
-                        Parejas Clasificadas al Cuadro ({zoneQualifications.qualified.length} parejas)
-                      </h4>
-                      <p className="text-xs text-dark-400 mt-0.5">
-                        Estado de disponibilidad para conformar los partidos de eliminación directa
-                      </p>
+                {matches.filter((m) => m.stage !== "zone").length === 0 && (
+                  <div className="p-8 bg-dark-900/60 rounded-2xl border border-dark-800 text-center space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto text-amber-400">
+                      <Trophy className="w-6 h-6" />
                     </div>
-                    <div className="flex items-center gap-3 text-xs">
-                      <span className="flex items-center gap-1.5 text-emerald-400">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                        Clasificada ({zoneQualifications.qualified.length})
-                      </span>
-                      <span className="flex items-center gap-1.5 text-rose-400">
-                        <span className="w-2 h-2 rounded-full bg-rose-400" />
-                        Eliminada ({zoneQualifications.eliminated.length})
-                      </span>
+                    <h4 className="text-white font-bold text-base">
+                      {isZonePhaseCompleted
+                        ? "¡Fase de zonas completada! Cuadro principal listo para conformar"
+                        : "Aún no se han conformado los cruces del cuadro principal"}
+                    </h4>
+                    <p className="text-xs text-dark-300 max-w-md mx-auto">
+                      {isZonePhaseCompleted
+                        ? "Todos los partidos de zona están finalizados. Haz clic en 'GENERAR CUADRO DE ELIMINACION DIRECTA' para conformar las llaves oficiales."
+                        : "Al concluir la fase de zonas, podrás diagramar y conformar las llaves de octavos, cuartos, semis y final."}
+                    </p>
+                    <div className="pt-2">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => setIsManualBracketModalOpen(true)}
+                        className="bg-emerald-500 hover:bg-emerald-600 text-dark-950 font-black shadow-md inline-flex items-center gap-2"
+                      >
+                        <Trophy className="w-4 h-4" />
+                        <span>Generar Cuadro de Eliminación Directa</span>
+                      </Button>
                     </div>
                   </div>
-
-                  {zones.length === 0 ? (
-                    <p className="text-xs text-dark-400 italic">No hay zonas configuradas en este torneo.</p>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {zones.map((zone) => {
-                        const zoneQualified = zoneQualifications.qualified.filter((q) => q.zoneId === zone.id);
-                        const zoneElim = zoneQualifications.eliminated.find((e) => e.zoneId === zone.id);
-                        const totalInZone = zoneQualified.length + (zoneElim ? 1 : 0);
-
-                        return (
-                          <div
-                            key={zone.id}
-                            className="p-3.5 bg-dark-950/80 rounded-xl border border-dark-800 space-y-2.5 text-xs"
-                          >
-                            <div className="flex items-center justify-between pb-2 border-b border-dark-800/80">
-                              <span className="font-bold text-white flex items-center gap-1.5">
-                                <Badge variant="default" size="xs">
-                                  {zone.name}
-                                </Badge>
-                                <span className="text-[11px] text-dark-400">({totalInZone} parejas)</span>
-                              </span>
-                              <span className="text-[10px] text-emerald-400/90 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                                Clasifican {totalInZone === 4 ? 3 : 2}
-                              </span>
-                            </div>
-
-                            {/* Lista de Clasificadas de esta Zona */}
-                            <div className="space-y-1.5">
-                              {zoneQualified.map((q) => {
-                                const coupleLabel = getCoupleLabel(q.coupleObj);
-                                return (
-                                  <div
-                                    key={q.pairId}
-                                    className={`p-2 rounded-lg border flex items-center justify-between gap-2 transition-colors ${
-                                      q.isAssigned
-                                        ? "bg-sky-500/5 border-sky-500/30 text-sky-200"
-                                        : "bg-dark-900/90 border-emerald-500/30 text-white"
-                                    }`}
-                                  >
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <span
-                                        className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] flex-shrink-0 ${
-                                          q.position === 1
-                                            ? "bg-amber-400/20 text-amber-300 border border-amber-400/40"
-                                            : q.position === 2
-                                            ? "bg-slate-300/20 text-slate-200 border border-slate-300/40"
-                                            : "bg-amber-700/20 text-amber-400 border border-amber-700/40"
-                                        }`}
-                                      >
-                                        {q.position}°
-                                      </span>
-                                      <span className="truncate font-medium">{coupleLabel}</span>
-                                    </div>
-                                    <span
-                                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-md flex-shrink-0 ${
-                                        q.isAssigned
-                                          ? "bg-sky-500/15 text-sky-300 border border-sky-500/30"
-                                          : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
-                                      }`}
-                                    >
-                                      {q.isAssigned
-                                        ? `En M#${q.assignedMatchNumber ?? ""}`
-                                        : "Disponible"}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-
-                              {/* Pareja Eliminada de esta Zona */}
-                              {zoneElim && (
-                                <div className="p-2 rounded-lg border border-rose-500/20 bg-rose-500/5 flex items-center justify-between gap-2 text-rose-300/80">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <span className="w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] flex-shrink-0 bg-rose-500/20 text-rose-400 border border-rose-500/40">
-                                      {zoneElim.position}°
-                                    </span>
-                                    <span className="truncate line-through opacity-75">
-                                      {getCoupleLabel(zoneElim.coupleObj)}
-                                    </span>
-                                  </div>
-                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-400 border border-rose-500/30 flex-shrink-0">
-                                    Eliminada
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                )}
 
                 {/* Visor Gráfico Oficial de Llaves de Arriba hacia Abajo */}
                 {matches.filter((m) => m.stage !== "zone").length > 0 && (
@@ -2223,6 +2151,123 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                     </div>
                   </div>
                 )}
+
+                {/* Zonas y Clasificación a Cuadro (Debajo del Cuadro Principal) */}
+                {/* Panel de Parejas Clasificadas y Eliminadas por Zona */}
+                <div className="bg-dark-900/60 p-5 rounded-2xl border border-dark-800 space-y-4">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        <Users className="w-4 h-4 text-emerald-400" />
+                        Parejas Clasificadas al Cuadro ({zoneQualifications.qualified.length} parejas)
+                      </h4>
+                      <p className="text-xs text-dark-400 mt-0.5">
+                        Estado de disponibilidad para conformar los partidos de eliminación directa
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="flex items-center gap-1.5 text-emerald-400">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                        Clasificada ({zoneQualifications.qualified.length})
+                      </span>
+                      <span className="flex items-center gap-1.5 text-rose-400">
+                        <span className="w-2 h-2 rounded-full bg-rose-400" />
+                        Eliminada ({zoneQualifications.eliminated.length})
+                      </span>
+                    </div>
+                  </div>
+
+                  {zones.length === 0 ? (
+                    <p className="text-xs text-dark-400 italic">No hay zonas configuradas en este torneo.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {zones.map((zone) => {
+                        const zoneQualified = zoneQualifications.qualified.filter((q) => q.zoneId === zone.id);
+                        const zoneElim = zoneQualifications.eliminated.find((e) => e.zoneId === zone.id);
+                        const totalInZone = zoneQualified.length + (zoneElim ? 1 : 0);
+
+                        return (
+                          <div
+                            key={zone.id}
+                            className="p-3.5 bg-dark-950/80 rounded-xl border border-dark-800 space-y-2.5 text-xs"
+                          >
+                            <div className="flex items-center justify-between pb-2 border-b border-dark-800/80">
+                              <span className="font-bold text-white flex items-center gap-1.5">
+                                <Badge variant="default" size="xs">
+                                  {zone.name}
+                                </Badge>
+                                <span className="text-[11px] text-dark-400">({totalInZone} parejas)</span>
+                              </span>
+                              <span className="text-[10px] text-emerald-400/90 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                                Clasifican {totalInZone === 4 ? 3 : 2}
+                              </span>
+                            </div>
+
+                            {/* Lista de Clasificadas de esta Zona */}
+                            <div className="space-y-1.5">
+                              {zoneQualified.map((q) => {
+                                const coupleLabel = getCoupleLabel(q.coupleObj);
+                                return (
+                                  <div
+                                    key={q.pairId}
+                                    className={`p-2 rounded-lg border flex items-center justify-between gap-2 transition-colors ${
+                                      q.isAssigned
+                                        ? "bg-sky-500/5 border-sky-500/30 text-sky-200"
+                                        : "bg-dark-900/90 border-emerald-500/30 text-white"
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span
+                                        className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] flex-shrink-0 ${
+                                          q.position === 1
+                                            ? "bg-amber-400/20 text-amber-300 border border-amber-400/40"
+                                            : q.position === 2
+                                            ? "bg-slate-300/20 text-slate-200 border border-slate-300/40"
+                                            : "bg-amber-700/20 text-amber-400 border border-amber-700/40"
+                                        }`}
+                                      >
+                                        {q.position}°
+                                      </span>
+                                      <span className="truncate font-medium">{coupleLabel}</span>
+                                    </div>
+                                    <span
+                                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-md flex-shrink-0 ${
+                                        q.isAssigned
+                                          ? "bg-sky-500/15 text-sky-300 border border-sky-500/30"
+                                          : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                                      }`}
+                                    >
+                                      {q.isAssigned
+                                        ? `En M#${q.assignedMatchNumber ?? ""}`
+                                        : "Disponible"}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+
+                              {/* Pareja Eliminada de esta Zona */}
+                              {zoneElim && (
+                                <div className="p-2 rounded-lg border border-rose-500/20 bg-rose-500/5 flex items-center justify-between gap-2 text-rose-300/80">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] flex-shrink-0 bg-rose-500/20 text-rose-400 border border-rose-500/40">
+                                      {zoneElim.position}°
+                                    </span>
+                                    <span className="truncate line-through opacity-75">
+                                      {getCoupleLabel(zoneElim.coupleObj)}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-400 border border-rose-500/30 flex-shrink-0">
+                                    Eliminada
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             </TabsContent>
 

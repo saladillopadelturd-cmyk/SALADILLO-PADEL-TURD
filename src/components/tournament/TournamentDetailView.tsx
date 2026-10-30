@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -826,6 +826,20 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
 
     return { allQualifiedPairs: qualified, hasPlayoffMatchesInDb: hasPlayoffs };
   }, [matches, zones, zoneCouplesMap, couples, displayMatches]);
+
+  const isZonePhaseCompleted = useMemo(() => {
+    const zoneMatches = matches.filter((m) => m.stage === "zone");
+    return zoneMatches.length > 0 && zoneMatches.every((m) => m.status === "completed");
+  }, [matches]);
+
+  const hasAutoSwitchedTab = useRef(false);
+
+  useEffect(() => {
+    if (!initialTab && !hasAutoSwitchedTab.current && (isZonePhaseCompleted || hasPlayoffMatchesInDb)) {
+      hasAutoSwitchedTab.current = true;
+      setActiveTab("playoffs");
+    }
+  }, [initialTab, isZonePhaseCompleted, hasPlayoffMatchesInDb]);
 
   if (loading) {
     return (
@@ -1789,6 +1803,120 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                     </div>
                   );
                 })}
+                </div>
+              </div>
+            )}
+            {/* Zonas y Clasificación a Cuadro (Debajo del Cuadro Principal) */}
+            {zones.length > 0 && (
+              <div className="space-y-4 pt-6 border-t border-dark-800">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <h3 className="text-base font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      <Trophy className="w-4 h-4 text-emerald-400" />
+                      Fase de Zonas - Tablas de Posiciones y Clasificados
+                    </h3>
+                    <p className="text-xs text-dark-400 mt-0.5">
+                      Rendimiento de las parejas en la fase de grupos previa al cuadro principal
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {zones.map((zone) => {
+                    const zoneCoupleIds = zoneCouplesMap[zone.id] ?? [];
+                    const zoneMatches = matches.filter((m) => m.zone_id === zone.id);
+                    const standings = calculateRoundRobinStandings(zoneMatches, zoneCoupleIds);
+                    return (
+                      <Card key={zone.id} className="overflow-hidden border border-dark-700/80 shadow-xl bg-dark-900/90">
+                        <div className="px-5 py-3.5 bg-dark-950 border-b border-dark-800 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-md bg-blue-500/10 border border-blue-500/30 flex items-center justify-center">
+                              <span className="text-blue-400 font-bold text-xs">{zone.zone_number}</span>
+                            </div>
+                            <h3 className="text-white font-bold text-base">{zone.name}</h3>
+                          </div>
+                          <Badge variant="info" size="sm">Zona {zone.zone_number}</Badge>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-dark-400 text-[11px] uppercase tracking-wider bg-dark-950/60 border-b border-dark-800">
+                                <th className="px-3 sm:px-4 py-2.5 text-left font-semibold">#</th>
+                                <th className="px-3 sm:px-4 py-2.5 text-left font-semibold">Pareja</th>
+                                <th className="px-2.5 py-2.5 text-center font-semibold">PJ</th>
+                                <th className="px-2.5 py-2.5 text-center font-semibold text-emerald-400">PG</th>
+                                <th className="px-2.5 py-2.5 text-center font-semibold text-rose-400">PP</th>
+                                <th className="px-2.5 py-2.5 text-center font-bold text-sky-400">Pts</th>
+                                <th className="px-2.5 py-2.5 text-center font-semibold">Dif</th>
+                                <th className="px-3 py-2.5 text-center font-semibold text-xs">Estado</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-dark-800/80">
+                              {standings.length === 0 ? (
+                                <tr>
+                                  <td colSpan={8} className="px-4 py-4 text-center text-dark-400 text-xs">
+                                    Sin parejas asignadas a esta zona
+                                  </td>
+                                </tr>
+                              ) : (
+                                standings.map((s, idx) => {
+                                  const isEliminated = idx === standings.length - 1 && standings.length > 1;
+                                  const isFirst = idx === 0;
+                                  const coupleName = coupleNamesMap[s.pair_id ?? s.couple_id ?? ""] ?? "Pareja";
+                                  return (
+                                    <tr
+                                      key={s.pair_id || idx}
+                                      className={`transition-colors ${
+                                        isEliminated
+                                          ? "bg-rose-950/20 hover:bg-rose-950/30 text-rose-300"
+                                          : isFirst
+                                          ? "bg-amber-400/[0.04] hover:bg-amber-400/[0.08] text-white"
+                                          : "bg-dark-900/60 hover:bg-dark-850 text-white"
+                                      }`}
+                                    >
+                                      <td className="px-3 sm:px-4 py-3 font-semibold text-xs">
+                                        <span
+                                          className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-black ${
+                                            isFirst
+                                              ? "bg-amber-400/20 text-amber-300 border border-amber-400/40"
+                                              : isEliminated
+                                              ? "bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                                              : "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                                          }`}
+                                        >
+                                          {idx + 1}°
+                                        </span>
+                                      </td>
+                                      <td className="px-3 sm:px-4 py-3 font-semibold text-xs sm:text-sm">
+                                        <span className="truncate block max-w-[150px] sm:max-w-[180px]">{coupleName}</span>
+                                      </td>
+                                      <td className="px-2.5 py-3 text-center text-xs text-dark-300 scoreboard-digit">{s.matches_played}</td>
+                                      <td className="px-2.5 py-3 text-center text-xs text-emerald-400 font-bold scoreboard-digit">{s.matches_won}</td>
+                                      <td className="px-2.5 py-3 text-center text-xs text-rose-400 scoreboard-digit">{s.matches_lost}</td>
+                                      <td className="px-2.5 py-3 text-center font-black text-sm text-sky-400 scoreboard-digit">{s.points}</td>
+                                      <td className="px-2.5 py-3 text-center text-xs text-dark-300 scoreboard-digit">
+                                        {(s.games_won ?? 0) - (s.games_lost ?? 0) > 0 ? `+${(s.games_won ?? 0) - (s.games_lost ?? 0)}` : (s.games_won ?? 0) - (s.games_lost ?? 0)}
+                                      </td>
+                                      <td className="px-3 py-3 text-center">
+                                        {isEliminated ? (
+                                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/35">
+                                            Eliminada
+                                          </span>
+                                        ) : (
+                                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/35">
+                                            Clasificada
+                                          </span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </Card>
+                    );
+                  })}
                 </div>
               </div>
             )}
