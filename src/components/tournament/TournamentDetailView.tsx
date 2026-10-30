@@ -2109,8 +2109,8 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
             <div className="flex items-center justify-center gap-1.5 mt-2 flex-wrap">
               {(tournament?.game_mode === "two_sets_super_tb"
                 ? (formWinnerCoupleId === scoringMatch?.couple2_id
-                    ? ["4/6", "3/6", "2/6", "1/6", "0/6", "5/7", "6/7"]
-                    : ["6/4", "6/3", "6/2", "6/1", "6/0", "7/5", "7/6"])
+                    ? ["0/6", "1/6", "2/6", "3/6", "4/6", "5/7", "6/7"]
+                    : ["6/0", "6/1", "6/2", "6/3", "6/4", "7/5", "7/6"])
                 : tournament?.game_mode === "american_2sets"
                 ? (formWinnerCoupleId === scoringMatch?.couple2_id
                     ? ["1/3", "2/3", "0/3"]
@@ -2212,8 +2212,8 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                 {/* Chips de marcadores rápidos Set 2 */}
                 <div className="flex items-center justify-center gap-1.5 mt-2 flex-wrap">
                   {(formWinnerCoupleId === scoringMatch?.couple2_id
-                    ? ["4/6", "3/6", "2/6", "1/6", "0/6", "5/7", "6/7"]
-                    : ["6/4", "6/3", "6/2", "6/1", "6/0", "7/5", "7/6"]
+                    ? ["0/6", "1/6", "2/6", "3/6", "4/6", "5/7", "6/7"]
+                    : ["6/0", "6/1", "6/2", "6/3", "6/4", "7/5", "7/6"]
                   ).map((chip) => {
                     const isTbBase = chip === "7/6" || chip === "6/7";
                     const isSelected = isTbBase
