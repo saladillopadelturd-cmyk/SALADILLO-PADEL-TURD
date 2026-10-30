@@ -1949,7 +1949,9 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                       className="flex items-center gap-1.5 font-bold bg-emerald-500 hover:bg-emerald-600 text-dark-950 shadow-md shadow-emerald-500/20"
                     >
                       <Trophy className="w-4 h-4 text-dark-950" />
-                      GENERAR CUADRO DE ELIMINACION DIRECTA
+                      {matches.filter((m) => m.stage !== "zone").length > 0
+                        ? "RECONFIGURAR LLAVES MANUALMENTE"
+                        : "GENERAR CUADRO DE ELIMINACION DIRECTA"}
                     </Button>
                     {matches.filter((m) => m.stage !== "zone").length > 0 && (
                       <Button

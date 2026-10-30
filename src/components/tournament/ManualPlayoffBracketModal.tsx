@@ -820,6 +820,14 @@ export function ManualPlayoffBracketModal({
               </div>
             </div>
 
+            {/* Aviso Guía: Modo Armado y Siembra de Llaves */}
+            <div className="bg-sky-500/10 border border-sky-500/30 rounded-xl px-3.5 py-2 text-xs text-sky-300 flex items-center gap-2 flex-shrink-0">
+              <Sparkles className="w-4 h-4 text-sky-400 flex-shrink-0" />
+              <span>
+                <strong>Modo Armado de Llaves:</strong> Este cuadro es una vista previa del diseño y sembrado. Para anotar resultados de partidos jugados y hacer avanzar a las parejas a 4tos, presiona <strong>&quot;Confirmar y Guardar Cuadro&quot;</strong> abajo y luego utiliza el <strong>Cuadro Oficial</strong> en la pantalla principal.
+              </span>
+            </div>
+
             <div className="flex-1 overflow-x-auto overflow-y-auto border border-dark-800 rounded-xl bg-dark-900/40 p-4 relative bracket-scroll-container">
               {!bracketResult || bracketResult.previewRounds.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-dark-500 text-xs">
