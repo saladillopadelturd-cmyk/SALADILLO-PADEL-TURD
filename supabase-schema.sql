@@ -177,6 +177,7 @@ CREATE TABLE public.matches (
   tournament_id UUID NOT NULL REFERENCES public.tournaments(id) ON DELETE CASCADE,
   stage TEXT NOT NULL CHECK (stage IN (
     'zone',         -- Fase de grupos
+    'round_of_32',  -- 16vos de final
     'round_of_16',  -- Octavos de final
     'quarter',      -- Cuartos de final
     'semi',         -- Semifinal

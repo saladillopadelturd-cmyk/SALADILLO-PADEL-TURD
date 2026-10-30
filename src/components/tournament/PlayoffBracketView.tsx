@@ -324,7 +324,7 @@ export function PlayoffBracketView({
       <div className="hidden print:block mb-4 text-center border-b-2 border-slate-700 pb-3">
         <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 uppercase tracking-widest mb-1">
           <span>SPT PÁDEL TOUR • CIRCUITO OFICIAL</span>
-          <span>
+          <span suppressHydrationWarning>
             {new Date().toLocaleDateString("es-AR", {
               day: "2-digit",
               month: "long",

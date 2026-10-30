@@ -1856,7 +1856,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                                     <MapPin className="w-3.5 h-3.5 text-sky-400" />
                                     {m.court_name || "Sin cancha asignada"}
                                   </span>
-                                  <span className="flex items-center gap-1">
+                                  <span className="flex items-center gap-1" suppressHydrationWarning>
                                     <Clock className="w-3.5 h-3.5 text-emerald-400" />
                                     {m.scheduled_time
                                       ? !isNaN(Date.parse(m.scheduled_time))
