@@ -884,6 +884,13 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
           return updated;
         });
 
+        // Limpiar cache local para asegurar sincronizacion del cuadro con BD
+        try {
+          if (typeof window !== "undefined") {
+            localStorage.removeItem(`spt_manual_bracket_${tournamentId}`);
+          }
+        } catch {}
+
         await loadData();
         setScoringMatch(null);
         setNotification({

@@ -185,10 +185,13 @@ export function ManualPlayoffBracketModal({
       console.warn("Error leyendo estado del cuadro de localStorage", e);
     }
 
-    if (!restoredSlots && existingMatches && existingMatches.length > 0) {
-      const fromDb = reconstructSlotsFromMatches(existingMatches);
-      if (fromDb) {
-        restoredSlots = fromDb;
+    const hasActiveMatches = existingMatches && existingMatches.some((m) => m.stage !== "zone" && (m.couple1_id || m.couple2_id || m.status === "completed"));
+    if (hasActiveMatches || !restoredSlots) {
+      if (existingMatches && existingMatches.length > 0) {
+        const fromDb = reconstructSlotsFromMatches(existingMatches);
+        if (fromDb) {
+          restoredSlots = fromDb;
+        }
       }
     }
 
