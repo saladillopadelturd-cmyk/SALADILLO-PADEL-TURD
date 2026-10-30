@@ -489,6 +489,10 @@ export function PlayoffBracketView({
                       isCompleted && m.winner_couple_id === m.couple1_id;
                     const isC2Winner =
                       isCompleted && !isBye && m.winner_couple_id === m.couple2_id;
+                    const isC1Loser =
+                      isCompleted && !isBye && m.winner_couple_id === m.couple2_id;
+                    const isC2Loser =
+                      isCompleted && !isBye && m.winner_couple_id === m.couple1_id;
 
                     const isClickable =
                       !isBye &&
@@ -570,7 +574,9 @@ export function PlayoffBracketView({
                                 : ""
                             } ${
                               isC1Winner
-                                ? "bracket-row-winner bg-emerald-500/15 text-emerald-300 font-bold"
+                                ? "bracket-row-winner bg-emerald-500/20 text-emerald-300 font-bold shadow-sm"
+                                : isC1Loser
+                                ? "text-slate-400/80 line-through opacity-70 bg-dark-950/20"
                                 : m.couple1_id
                                 ? "text-white"
                                 : "text-dark-500 italic"
@@ -584,10 +590,10 @@ export function PlayoffBracketView({
                             <div className="flex items-center gap-1.5 min-w-0 flex-1">
                               {isC1Winner ? (
                                 <Trophy className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                              ) : isClickable && m.couple1_id ? (
+                              ) : isClickable && m.couple1_id && !isCompleted ? (
                                 <span className="w-2 h-2 rounded-full bg-emerald-500/50 group-hover:bg-emerald-400 flex-shrink-0 transition-colors" />
                               ) : null}
-                              <span className="truncate text-xs font-semibold">
+                              <span className={`truncate text-xs ${isC1Winner ? "font-bold text-emerald-200" : isC1Loser ? "text-slate-400 line-through" : "font-semibold text-white"}`}>
                                 {c1.name}
                               </span>
                             </div>
@@ -595,10 +601,14 @@ export function PlayoffBracketView({
                               <span className="text-[10px] font-mono font-bold text-amber-400 px-1.5 py-0.5 rounded bg-amber-500/10 flex-shrink-0">
                                 SEMBRADA
                               </span>
-                            ) : isClickable && m.couple1_id && !isC1Winner ? (
-                              <span className="text-[10px] font-bold text-emerald-400 hover:text-white bg-emerald-500/15 hover:bg-emerald-500/30 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1 flex-shrink-0 transition-colors shadow-sm">
+                            ) : isC1Winner ? (
+                              <span className="text-[10px] font-black text-amber-300 bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded-full flex items-center gap-1 flex-shrink-0 shadow-sm">
                                 <Trophy className="w-3 h-3 text-amber-400" />
-                                Ganador
+                                GANADOR
+                              </span>
+                            ) : !isCompleted && isClickable && m.couple1_id ? (
+                              <span className="text-[10px] font-bold text-emerald-400 hover:text-white bg-emerald-500/15 hover:bg-emerald-500/30 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1 flex-shrink-0 transition-colors shadow-sm">
+                                Elegir
                               </span>
                             ) : null}
                           </button>
@@ -619,7 +629,9 @@ export function PlayoffBracketView({
                                 : ""
                             } ${
                               isC2Winner
-                                ? "bracket-row-winner bg-emerald-500/15 text-emerald-300 font-bold"
+                                ? "bracket-row-winner bg-emerald-500/20 text-emerald-300 font-bold shadow-sm"
+                                : isC2Loser
+                                ? "text-slate-400/80 line-through opacity-70 bg-dark-950/20"
                                 : isBye
                                 ? "text-dark-500 italic text-[11px]"
                                 : m.couple2_id
@@ -635,17 +647,21 @@ export function PlayoffBracketView({
                             <div className="flex items-center gap-1.5 min-w-0 flex-1">
                               {isC2Winner ? (
                                 <Trophy className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                              ) : isClickable && m.couple2_id && !isBye ? (
+                              ) : isClickable && m.couple2_id && !isBye && !isCompleted ? (
                                 <span className="w-2 h-2 rounded-full bg-emerald-500/50 group-hover:bg-emerald-400 flex-shrink-0 transition-colors" />
                               ) : null}
-                              <span className="truncate text-xs font-semibold">
+                              <span className={`truncate text-xs ${isC2Winner ? "font-bold text-emerald-200" : isC2Loser ? "text-slate-400 line-through" : "font-semibold text-white"}`}>
                                 {c2.name}
                               </span>
                             </div>
-                            {isClickable && m.couple2_id && !isBye && !isC2Winner ? (
-                              <span className="text-[10px] font-bold text-emerald-400 hover:text-white bg-emerald-500/15 hover:bg-emerald-500/30 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1 flex-shrink-0 transition-colors shadow-sm">
+                            {isC2Winner ? (
+                              <span className="text-[10px] font-black text-amber-300 bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded-full flex items-center gap-1 flex-shrink-0 shadow-sm">
                                 <Trophy className="w-3 h-3 text-amber-400" />
-                                Ganador
+                                GANADOR
+                              </span>
+                            ) : !isCompleted && isClickable && m.couple2_id && !isBye ? (
+                              <span className="text-[10px] font-bold text-emerald-400 hover:text-white bg-emerald-500/15 hover:bg-emerald-500/30 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1 flex-shrink-0 transition-colors shadow-sm">
+                                Elegir
                               </span>
                             ) : null}
                           </button>
