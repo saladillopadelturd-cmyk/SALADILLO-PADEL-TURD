@@ -518,13 +518,15 @@ export function PlayoffBracketView({
                           }`}
                         >
                           {/* Barra superior de partido */}
-                          <div
+                          <button
+                            type="button"
                             onClick={() => {
                               if (isClickable && onMatchClick) {
                                 onMatchClick(m);
                               }
                             }}
-                            className={`bracket-match-header px-3 py-1.5 border-b border-dark-800/80 flex items-center justify-between text-[11px] bg-dark-950/40 rounded-t-xl ${
+                            disabled={!isClickable}
+                            className={`w-full text-left bracket-match-header px-3 py-1.5 border-b border-dark-800/80 flex items-center justify-between text-[11px] bg-dark-950/40 rounded-t-xl ${
                               isClickable ? "cursor-pointer hover:bg-dark-800/60 transition-colors" : ""
                             }`}
                             title={isClickable ? "Clic para abrir opciones del partido" : undefined}
@@ -550,19 +552,21 @@ export function PlayoffBracketView({
                                 </span>
                               )}
                             </div>
-                          </div>
+                          </button>
 
                           {/* Pareja 1: Tocar para elegir como ganadora y abrir campo de resultado */}
-                          <div
+                          <button
+                            type="button"
                             onClick={(e) => {
                               if (isClickable && onMatchClick && m.couple1_id) {
                                 e.stopPropagation();
                                 onMatchClick(m, m.couple1_id);
                               }
                             }}
-                            className={`bracket-couple-row p-2.5 flex items-center justify-between gap-2 border-b border-dark-800/60 transition-all select-none ${
+                            disabled={!isClickable || !m.couple1_id}
+                            className={`w-full text-left bracket-couple-row p-2.5 flex items-center justify-between gap-2 border-b border-dark-800/60 transition-all select-none ${
                               isClickable && m.couple1_id
-                                ? "cursor-pointer hover:bg-emerald-500/20 hover:border-emerald-500/50 active:scale-[0.99]"
+                                ? "cursor-pointer hover:bg-emerald-500/25 hover:border-emerald-500/50 active:scale-[0.99] focus:outline-none focus:ring-1 focus:ring-emerald-400"
                                 : ""
                             } ${
                               isC1Winner
@@ -581,9 +585,9 @@ export function PlayoffBracketView({
                               {isC1Winner ? (
                                 <Trophy className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
                               ) : isClickable && m.couple1_id ? (
-                                <span className="w-1.5 h-1.5 rounded-full bg-dark-600 group-hover:bg-emerald-400 flex-shrink-0 transition-colors" />
+                                <span className="w-2 h-2 rounded-full bg-emerald-500/50 group-hover:bg-emerald-400 flex-shrink-0 transition-colors" />
                               ) : null}
-                              <span className="truncate text-xs font-medium">
+                              <span className="truncate text-xs font-semibold">
                                 {c1.name}
                               </span>
                             </div>
@@ -592,24 +596,26 @@ export function PlayoffBracketView({
                                 SEMBRADA
                               </span>
                             ) : isClickable && m.couple1_id && !isC1Winner ? (
-                              <span className="text-[10px] font-bold text-dark-400 hover:text-emerald-300 bg-dark-800/80 px-1.5 py-0.5 rounded border border-dark-700/80 flex items-center gap-1 flex-shrink-0 transition-colors">
-                                <Trophy className="w-3 h-3 text-amber-400/80" />
+                              <span className="text-[10px] font-bold text-emerald-400 hover:text-white bg-emerald-500/15 hover:bg-emerald-500/30 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1 flex-shrink-0 transition-colors shadow-sm">
+                                <Trophy className="w-3 h-3 text-amber-400" />
                                 Ganador
                               </span>
                             ) : null}
-                          </div>
+                          </button>
 
                           {/* Pareja 2: Tocar para elegir como ganadora y abrir campo de resultado */}
-                          <div
+                          <button
+                            type="button"
                             onClick={(e) => {
                               if (isClickable && onMatchClick && m.couple2_id) {
                                 e.stopPropagation();
                                 onMatchClick(m, m.couple2_id);
                               }
                             }}
-                            className={`bracket-couple-row p-2.5 flex items-center justify-between gap-2 rounded-b-xl transition-all select-none ${
+                            disabled={!isClickable || !m.couple2_id}
+                            className={`w-full text-left bracket-couple-row p-2.5 flex items-center justify-between gap-2 rounded-b-xl transition-all select-none ${
                               isClickable && m.couple2_id
-                                ? "cursor-pointer hover:bg-emerald-500/20 hover:border-emerald-500/50 active:scale-[0.99]"
+                                ? "cursor-pointer hover:bg-emerald-500/25 hover:border-emerald-500/50 active:scale-[0.99] focus:outline-none focus:ring-1 focus:ring-emerald-400"
                                 : ""
                             } ${
                               isC2Winner
@@ -630,19 +636,19 @@ export function PlayoffBracketView({
                               {isC2Winner ? (
                                 <Trophy className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
                               ) : isClickable && m.couple2_id && !isBye ? (
-                                <span className="w-1.5 h-1.5 rounded-full bg-dark-600 group-hover:bg-emerald-400 flex-shrink-0 transition-colors" />
+                                <span className="w-2 h-2 rounded-full bg-emerald-500/50 group-hover:bg-emerald-400 flex-shrink-0 transition-colors" />
                               ) : null}
-                              <span className="truncate text-xs font-medium">
+                              <span className="truncate text-xs font-semibold">
                                 {c2.name}
                               </span>
                             </div>
                             {isClickable && m.couple2_id && !isBye && !isC2Winner ? (
-                              <span className="text-[10px] font-bold text-dark-400 hover:text-emerald-300 bg-dark-800/80 px-1.5 py-0.5 rounded border border-dark-700/80 flex items-center gap-1 flex-shrink-0 transition-colors">
-                                <Trophy className="w-3 h-3 text-amber-400/80" />
+                              <span className="text-[10px] font-bold text-emerald-400 hover:text-white bg-emerald-500/15 hover:bg-emerald-500/30 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1 flex-shrink-0 transition-colors shadow-sm">
+                                <Trophy className="w-3 h-3 text-amber-400" />
                                 Ganador
                               </span>
                             ) : null}
-                          </div>
+                          </button>
 
                           {/* Marcador si está finalizado */}
                           {scoreFormatted && !isBye && (

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { calculateRoundRobinStandings, getQualifiedPairs, getEliminatedPair } from "@/lib/tournament/standings";
 import {
   generateSeededPlayoffBracket,
@@ -14,7 +14,7 @@ import {
  * - En zonas de 3 parejas: clasifican las 2 mejores (1°, 2°). La 3ª queda eliminada.
  */
 async function calculateZoneQualifications(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: ReturnType<typeof createAdminClient>,
   tournamentId: string
 ) {
   // 1. Zonas del torneo
@@ -126,7 +126,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "tournamentId es requerido" }, { status: 400 });
   }
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   // Partidos de playoffs
   const { data: playoffMatches, error } = await supabase
@@ -190,7 +190,7 @@ export async function GET(request: Request) {
  * - action: "generate_fap": Generar sugerencia de cuadro oficial FAP
  */
 export async function POST(request: Request) {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const body = await request.json();
   const {
     tournamentId,
@@ -645,7 +645,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "tournamentId es requerido" }, { status: 400 });
   }
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   if (matchId) {
     const { error } = await supabase
