@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState, useEffect, useCallback, useMemo, useTransition, Suspense, useRef } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Card from "@/components/ui/Card";
@@ -17,9 +18,18 @@ import { calculateOptimalZones, getZoneSuggestions, getMatchZoneDisplayName, pro
 import { getCoupleNumberMap, getCoupleLabelWithNumber, getCouplePlayersShortLabel, getCoupleLastNames, isSumaCategory, formatScoreInput } from "@/lib/tournament/couples";
 import { findNextPlayoffMatchSlot, propagatePlayoffWinners, getStageName } from "@/lib/tournament/elimination";
 import ZoneCard from "@/components/tournament/ZoneCard";
-import ZoneConformationEditor from "@/components/tournament/ZoneConformationEditor";
-import AutoScheduleModal from "@/components/tournament/AutoScheduleModal";
-import { ManualPlayoffBracketModal } from "@/components/tournament/ManualPlayoffBracketModal";
+const ZoneConformationEditor = dynamic(
+  () => import("@/components/tournament/ZoneConformationEditor"),
+  { ssr: false }
+);
+const AutoScheduleModal = dynamic(
+  () => import("@/components/tournament/AutoScheduleModal"),
+  { ssr: false }
+);
+const ManualPlayoffBracketModal = dynamic(
+  () => import("@/components/tournament/ManualPlayoffBracketModal").then((mod) => mod.ManualPlayoffBracketModal),
+  { ssr: false }
+);
 import { PlayoffBracketView } from "@/components/tournament/PlayoffBracketView";
 import { normalizeScheduledTime } from "@/lib/tournament/scheduler";
 import { formatDate } from "@/lib/dateUtils";

@@ -1,4 +1,4 @@
-import type { Match, MatchStage } from "@/types/tournament";
+import type { Match } from "@/types/tournament";
 
 export interface AutoScheduleOptions {
   courtCount: number;
@@ -136,7 +136,7 @@ export function autoScheduleMatches(
   }
 
   // 2. Filtrar partidos según stageFilter y onlyUnscheduled
-  let targetMatches = matches.filter((m) => {
+  const targetMatches = matches.filter((m) => {
     if (stageFilter === "zone" && m.stage !== "zone") return false;
     if (stageFilter === "playoff" && m.stage === "zone") return false;
     if (onlyUnscheduled && m.scheduled_time && m.court_name) return false;
@@ -213,7 +213,6 @@ export function autoScheduleMatches(
   while (unassigned.length > 0) {
     const couplesInThisSlot = new Set<string>();
     const stagesInThisSlot = new Set<string>();
-    let assignedInThisSlot = 0;
 
     // Determinar la fase mínima que todavía tiene partidos pendientes
     const currentMinStage = unassigned[0].stage;
@@ -328,7 +327,6 @@ export function autoScheduleMatches(
         }
         stageCompletedSlot.set(chosenMatch.stage, slotIndex);
 
-        assignedInThisSlot++;
       }
     }
 

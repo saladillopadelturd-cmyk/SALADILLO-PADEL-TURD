@@ -247,7 +247,6 @@ export function buildManualPlayoffBracketFromSlots(
   startingMatchNumber: number = 101
 ): ManualBracketResult {
   const allStages = OFFICIAL_STAGES;
-  const initialStage: MatchStage = "round_of_32";
 
   let curMatchNumber = startingMatchNumber;
   const previewRounds: PreviewRound[] = [];

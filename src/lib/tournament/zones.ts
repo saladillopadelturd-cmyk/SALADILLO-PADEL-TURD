@@ -10,7 +10,7 @@
  * - El administrador confirma manualmente cuántas parejas por zona tendrá el torneo.
  */
 
-import type { Zone, Couple, Match, MatchStage } from "@/types/tournament";
+import type { Zone, Couple, MatchStage } from "@/types/tournament";
 
 export interface ZoneDistribution {
   numZones: number;
