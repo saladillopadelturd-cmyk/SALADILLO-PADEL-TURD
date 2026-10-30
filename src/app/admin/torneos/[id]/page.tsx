@@ -827,22 +827,25 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
 
     startTransition(async () => {
       try {
-        const { error } = await supabase
-          .from("matches")
-          .update({
-            score_set1: formScoreSet1.trim(),
-            score_set2: formScoreSet2.trim() || null,
-            score_super_tb: formScoreSuperTb.trim() || null,
-            winner_couple_id: formWinnerCoupleId,
-            status: "completed",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", scoringMatch.id);
+        const res = await fetch("/api/matches/score", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            matchId: scoringMatch.id,
+            tournamentId,
+            winnerCoupleId: formWinnerCoupleId,
+            scoreSet1: formScoreSet1.trim(),
+            scoreSet2: formScoreSet2.trim() || null,
+            scoreSuperTb: formScoreSuperTb.trim() || null,
+          }),
+        });
 
-        if (error) throw error;
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Error al registrar el resultado en el servidor");
+        }
 
-        // En fase de eliminación directa (Playoffs), avanzar automáticamente a la pareja ganadora al siguiente cruce
-        let advancedToNextStage = false;
+        // En fase de eliminación directa (Playoffs), calcular slot destino para actualización reactiva en pantalla
         let nextTargetMatchId: string | null = null;
         let nextTargetSlotField: "couple1_id" | "couple2_id" | null = null;
 
@@ -851,66 +854,6 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
           if (nextSlot) {
             nextTargetMatchId = nextSlot.targetMatchId;
             nextTargetSlotField = nextSlot.slotField;
-            const targetMatch = matches.find((m) => m.id === nextSlot.targetMatchId);
-            const updatePayload: Record<string, unknown> = {
-              [nextSlot.slotField]: formWinnerCoupleId,
-              updated_at: new Date().toISOString(),
-            };
-
-            // Si se corrigió un ganador anterior y ya figuraba como ganador de la ronda siguiente, resetear ese resultado dependiente
-            if (
-              scoringMatch.winner_couple_id &&
-              scoringMatch.winner_couple_id !== formWinnerCoupleId &&
-              targetMatch &&
-              targetMatch.winner_couple_id === scoringMatch.winner_couple_id
-            ) {
-              updatePayload.winner_couple_id = null;
-              updatePayload.status = "pending";
-              updatePayload.score_set1 = null;
-              updatePayload.score_set2 = null;
-              updatePayload.score_super_tb = null;
-            }
-
-            const { error: nextError } = await supabase
-              .from("matches")
-              .update(updatePayload)
-              .eq("id", nextSlot.targetMatchId);
-
-            if (nextError) {
-              console.error("Error al avanzar pareja a la siguiente ronda:", nextError);
-            } else {
-              advancedToNextStage = true;
-            }
-          }
-        }
-
-        // Propagar avance en zonas de 4 parejas (Ganador vs Ganador y Perdedor vs Perdedor)
-        if (scoringMatch.stage === "zone" && scoringMatch.zone_id) {
-          const simulatedMatches = matches.map((m) =>
-            m.id === scoringMatch.id
-              ? {
-                  ...m,
-                  score_set1: formScoreSet1.trim(),
-                  score_set2: formScoreSet2.trim() || null,
-                  score_super_tb: formScoreSuperTb.trim() || null,
-                  winner_couple_id: formWinnerCoupleId,
-                  status: "completed" as const,
-                }
-              : m
-          );
-          const { updatesToPersist: zoneUpdates } = propagateZoneMatches(simulatedMatches);
-          for (const upd of zoneUpdates) {
-            const p: Record<string, unknown> = { updated_at: new Date().toISOString() };
-            if (upd.couple1_id !== undefined) p.couple1_id = upd.couple1_id;
-            if (upd.couple2_id !== undefined) p.couple2_id = upd.couple2_id;
-            if (upd.resetScore) {
-              p.winner_couple_id = null;
-              p.status = "pending";
-              p.score_set1 = null;
-              p.score_set2 = null;
-              p.score_super_tb = null;
-            }
-            await supabase.from("matches").update(p).eq("id", upd.matchId);
           }
         }
 
@@ -941,28 +884,13 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
           return updated;
         });
 
-        // Cada vez que se anote el resultado de un partido se actualiza el ranking oficial de jugadores
-        let rankingUpdated = false;
-        try {
-          const rankRes = await fetch("/api/rankings", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ tournamentId, recalculate: true }),
-          });
-          if (rankRes.ok) rankingUpdated = true;
-        } catch (rankErr) {
-          console.warn("Error actualizando rankings oficiales tras registrar resultado:", rankErr);
-        }
-
         await loadData();
         setScoringMatch(null);
         setNotification({
           type: "success",
-          text: advancedToNextStage
+          text: data.advancedToNextStage
             ? "Resultado guardado: la pareja ganadora avanzó automáticamente a la siguiente instancia y el ranking de jugadores fue actualizado."
-            : rankingUpdated
-            ? "Resultado guardado y ranking de jugadores actualizado exitosamente."
-            : "Resultado guardado y posiciones actualizadas con éxito.",
+            : "Resultado guardado y ranking de jugadores actualizado exitosamente.",
         });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Error al guardar marcador";
@@ -982,86 +910,34 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
     if (!scoringMatch) return;
     startTransition(async () => {
       try {
-        const previousWinnerId = scoringMatch.winner_couple_id;
+        const res = await fetch("/api/matches/score", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            matchId: scoringMatch.id,
+            tournamentId,
+            reset: true,
+          }),
+        });
 
-        // 1. Resetear el marcador del partido a programado/pendiente
-        const { error } = await supabase
-          .from("matches")
-          .update({
-            score_set1: null,
-            score_set2: null,
-            score_super_tb: null,
-            winner_couple_id: null,
-            status: "scheduled",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", scoringMatch.id);
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Error al restablecer el resultado en el servidor");
+        }
 
-        if (error) throw error;
-
-        // 2. Si el partido era de Playoffs, hacer retroceder a la pareja ganadora de la siguiente instancia
+        // En fase de eliminación directa, calcular slot para actualizar estado en memoria
         let nextTargetMatchId: string | null = null;
         let nextTargetSlotField: "couple1_id" | "couple2_id" | null = null;
 
-        if (scoringMatch.stage !== "zone" && previousWinnerId) {
+        if (scoringMatch.stage !== "zone") {
           const nextSlot = findNextPlayoffMatchSlot(matches, scoringMatch);
           if (nextSlot) {
             nextTargetMatchId = nextSlot.targetMatchId;
             nextTargetSlotField = nextSlot.slotField;
-            const targetMatch = matches.find((m) => m.id === nextSlot.targetMatchId);
-
-            const resetPayload: Record<string, unknown> = {
-              [nextSlot.slotField]: null,
-              updated_at: new Date().toISOString(),
-            };
-
-            // Si en el cruce siguiente ya figuraba como ganador o jugado, resetear en cascada
-            if (targetMatch && targetMatch.winner_couple_id === previousWinnerId) {
-              resetPayload.winner_couple_id = null;
-              resetPayload.status = "pending";
-              resetPayload.score_set1 = null;
-              resetPayload.score_set2 = null;
-              resetPayload.score_super_tb = null;
-            }
-
-            await supabase
-              .from("matches")
-              .update(resetPayload)
-              .eq("id", nextSlot.targetMatchId);
           }
         }
 
-        // 3. Si era zona de 4 parejas, propagar el reseteo
-        if (scoringMatch.stage === "zone" && scoringMatch.zone_id) {
-          const simulatedMatches = matches.map((m) =>
-            m.id === scoringMatch.id
-              ? {
-                  ...m,
-                  score_set1: null,
-                  score_set2: null,
-                  score_super_tb: null,
-                  winner_couple_id: null,
-                  status: "scheduled" as const,
-                }
-              : m
-          );
-          const { updatesToPersist: zoneUpdates } = propagateZoneMatches(simulatedMatches);
-          for (const upd of zoneUpdates) {
-            const p: Record<string, unknown> = { updated_at: new Date().toISOString() };
-            if (upd.couple1_id !== undefined) p.couple1_id = upd.couple1_id;
-            if (upd.couple2_id !== undefined) p.couple2_id = upd.couple2_id;
-            if (upd.resetScore) {
-              p.winner_couple_id = null;
-              p.status = "pending";
-              p.score_set1 = null;
-              p.score_set2 = null;
-              p.score_super_tb = null;
-            }
-            await supabase.from("matches").update(p).eq("id", upd.matchId);
-          }
-        }
-
-        // 4. Actualización optimista inmediata en memoria
+        // Actualización optimista inmediata en memoria
         setMatches((prev) => {
           let updated = prev.map((m) =>
             m.id === scoringMatch.id
@@ -1071,7 +947,7 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                   score_set2: null,
                   score_super_tb: null,
                   winner_couple_id: null,
-                  status: "scheduled" as const,
+                  status: "pending" as const,
                 }
               : m
           );
@@ -1081,6 +957,11 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
                 ? {
                     ...m,
                     [nextTargetSlotField!]: null,
+                    winner_couple_id: null,
+                    status: "pending" as const,
+                    score_set1: null,
+                    score_set2: null,
+                    score_super_tb: null,
                   }
                 : m
             );
@@ -1088,26 +969,11 @@ function AdminTorneoDetailContent({ tournamentId }: { tournamentId: string }) {
           return updated;
         });
 
-        // 5. Descontar inmediatamente los puntos sumados en el ranking de jugadores
-        let rankRecalculated = false;
-        try {
-          const rankRes = await fetch("/api/rankings", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ tournamentId, recalculate: true }),
-          });
-          if (rankRes.ok) rankRecalculated = true;
-        } catch (rankErr) {
-          console.warn("Error recalculando rankings tras eliminar resultado:", rankErr);
-        }
-
         await loadData();
         setScoringMatch(null);
         setNotification({
           type: "success",
-          text: rankRecalculated
-            ? "Resultado eliminado: la pareja retrocedió a la instancia anterior y los puntos sumados fueron descontados del ranking de jugadores."
-            : "Resultado eliminado y pareja retrocedida a la instancia anterior con éxito.",
+          text: "Resultado restablecido exitosamente a pendiente y ranking actualizado.",
         });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Error al restablecer el partido";

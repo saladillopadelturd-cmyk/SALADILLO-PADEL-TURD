@@ -491,11 +491,10 @@ export function PlayoffBracketView({
                       isCompleted && !isBye && m.winner_couple_id === m.couple2_id;
 
                     const isClickable =
-                      isAdmin &&
                       !isBye &&
                       !!m.couple1_id &&
                       !!m.couple2_id &&
-                      onMatchClick;
+                      Boolean(onMatchClick);
 
                     const scoreFormatted = [
                       m.score_set1,
@@ -561,7 +560,7 @@ export function PlayoffBracketView({
                                 onMatchClick(m, m.couple1_id);
                               }
                             }}
-                            className={`bracket-couple-row p-2.5 flex items-center justify-between gap-2 border-b border-dark-800/60 transition-all ${
+                            className={`bracket-couple-row p-2.5 flex items-center justify-between gap-2 border-b border-dark-800/60 transition-all select-none ${
                               isClickable && m.couple1_id
                                 ? "cursor-pointer hover:bg-emerald-500/20 hover:border-emerald-500/50 active:scale-[0.99]"
                                 : ""
@@ -579,10 +578,12 @@ export function PlayoffBracketView({
                             }
                           >
                             <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                              {isC1Winner && (
+                              {isC1Winner ? (
                                 <Trophy className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                              )}
-                              <span className="truncate text-xs">
+                              ) : isClickable && m.couple1_id ? (
+                                <span className="w-1.5 h-1.5 rounded-full bg-dark-600 group-hover:bg-emerald-400 flex-shrink-0 transition-colors" />
+                              ) : null}
+                              <span className="truncate text-xs font-medium">
                                 {c1.name}
                               </span>
                             </div>
@@ -591,7 +592,7 @@ export function PlayoffBracketView({
                                 SEMBRADA
                               </span>
                             ) : isClickable && m.couple1_id && !isC1Winner ? (
-                              <span className="text-[10px] font-bold text-dark-500 hover:text-emerald-300 opacity-60 hover:opacity-100 flex items-center gap-1 flex-shrink-0 transition-opacity">
+                              <span className="text-[10px] font-bold text-dark-400 hover:text-emerald-300 bg-dark-800/80 px-1.5 py-0.5 rounded border border-dark-700/80 flex items-center gap-1 flex-shrink-0 transition-colors">
                                 <Trophy className="w-3 h-3 text-amber-400/80" />
                                 Ganador
                               </span>
@@ -606,7 +607,7 @@ export function PlayoffBracketView({
                                 onMatchClick(m, m.couple2_id);
                               }
                             }}
-                            className={`bracket-couple-row p-2.5 flex items-center justify-between gap-2 rounded-b-xl transition-all ${
+                            className={`bracket-couple-row p-2.5 flex items-center justify-between gap-2 rounded-b-xl transition-all select-none ${
                               isClickable && m.couple2_id
                                 ? "cursor-pointer hover:bg-emerald-500/20 hover:border-emerald-500/50 active:scale-[0.99]"
                                 : ""
@@ -626,15 +627,17 @@ export function PlayoffBracketView({
                             }
                           >
                             <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                              {isC2Winner && (
+                              {isC2Winner ? (
                                 <Trophy className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                              )}
-                              <span className="truncate text-xs">
+                              ) : isClickable && m.couple2_id && !isBye ? (
+                                <span className="w-1.5 h-1.5 rounded-full bg-dark-600 group-hover:bg-emerald-400 flex-shrink-0 transition-colors" />
+                              ) : null}
+                              <span className="truncate text-xs font-medium">
                                 {c2.name}
                               </span>
                             </div>
                             {isClickable && m.couple2_id && !isBye && !isC2Winner ? (
-                              <span className="text-[10px] font-bold text-dark-500 hover:text-emerald-300 opacity-60 hover:opacity-100 flex items-center gap-1 flex-shrink-0 transition-opacity">
+                              <span className="text-[10px] font-bold text-dark-400 hover:text-emerald-300 bg-dark-800/80 px-1.5 py-0.5 rounded border border-dark-700/80 flex items-center gap-1 flex-shrink-0 transition-colors">
                                 <Trophy className="w-3 h-3 text-amber-400/80" />
                                 Ganador
                               </span>
