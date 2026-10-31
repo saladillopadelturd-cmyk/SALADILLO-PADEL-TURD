@@ -80,7 +80,7 @@ import {
   validateCoupleCategorySuma,
 } from "./couples";
 
-import { calculateOptimalZones, getZoneSuggestions } from "./zones";
+import { calculateOptimalZones, getZoneSuggestions, buildCustomZonesConfig } from "./zones";
 
 import type { Match, Couple, Player } from "@/types/tournament";
 
@@ -1877,6 +1877,40 @@ export function runTournamentBusinessLogicTests(): TestResult {
   assert(qualifiedGSL.length === 3, "Clasifican 3 parejas en zona de 4");
   assert(qualifiedGSL[0].pair_id === "c_p1" && qualifiedGSL[1].pair_id === "c_p2", "Top 2 clasificados son c_p1 y c_p2");
   assert(eliminatedGSL?.pair_id === "c_p4", "La 4ta pareja (c_p4) queda estrictamente eliminada");
+
+  // =========================================================================
+  // PRUEBAS DE COMBINACIÓN PERSONALIZADA DE ZONAS (buildCustomZonesConfig)
+  // Ejemplo usuario: 2 zonas de 4 parejas y 6 zonas de 3 parejas
+  // =========================================================================
+  const customConfig1 = buildCustomZonesConfig(
+    { numZones: 2, zoneSize: 4 },
+    { numZones: 6, zoneSize: 3 }
+  );
+
+  assert(customConfig1.totalZones === 8, "2 zonas de 4 + 6 zonas de 3 genera exactamente 8 zonas en total");
+  assert(customConfig1.totalCapacity === 26, "2*4 (8) + 6*3 (18) = 26 parejas de capacidad total");
+  assert(customConfig1.zones.length === 8, "El array de zonas contiene 8 elementos");
+  assert(customConfig1.zones[0].name === "Zona A" && customConfig1.zones[0].size === 4, "Zona A tiene cupo de 4 parejas");
+  assert(customConfig1.zones[1].name === "Zona B" && customConfig1.zones[1].size === 4, "Zona B tiene cupo de 4 parejas");
+  assert(customConfig1.zones[2].name === "Zona C" && customConfig1.zones[2].size === 3, "Zona C tiene cupo de 3 parejas");
+  assert(customConfig1.zones[7].name === "Zona H" && customConfig1.zones[7].size === 3, "Zona H tiene cupo de 3 parejas");
+  assert(customConfig1.summary === "2 zonas de 4 parejas y 6 zonas de 3 parejas", "Resumen de la combinación es claro");
+
+  // Caso: 4 zonas de 3 parejas (sin grupo 2)
+  const customConfig2 = buildCustomZonesConfig(
+    { numZones: 4, zoneSize: 3 }
+  );
+  assert(customConfig2.totalZones === 4, "4 zonas de 3 genera 4 zonas");
+  assert(customConfig2.totalCapacity === 12, "4*3 = 12 parejas de capacidad");
+  assert(customConfig2.zones[3].name === "Zona D", "Última zona es Zona D");
+
+  // Caso: 3 zonas de 4 parejas
+  const customConfig3 = buildCustomZonesConfig(
+    { numZones: 3, zoneSize: 4 },
+    { numZones: 0, zoneSize: 3 }
+  );
+  assert(customConfig3.totalZones === 3, "3 zonas de 4 genera 3 zonas");
+  assert(customConfig3.totalCapacity === 12, "3*4 = 12 parejas de capacidad");
 
   return {
     passed,

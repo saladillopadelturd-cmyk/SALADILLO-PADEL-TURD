@@ -153,6 +153,26 @@ export default function ZoneConformationEditor({
     }
   }, [zones, activeZoneId]);
 
+  // Sincronizar zoneSizes con localStorage si se agregan o cambian zonas
+  useEffect(() => {
+    let saved: Record<string, number> = {};
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem(`spt_zone_sizes_${tournamentId}`);
+        if (raw) saved = JSON.parse(raw);
+      } catch {}
+    }
+    setZoneSizes((prev) => {
+      const nextSizes: Record<string, number> = { ...prev };
+      zones.forEach((z) => {
+        if (!nextSizes[z.id]) {
+          nextSizes[z.id] = saved[z.id] === 3 || saved[z.id] === 4 ? saved[z.id] : (targetZoneSize === 3 ? 3 : 4);
+        }
+      });
+      return nextSizes;
+    });
+  }, [zones, tournamentId, targetZoneSize]);
+
   // Limpiar mensaje de feedback tras unos segundos
   useEffect(() => {
     if (feedbackNotice) {

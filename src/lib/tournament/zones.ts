@@ -12,6 +12,81 @@
 
 import type { Zone, Couple, MatchStage } from "@/types/tournament";
 
+export interface CustomZoneGroup {
+  numZones: number;
+  zoneSize: number;
+}
+
+export interface CustomZoneItem {
+  zoneIndex: number;
+  name: string;
+  zoneNumber: number;
+  size: number;
+}
+
+export interface CustomZonesConfigResult {
+  totalZones: number;
+  totalCapacity: number;
+  summary: string;
+  zones: CustomZoneItem[];
+}
+
+/**
+ * Combina X cantidad de zonas de A parejas con Y cantidad de zonas de B parejas.
+ * Por ejemplo: 2 zonas de 4 parejas y 6 zonas de 3 parejas = 8 zonas, 26 parejas.
+ */
+export function buildCustomZonesConfig(
+  group1: CustomZoneGroup,
+  group2?: CustomZoneGroup
+): CustomZonesConfigResult {
+  const g1Zones = Math.max(0, group1.numZones || 0);
+  const g1Size = Math.max(2, group1.zoneSize || 4);
+  const g2Zones = Math.max(0, group2?.numZones || 0);
+  const g2Size = Math.max(2, group2?.zoneSize || 3);
+
+  const zones: CustomZoneItem[] = [];
+  let zoneIdx = 0;
+
+  for (let i = 0; i < g1Zones; i++) {
+    zones.push({
+      zoneIndex: zoneIdx,
+      name: `Zona ${String.fromCharCode(65 + zoneIdx)}`,
+      zoneNumber: zoneIdx + 1,
+      size: g1Size,
+    });
+    zoneIdx++;
+  }
+
+  for (let j = 0; j < g2Zones; j++) {
+    zones.push({
+      zoneIndex: zoneIdx,
+      name: `Zona ${String.fromCharCode(65 + zoneIdx)}`,
+      zoneNumber: zoneIdx + 1,
+      size: g2Size,
+    });
+    zoneIdx++;
+  }
+
+  const totalZones = zones.length;
+  const totalCapacity = g1Zones * g1Size + g2Zones * g2Size;
+
+  const parts: string[] = [];
+  if (g1Zones > 0) {
+    parts.push(`${g1Zones} ${g1Zones === 1 ? "zona" : "zonas"} de ${g1Size} parejas`);
+  }
+  if (g2Zones > 0) {
+    parts.push(`${g2Zones} ${g2Zones === 1 ? "zona" : "zonas"} de ${g2Size} parejas`);
+  }
+  const summary = parts.length > 0 ? parts.join(" y ") : "Sin zonas configuradas";
+
+  return {
+    totalZones,
+    totalCapacity,
+    summary,
+    zones,
+  };
+}
+
 export interface ZoneDistribution {
   numZones: number;
   zoneSize: number;

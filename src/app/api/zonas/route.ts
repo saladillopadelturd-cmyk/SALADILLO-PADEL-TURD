@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { calculateOptimalZones, generateZoneMatches } from "@/lib/tournament/zones";
+import { calculateOptimalZones, generateZoneMatches, buildCustomZonesConfig } from "@/lib/tournament/zones";
 
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];
@@ -482,51 +482,61 @@ export async function POST(request: Request) {
   }
 
   // ==========================================================================
-  // ACCIÓN 3: GENERACIÓN / SORTEO AUTOMÁTICO DE ZONAS
+  // ACCIÓN 3: CREACIÓN / CONFIGURACIÓN DE ESTRUCTURA DE ZONAS (VACÍAS)
+  // Las zonas siempre se confeccionan MANUALMENTE.
+  // Permite combinar X cantidad de zonas con A parejas e Y cantidad de zonas con B parejas.
   // ==========================================================================
-  const targetZoneSize = reqZoneSize
-    ? Number(reqZoneSize)
-    : (tournament.zone_size ? Number(tournament.zone_size) : 4);
-  const targetNumZones = reqNumZones
-    ? Number(reqNumZones)
-    : (tournament.num_zones ? Number(tournament.num_zones) : 0);
+  let customZonesToBuild: { name: string; zoneNumber: number; size: number }[] = [];
+  let zoneSummary = "";
 
-  const optimal = calculateOptimalZones(
-    couples.length,
-    targetZoneSize,
-    targetNumZones > 0 ? targetNumZones : null
-  );
+  if (body.group1 || body.group2) {
+    const config = buildCustomZonesConfig(
+      body.group1 || { numZones: 0, zoneSize: 4 },
+      body.group2 || { numZones: 0, zoneSize: 3 }
+    );
+    customZonesToBuild = config.zones;
+    zoneSummary = config.summary;
+  } else if (Array.isArray(body.zonesConfig) && body.zonesConfig.length > 0) {
+    customZonesToBuild = body.zonesConfig.map((z: { name?: string; size?: number }, idx: number) => ({
+      name: z.name || `Zona ${String.fromCharCode(65 + idx)}`,
+      zoneNumber: idx + 1,
+      size: z.size || 4,
+    }));
+    zoneSummary = `${customZonesToBuild.length} zonas configuradas`;
+  } else {
+    // Fallback con numZones y zoneSize
+    const targetZoneSize = reqZoneSize
+      ? Number(reqZoneSize)
+      : (tournament.zone_size ? Number(tournament.zone_size) : 4);
+    const targetNumZones = reqNumZones
+      ? Number(reqNumZones)
+      : (tournament.num_zones ? Number(tournament.num_zones) : 2);
 
-  // Regla estricta SPT: Cada zona debe tener al menos 2 parejas (nunca zonas vacías ni con 1 pareja).
-  // El número máximo admisible de zonas es Math.floor(couples.length / 2).
-  const maxPossibleZones = Math.max(1, Math.floor(couples.length / 2));
-  const rawNumZones = targetNumZones > 0 ? targetNumZones : optimal.numZones;
-  const numZones = Math.max(1, Math.min(rawNumZones, maxPossibleZones));
-  const zoneSize = targetZoneSize > 0 ? targetZoneSize : optimal.zoneSize;
+    const config = buildCustomZonesConfig(
+      { numZones: targetNumZones, zoneSize: targetZoneSize },
+      { numZones: 0, zoneSize: 3 }
+    );
+    customZonesToBuild = config.zones;
+    zoneSummary = config.summary;
+  }
 
-  // Si no se cumple la igualdad de zonas y no se forzó explícitamente ni es generate_zones / confirm_structure,
-  // se permite la conformación directa si el admin confirmó manualmente la estructura.
-  if (action !== "generate_zones" && action !== "confirm_structure" && !optimal.isEqual && body.force !== true && !body.confirmedByAdmin) {
+  if (customZonesToBuild.length === 0) {
     return NextResponse.json(
-      {
-        error: optimal.warningMessage,
-        isEqual: false,
-        missingCouples: optimal.missingCouples,
-        missingPlayers: optimal.missingPlayers,
-        canForce: true,
-        summary: optimal.summary,
-      },
+      { error: "Debes configurar al menos 1 zona para el torneo" },
       { status: 400 }
     );
   }
 
-  // Actualizar configuración real en el torneo (num_zones y zone_size)
+  const numZones = customZonesToBuild.length;
+  const primaryZoneSize = customZonesToBuild[0]?.size || 4;
+
+  // Actualizar configuración en el torneo
   await supabase
     .from("tournaments")
-    .update({ num_zones: numZones, zone_size: zoneSize })
+    .update({ num_zones: numZones, zone_size: primaryZoneSize, status: "zones", updated_at: new Date().toISOString() })
     .eq("id", tournamentId);
 
-  // Eliminar zonas anteriores, partidos y sus asignaciones si existían
+  // Eliminar zonas anteriores, partidos de zona y sus asignaciones si existían
   const { data: existingZones } = await supabase
     .from("zones")
     .select("id")
@@ -534,7 +544,6 @@ export async function POST(request: Request) {
 
   if (existingZones && existingZones.length > 0) {
     const existingIds = existingZones.map((z) => z.id);
-    // Eliminar partidos de zona primero para no violar restricciones de clave foránea
     await supabase
       .from("matches")
       .delete()
@@ -544,15 +553,27 @@ export async function POST(request: Request) {
     await supabase.from("zones").delete().eq("tournament_id", tournamentId);
   }
 
-  // 1. Crear las zonas correspondientes (Zona A, Zona B, Zona C...)
-  const zonesToCreate = [];
-  for (let i = 0; i < numZones; i++) {
-    zonesToCreate.push({
-      tournament_id: tournamentId,
-      name: `Zona ${String.fromCharCode(65 + i)}`,
-      zone_number: i + 1,
-    });
+  // Resetear zone_id en couples
+  await supabase
+    .from("couples")
+    .update({ zone_id: null })
+    .eq("tournament_id", tournamentId);
+
+  try {
+    await supabase
+      .from("pairs")
+      .update({ zone_id: null })
+      .eq("tournament_id", tournamentId);
+  } catch {
+    // Ignorar si tabla opcional no existe
   }
+
+  // Crear las nuevas zonas vacías (Zona A, Zona B, Zona C...)
+  const zonesToCreate = customZonesToBuild.map((z) => ({
+    tournament_id: tournamentId,
+    name: z.name,
+    zone_number: z.zoneNumber,
+  }));
 
   const { data: createdZones, error: zoneError } = await supabase
     .from("zones")
@@ -563,107 +584,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: zoneError?.message || "Error al crear zonas" }, { status: 500 });
   }
 
-  // 2. Mezclar aleatoriamente las parejas (Sorteo)
-  const shuffledPairs = shuffleArray(couples);
-
-  // 3. Distribuir parejas equitativamente asegurando que NUNCA haya zonas vacías ni con 1 pareja
-  // Cada zona recibe baseCount o baseCount + 1, donde baseCount >= 2.
-  const baseCount = Math.floor(shuffledPairs.length / numZones);
-  const remainder = shuffledPairs.length % numZones;
-  const zoneCapacities: number[] = [];
-
-  for (let i = 0; i < numZones; i++) {
-    zoneCapacities.push(i < remainder ? baseCount + 1 : baseCount);
-  }
-
-  const zoneCouplesToInsert = [];
-  let currentPairIdx = 0;
-
-  for (let zIdx = 0; zIdx < createdZones.length; zIdx++) {
-    const assignedZone = createdZones[zIdx];
-    const capacity = zoneCapacities[zIdx] || 0;
-
-    for (let c = 0; c < capacity && currentPairIdx < shuffledPairs.length; c++) {
-      const pair = shuffledPairs[currentPairIdx++];
-      zoneCouplesToInsert.push({
-        zone_id: assignedZone.id,
-        couple_id: pair.id,
-      });
-
-      // Sincronizar zone_id en la entidad de pareja
-      await supabase
-        .from("couples")
-        .update({ zone_id: assignedZone.id })
-        .eq("id", pair.id);
-
-      try {
-        await supabase
-          .from("pairs")
-          .update({ zone_id: assignedZone.id })
-          .eq("id", pair.id);
-      } catch {
-        // Ignorar si tabla opcional no existe
-      }
-    }
-  }
-
-  const { error: zcInsertError } = await supabase
-    .from("zone_couples")
-    .insert(zoneCouplesToInsert);
-
-  if (zcInsertError) {
-    return NextResponse.json({ error: zcInsertError.message }, { status: 500 });
-  }
-
-  // 4. Generar automáticamente los partidos round-robin (todos contra todos)
-  let matchNumber = 1;
-  const initialMatches: {
-    tournament_id: string;
-    zone_id: string;
-    stage: string;
-    match_number: number;
-    couple1_id: string | null;
-    couple2_id: string | null;
-    status: string;
-  }[] = [];
-
-  for (const zone of createdZones) {
-    const zoneCoupleIds = zoneCouplesToInsert
-      .filter((zc) => zc.zone_id === zone.id)
-      .map((zc) => zc.couple_id);
-
-    const roundRobin = generateRoundRobinPairs(zoneCoupleIds);
-    for (const rr of roundRobin) {
-      initialMatches.push({
-        tournament_id: tournamentId,
-        zone_id: zone.id,
-        stage: "zone",
-        match_number: matchNumber++,
-        couple1_id: rr.couple1Id,
-        couple2_id: rr.couple2Id,
-        status: "pending",
-      });
-    }
-  }
-
-  if (initialMatches.length > 0) {
-    const { error: matchInsertError } = await supabase.from("matches").insert(initialMatches);
-    if (matchInsertError) {
-      return NextResponse.json({ error: matchInsertError.message }, { status: 500 });
-    }
-  }
-
-  // Actualizar estado del torneo a 'zones'
-  await supabase
-    .from("tournaments")
-    .update({ status: "zones", updated_at: new Date().toISOString() })
-    .eq("id", tournamentId);
+  // Mapa de cupos para cada zona creada (zoneId -> size)
+  const zoneSizesMap: Record<string, number> = {};
+  createdZones.forEach((cz, idx) => {
+    zoneSizesMap[cz.id] = customZonesToBuild[idx]?.size || 4;
+  });
 
   return NextResponse.json({
     success: true,
-    message: "Zonas y fixture sorteados exitosamente",
+    message: `Estructura de zonas creada exitosamente (${zoneSummary}). Las zonas están listas para su confección manual.`,
     zones: createdZones,
-    assignedCouples: zoneCouplesToInsert.length,
-    matchesCreated: initialMatches.length,
+    zoneSizes: zoneSizesMap,
+    summary: zoneSummary,
+    assignedCouples: 0,
+    matchesCreated: 0,
   });
 }
