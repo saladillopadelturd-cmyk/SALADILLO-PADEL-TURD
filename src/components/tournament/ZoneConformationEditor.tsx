@@ -103,8 +103,72 @@ export default function ZoneConformationEditor({
     type: "success" | "info" | "warning";
   } | null>(null);
 
+  // Estado de auto-guardado reactivo
+  const [autoSaveState, setAutoSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Guardado reactivo automático hacia la API de zonas
+  const saveToServer = async (
+    targetZones: Zone[],
+    targetAssignments: Record<string, string>
+  ) => {
+    setAutoSaveState("saving");
+    try {
+      const payloadAssignments = Object.entries(targetAssignments).map(([coupleId, zoneId]) => ({
+        coupleId,
+        zoneId,
+      }));
+
+      const res = await fetch("/api/zonas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tournamentId,
+          action: "manual",
+          zones: targetZones.map((z, idx) => ({
+            id: z.id,
+            name: `Zona ${String.fromCharCode(65 + idx)}`,
+            zone_number: idx + 1,
+          })),
+          assignments: payloadAssignments,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Error al auto-guardar conformación");
+      }
+
+      // Sincronizar zonas si se generaron IDs en BD
+      if (Array.isArray(data.zones)) {
+        setLocalZones(data.zones);
+        setActiveZoneId((curr) => {
+          if (curr.startsWith("temp-")) {
+            const idx = targetZones.findIndex((z) => z.id === curr);
+            if (idx >= 0 && data.zones[idx]) {
+              return data.zones[idx].id;
+            }
+          }
+          return curr;
+        });
+      }
+
+      if (Array.isArray(data.assignments)) {
+        const nextMap: Record<string, string> = {};
+        data.assignments.forEach((a: { coupleId: string; zoneId: string }) => {
+          nextMap[a.coupleId] = a.zoneId;
+        });
+        setAssignments(nextMap);
+      }
+
+      setAutoSaveState("saved");
+    } catch (err: unknown) {
+      console.error("Error en auto-guardado de zonas:", err);
+      setAutoSaveState("error");
+    }
+  };
 
   // Sincronizar activeZoneId si cambia localZones
   useEffect(() => {
@@ -165,8 +229,10 @@ export default function ZoneConformationEditor({
       zone_number: nextIdx + 1,
       created_at: new Date().toISOString(),
     };
-    setLocalZones((prev) => [...prev, newZone]);
+    const nextZones = [...localZones, newZone];
+    setLocalZones(nextZones);
     setActiveZoneId(newZone.id);
+    saveToServer(nextZones, assignments);
     setFeedbackNotice({
       type: "success",
       text: `Se agregó ${nextName}. Ya puedes asignarle las parejas que desees.`,
@@ -178,30 +244,28 @@ export default function ZoneConformationEditor({
     const targetZone = localZones.find((z) => z.id === zoneId);
 
     // Desasignar parejas que estaban en esta zona
-    setAssignments((prev) => {
-      const next = { ...prev };
-      Object.keys(next).forEach((cId) => {
-        if (next[cId] === zoneId) delete next[cId];
-      });
-      return next;
+    const nextAssignments = { ...assignments };
+    Object.keys(nextAssignments).forEach((cId) => {
+      if (nextAssignments[cId] === zoneId) delete nextAssignments[cId];
     });
+    setAssignments(nextAssignments);
 
     // Quitar la zona y renumerar las restantes correlativamente (Zona A, Zona B, etc.)
-    setLocalZones((prev) => {
-      const filtered = prev.filter((z) => z.id !== zoneId);
-      return filtered.map((z, idx) => ({
+    const nextZones = localZones
+      .filter((z) => z.id !== zoneId)
+      .map((z, idx) => ({
         ...z,
         name: `Zona ${String.fromCharCode(65 + idx)}`,
         zone_number: idx + 1,
       }));
-    });
+    setLocalZones(nextZones);
 
     if (activeZoneId === zoneId) {
-      const remaining = localZones.filter((z) => z.id !== zoneId);
-      if (remaining.length > 0) setActiveZoneId(remaining[0].id);
+      if (nextZones.length > 0) setActiveZoneId(nextZones[0].id);
       else setActiveZoneId("");
     }
 
+    saveToServer(nextZones, nextAssignments);
     setFeedbackNotice({
       type: "info",
       text: `${targetZone?.name || "Zona"} eliminada. Sus parejas quedaron disponibles.`,
@@ -210,18 +274,17 @@ export default function ZoneConformationEditor({
 
   // Mover una pareja a una zona específica o desasignarla
   const handleMoveCouple = (coupleId: string, targetZoneId: string) => {
-    setAssignments((prev) => {
-      const updated = { ...prev };
-      if (!targetZoneId || targetZoneId === "none") {
-        delete updated[coupleId];
-      } else {
-        updated[coupleId] = targetZoneId;
-      }
-      return updated;
-    });
+    const nextAssignments = { ...assignments };
+    if (!targetZoneId || targetZoneId === "none") {
+      delete nextAssignments[coupleId];
+    } else {
+      nextAssignments[coupleId] = targetZoneId;
+    }
+    setAssignments(nextAssignments);
     if (selectedForSwap === coupleId) {
       setSelectedForSwap(null);
     }
+    saveToServer(localZones, nextAssignments);
   };
 
   // Asignar una pareja a la Zona Activa en el Asistente Dinámico (SIN límite rígido)
@@ -242,16 +305,18 @@ export default function ZoneConformationEditor({
     const coupleNum = couple ? coupleNumberMap.get(couple.id) : null;
     const newCount = couplesInActive.length + 1;
 
-    setAssignments((prev) => ({
-      ...prev,
+    const nextAssignments = {
+      ...assignments,
       [coupleId]: activeZoneId,
-    }));
+    };
+    setAssignments(nextAssignments);
+    saveToServer(localZones, nextAssignments);
 
     setFeedbackNotice({
       type: "info",
       text: `Pareja ${coupleNum ?? ""} asignada a ${activeZone.name} (${newCount} ${
         newCount === 1 ? "pareja" : "parejas"
-      }).`,
+      }). Guardado automático.`,
     });
   };
 
@@ -283,27 +348,25 @@ export default function ZoneConformationEditor({
       return;
     }
 
-    setAssignments((prev) => {
-      const updated = { ...prev };
-      const zone1 = prev[coupleId1];
-      const zone2 = prev[coupleId2];
+    const nextAssignments = { ...assignments };
+    const zone1 = nextAssignments[coupleId1];
+    const zone2 = nextAssignments[coupleId2];
 
-      if (zone2) {
-        updated[coupleId1] = zone2;
-      } else {
-        delete updated[coupleId1];
-      }
+    if (zone2) {
+      nextAssignments[coupleId1] = zone2;
+    } else {
+      delete nextAssignments[coupleId1];
+    }
 
-      if (zone1) {
-        updated[coupleId2] = zone1;
-      } else {
-        delete updated[coupleId2];
-      }
+    if (zone1) {
+      nextAssignments[coupleId2] = zone1;
+    } else {
+      delete nextAssignments[coupleId2];
+    }
 
-      return updated;
-    });
-
+    setAssignments(nextAssignments);
     setSelectedForSwap(null);
+    saveToServer(localZones, nextAssignments);
   };
 
   // Desasignar todas las parejas para armar de cero
@@ -311,6 +374,7 @@ export default function ZoneConformationEditor({
     setAssignments({});
     setSelectedForSwap(null);
     if (localZones.length > 0) setActiveZoneId(localZones[0].id);
+    saveToServer(localZones, {});
     setFeedbackNotice({
       type: "info",
       text: "Se han vaciado todas las zonas. Puedes comenzar a seleccionarlas una a una.",
@@ -322,6 +386,7 @@ export default function ZoneConformationEditor({
     setLocalZones(zones);
     setAssignments(initialAssignments);
     setSelectedForSwap(null);
+    saveToServer(zones, initialAssignments);
     setFeedbackNotice({
       type: "info",
       text: "Conformación restablecida al estado original.",
@@ -337,53 +402,9 @@ export default function ZoneConformationEditor({
       return;
     }
 
-    // Validación reglamentaria: Las zonas con parejas deben tener al menos 2 parejas.
-    let activeZonesCount = 0;
-    for (const zone of localZones) {
-      const count = Object.values(assignments).filter((zId) => zId === zone.id).length;
-      if (count === 1) {
-        setErrorMessage(
-          `No se puede guardar: la ${zone.name} tiene una sola pareja. Asigna al menos 2 parejas para poder jugar partidos, o elimina la zona.`
-        );
-        return;
-      }
-      if (count >= 2) {
-        activeZonesCount++;
-      }
-    }
-
-    if (activeZonesCount === 0) {
-      setErrorMessage("Debes asignar al menos 2 parejas a una zona para conformar el torneo.");
-      return;
-    }
-
     startTransition(async () => {
       try {
-        const payloadAssignments = Object.entries(assignments).map(([coupleId, zoneId]) => ({
-          coupleId,
-          zoneId,
-        }));
-
-        const res = await fetch("/api/zonas", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tournamentId,
-            action: "manual",
-            zones: localZones.map((z, idx) => ({
-              id: z.id,
-              name: `Zona ${String.fromCharCode(65 + idx)}`,
-              zone_number: idx + 1,
-            })),
-            assignments: payloadAssignments,
-          }),
-        });
-
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || "Error al guardar la conformación de zonas");
-        }
-
+        await saveToServer(localZones, assignments);
         await onSaveSuccess();
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Error al guardar cambios";
@@ -446,9 +467,29 @@ export default function ZoneConformationEditor({
               <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                 Libertad total (zonas de 3, 4, 5 parejas o más)
               </span>
+
+              {/* Indicador de estado de auto-guardado en vivo */}
+              {autoSaveState === "saving" && (
+                <span className="text-[11px] font-bold text-sky-400 bg-sky-500/15 border border-sky-500/30 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 animate-pulse shadow-sm">
+                  <span className="w-2 h-2 rounded-full border border-sky-400 border-t-transparent animate-spin" />
+                  Guardando cambios en vivo...
+                </span>
+              )}
+              {autoSaveState === "saved" && (
+                <span className="text-[11px] font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-sm">
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  ✓ Guardado automático
+                </span>
+              )}
+              {autoSaveState === "error" && (
+                <span className="text-[11px] font-bold text-rose-400 bg-rose-500/15 border border-rose-500/30 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-sm">
+                  <X className="w-3.5 h-3.5 text-rose-400" />
+                  Error al auto-guardar
+                </span>
+              )}
             </div>
             <p className="text-xs text-dark-300 mt-0.5">
-              Crea las zonas que desees y determina a tu gusto cuántas y cuáles parejas juegan en cada una.
+              Crea las zonas que desees y determina a tu gusto cuántas y cuáles parejas juegan en cada una. Cada cambio se guarda automáticamente.
             </p>
           </div>
         </div>

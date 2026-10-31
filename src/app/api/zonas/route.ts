@@ -291,63 +291,15 @@ export async function POST(request: Request) {
       .order("zone_number", { ascending: true });
 
     const tourZoneIds = tourZones ? tourZones.map((z) => z.id) : [];
+    const validZoneIdSet = new Set(tourZoneIds);
 
-    // Separar zonas que tienen parejas asignadas vs zonas que quedan sin parejas (vacías)
-    type TourZone = NonNullable<typeof tourZones>[number];
-    const activeTourZones: { zone: TourZone; count: number }[] = [];
-    const emptyTourZones: TourZone[] = [];
-
-    for (const zone of tourZones || []) {
-      const count = validAssignments.filter((a) => a.zoneId === zone.id).length;
-      if (count === 0) {
-        emptyTourZones.push(zone);
-      } else {
-        activeTourZones.push({ zone, count });
-      }
-    }
-
-    if (activeTourZones.length === 0) {
-      return NextResponse.json(
-        { error: "No se puede conformar el torneo: todas las zonas están vacías. Asigna al menos 2 parejas por zona." },
-        { status: 400 }
-      );
-    }
-
-    // Validar regla estricta SPT: Ninguna zona activa puede tener solo 1 pareja
-    for (const { zone, count } of activeTourZones) {
-      if (count === 1) {
-        return NextResponse.json(
-          { error: `No se puede conformar el torneo: la ${zone.name} tiene una sola pareja. Nunca debe haber zonas con una sola pareja (mínimo 2 parejas por zona).` },
-          { status: 400 }
-        );
-      }
-    }
-
-    // ELIMINAR ZONAS QUE NO TIENEN PAREJAS
-    if (emptyTourZones.length > 0) {
-      const emptyIds = emptyTourZones.map((z) => z.id);
-      await supabase.from("matches").delete().in("zone_id", emptyIds);
-      await supabase.from("zone_couples").delete().in("zone_id", emptyIds);
-      await supabase.from("zones").delete().in("id", emptyIds);
-    }
-
-    // Renumerar las zonas activas restantes correlativamente (Zona A, Zona B, Zona C...)
-    for (let i = 0; i < activeTourZones.length; i++) {
-      const { zone } = activeTourZones[i];
-      const newName = `Zona ${String.fromCharCode(65 + i)}`;
-      const newNumber = i + 1;
-      await supabase
-        .from("zones")
-        .update({ name: newName, zone_number: newNumber })
-        .eq("id", zone.id);
-      zone.name = newName;
-      zone.zone_number = newNumber;
-    }
+    // Filtrar asignaciones a zonas válidas existentes
+    const finalAssignments = validAssignments.filter((a) => validZoneIdSet.has(a.zoneId));
 
     // Actualizar num_zones en el torneo
     await supabase
       .from("tournaments")
-      .update({ num_zones: activeTourZones.length })
+      .update({ num_zones: (tourZones || []).length })
       .eq("id", tournamentId);
 
     // 2. Limpiar asignaciones previas en zone_couples para las zonas de este torneo
@@ -355,10 +307,7 @@ export async function POST(request: Request) {
       await supabase.from("zone_couples").delete().in("zone_id", tourZoneIds);
     }
 
-    // 3. Insertar nuevas asignaciones válidas (solo para zonas activas)
-    const activeZoneIds = new Set(activeTourZones.map((az) => az.zone.id));
-    const finalAssignments = validAssignments.filter((a) => activeZoneIds.has(a.zoneId));
-
+    // 3. Insertar nuevas asignaciones válidas
     const newZoneCouples = finalAssignments.map((a) => ({
       zone_id: a.zoneId,
       couple_id: a.coupleId,
@@ -396,7 +345,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 5. Regenerar automáticamente los partidos de zona para reflejar la nueva conformación
+    // 5. Regenerar automáticamente los partidos de zona para las zonas que tengan al menos 2 parejas
     await supabase
       .from("matches")
       .delete()
@@ -414,7 +363,7 @@ export async function POST(request: Request) {
       status: string;
     }[] = [];
 
-    for (const { zone } of activeTourZones) {
+    for (const zone of tourZones || []) {
       const zoneCouplesList = finalAssignments
         .filter((a) => a.zoneId === zone.id)
         .map((a) => a.coupleId);
@@ -441,14 +390,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: emptyTourZones.length > 0
-        ? `Conformación guardada con éxito. Se eliminaron ${emptyTourZones.length} ${
-            emptyTourZones.length === 1 ? "zona vacía" : "zonas vacías"
-          }.`
-        : "Conformación de zonas guardada con éxito",
+      message: "Estado de zonas guardado exitosamente.",
       assignedCount: finalAssignments.length,
-      deletedEmptyZonesCount: emptyTourZones.length,
-      activeZonesCount: activeTourZones.length,
+      zones: tourZones,
+      assignments: finalAssignments,
       matchesCreated: matchesToInsert.length,
     });
   }

@@ -1174,7 +1174,7 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
             </div>
 
             {/* Modo Edición Interactivo de Conformación de Zonas */}
-            {isEditingConformation ? (
+            {isEditingConformation || zones.length === 0 ? (
               <ZoneConformationEditor
                 tournamentId={id}
                 zones={zones}
@@ -1191,41 +1191,10 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                     text: "Conformación de zonas guardada y actualizada exitosamente.",
                   });
                 }}
-                onCancel={() => setIsEditingConformation(false)}
+                onCancel={() => {
+                  if (zones.length > 0) setIsEditingConformation(false);
+                }}
               />
-            ) : zones.length === 0 ? (
-              <Card className="p-10 text-center text-dark-400 space-y-4">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center mx-auto text-emerald-400">
-                  <ArrowRightLeft className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4 className="text-white font-bold text-base mb-1">
-                    Confección Manual de Zonas
-                  </h4>
-                  <p className="text-xs text-dark-300 max-w-md mx-auto">
-                    El administrador genera manualmente las zonas del torneo, determinando libremente cuántas y cuáles parejas juegan en cada una (en el mismo torneo puede haber zonas de 3 parejas, de 5 parejas, de 4 parejas, etc.).
-                    {couples.length > 0
-                      ? ` Hay ${couples.length} parejas inscriptas listas para asignar.`
-                      : " Recuerda cargar las parejas desde el editor."}
-                  </p>
-                </div>
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-                  <Button
-                    onClick={() => setIsEditingConformation(true)}
-                    className="bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-black px-6 py-2.5 rounded-xl shadow-lg flex items-center gap-2"
-                  >
-                    <ArrowRightLeft className="w-4 h-4" />
-                    <span>Comenzar Confección Manual</span>
-                  </Button>
-                  <Link
-                    href={`/admin/parejas?torneo=${id}`}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-200 border border-dark-700 text-xs font-bold transition-all"
-                  >
-                    <Users className="w-4 h-4 text-emerald-400" />
-                    <span>Editor de Parejas ({couples.length})</span>
-                  </Link>
-                </div>
-              </Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {zones.map((zone) => {
