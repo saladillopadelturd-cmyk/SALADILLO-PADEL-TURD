@@ -1145,6 +1145,19 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                   </span>
                 </Button>
 
+                {isAdmin && zones.length > 0 && !isEditingConformation && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setIsEditingConformation(true)}
+                    className="bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/30 font-bold flex items-center gap-1.5"
+                    title="Mover o intercambiar parejas entre zonas de forma personalizada"
+                  >
+                    <ArrowRightLeft className="w-4 h-4 text-blue-400" />
+                    <span>Confección Manual</span>
+                  </Button>
+                )}
+
                 {zones.length > 0 && emptyZonesCount > 0 && !isEditingConformation && (
                   <Button
                     variant="secondary"

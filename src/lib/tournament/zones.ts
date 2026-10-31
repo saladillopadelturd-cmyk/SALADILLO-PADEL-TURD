@@ -321,7 +321,7 @@ export function calculateOptimalZones(
   preferredZoneSize: number = 4,
   customNumZones?: number | null
 ): ZoneDistribution {
-  const zoneSize = preferredZoneSize === 3 ? 3 : 4;
+  const zoneSize = Math.max(2, preferredZoneSize || 4);
 
   if (couplesCount <= 0) {
     const missingCouples = zoneSize;
