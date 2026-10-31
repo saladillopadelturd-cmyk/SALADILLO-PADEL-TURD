@@ -217,12 +217,73 @@ export async function POST(request: Request) {
 
   // ==========================================================================
   // ACCIÓN 1: REORDENAMIENTO / EDICIÓN MANUAL DE PAREJAS EN ZONAS
+  // El administrador genera y conforma libremente las zonas (3, 4, 5 parejas, etc.)
   // ==========================================================================
   if (action === "manual" && Array.isArray(assignments)) {
     type Assignment = { zoneId: string; coupleId: string };
-    const validAssignments = assignments as Assignment[];
+    let validAssignments = assignments as Assignment[];
 
-    // 1. Obtener todas las zonas de este torneo
+    // Si el cliente envía la lista de zonas modificada (creadas/eliminadas manualmente)
+    const idMap = new Map<string, string>();
+    if (Array.isArray(body.zones) && body.zones.length > 0) {
+      const { data: currentDbZones } = await supabase
+        .from("zones")
+        .select("*")
+        .eq("tournament_id", tournamentId);
+
+      const dbZoneMap = new Map((currentDbZones || []).map((z) => [z.id, z]));
+      const requestedZoneIds = new Set(body.zones.map((z: { id?: string }) => z.id).filter(Boolean));
+
+      // Eliminar zonas de la BD que ya no están en la lista
+      const toDeleteIds: string[] = [];
+      for (const [dbId] of dbZoneMap) {
+        if (!requestedZoneIds.has(dbId)) {
+          toDeleteIds.push(dbId);
+        }
+      }
+      if (toDeleteIds.length > 0) {
+        await supabase.from("matches").delete().in("zone_id", toDeleteIds);
+        await supabase.from("zone_couples").delete().in("zone_id", toDeleteIds);
+        await supabase.from("zones").delete().in("id", toDeleteIds);
+      }
+
+      // Crear nuevas zonas o actualizar existentes
+      for (let i = 0; i < body.zones.length; i++) {
+        const rz = body.zones[i];
+        const zoneName = rz.name || `Zona ${String.fromCharCode(65 + i)}`;
+        const zoneNumber = i + 1;
+
+        if (rz.id && dbZoneMap.has(rz.id)) {
+          await supabase
+            .from("zones")
+            .update({ name: zoneName, zone_number: zoneNumber })
+            .eq("id", rz.id);
+          idMap.set(rz.id, rz.id);
+        } else {
+          const { data: newZone } = await supabase
+            .from("zones")
+            .insert({
+              tournament_id: tournamentId,
+              name: zoneName,
+              zone_number: zoneNumber,
+            })
+            .select()
+            .single();
+
+          if (newZone) {
+            idMap.set(rz.id, newZone.id);
+          }
+        }
+      }
+
+      // Reasignar IDs temporales a IDs reales
+      validAssignments = validAssignments.map((a) => ({
+        ...a,
+        zoneId: idMap.get(a.zoneId) || a.zoneId,
+      }));
+    }
+
+    // 1. Obtener todas las zonas de este torneo (actualizadas)
     const { data: tourZones } = await supabase
       .from("zones")
       .select("*")

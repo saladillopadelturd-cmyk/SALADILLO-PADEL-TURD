@@ -28,10 +28,6 @@ const ZoneConformationEditor = dynamic(
   () => import("@/components/tournament/ZoneConformationEditor"),
   { ssr: false }
 );
-const ZoneSetupModal = dynamic(
-  () => import("@/components/tournament/ZoneSetupModal"),
-  { ssr: false }
-);
 const AutoScheduleModal = dynamic(
   () => import("@/components/tournament/AutoScheduleModal"),
   { ssr: false }
@@ -105,7 +101,6 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<string>(initialTab || "parejas");
   const [isGeneratingZones, setIsGeneratingZones] = useState(false);
-  const [isZoneSetupModalOpen, setIsZoneSetupModalOpen] = useState(false);
   const [isGeneratingPlayoffs, setIsGeneratingPlayoffs] = useState(false);
   const [isEditingConformation, setIsEditingConformation] = useState(false);
   const [notification, setNotification] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
@@ -1126,11 +1121,11 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                 <p className="text-xs text-dark-400 mt-0.5">
                   {zones.length > 0 ? (
                     <>
-                      Estructura: <strong className="text-white">{zones.length} {zones.length === 1 ? "zona" : "zonas"}</strong>. Confección manual de parejas.
+                      Estructura: <strong className="text-white">{zones.length} {zones.length === 1 ? "zona" : "zonas"}</strong>. Confección manual de parejas (3, 4, 5 o más parejas por zona).
                     </>
                   ) : (
                     <>
-                      Define la combinación de zonas de 4 y 3 parejas. Confección 100% manual.
+                      Confección manual de zonas: determina libremente cuántas y cuáles parejas juegan en cada zona.
                     </>
                   )}
                   <span className="hidden sm:inline"> (La peor clasificada de cada zona queda eliminada).</span>
@@ -1142,39 +1137,24 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                 {zones.length === 0 ? (
                   <Button
                     size="sm"
-                    onClick={() => setIsZoneSetupModalOpen(true)}
+                    onClick={() => setIsEditingConformation(true)}
                     className="bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-black shadow-md flex items-center gap-1.5"
                   >
-                    <Layers className="w-4 h-4" />
-                    <span>Configurar y Confeccionar Zonas</span>
+                    <ArrowRightLeft className="w-4 h-4" />
+                    <span>Confeccionar Zonas Manualmente</span>
                   </Button>
                 ) : (
-                  <>
-                    {isAdmin && !isEditingConformation && (
-                      <Button
-                        size="sm"
-                        onClick={() => setIsEditingConformation(true)}
-                        className="bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-black shadow-md flex items-center gap-1.5"
-                        title="Asignar o reordenar parejas en cada zona de forma manual"
-                      >
-                        <ArrowRightLeft className="w-4 h-4" />
-                        <span>Confección Manual</span>
-                      </Button>
-                    )}
-
-                    {isAdmin && !isEditingConformation && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setIsZoneSetupModalOpen(true)}
-                        className="bg-dark-800 hover:bg-dark-750 text-slate-200 border border-dark-700 font-bold flex items-center gap-1.5"
-                        title="Cambiar la cantidad de zonas de 4 y de 3 parejas"
-                      >
-                        <Layers className="w-4 h-4 text-emerald-400" />
-                        <span>Reconfigurar Zonas</span>
-                      </Button>
-                    )}
-                  </>
+                  isAdmin && !isEditingConformation && (
+                    <Button
+                      size="sm"
+                      onClick={() => setIsEditingConformation(true)}
+                      className="bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-black shadow-md flex items-center gap-1.5"
+                      title="Asignar, agregar zonas o reordenar parejas en cada zona de forma manual"
+                    >
+                      <ArrowRightLeft className="w-4 h-4" />
+                      <span>Confección Manual de Zonas</span>
+                    </Button>
+                  )
                 )}
 
                 {zones.length > 0 && emptyZonesCount > 0 && !isEditingConformation && (
@@ -1216,26 +1196,26 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
             ) : zones.length === 0 ? (
               <Card className="p-10 text-center text-dark-400 space-y-4">
                 <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center mx-auto text-emerald-400">
-                  <Layers className="w-6 h-6" />
+                  <ArrowRightLeft className="w-6 h-6" />
                 </div>
                 <div>
                   <h4 className="text-white font-bold text-base mb-1">
-                    Aún no se ha configurado la estructura de zonas
+                    Confección Manual de Zonas
                   </h4>
                   <p className="text-xs text-dark-300 max-w-md mx-auto">
-                    Puedes combinar libremente zonas de 4 parejas y zonas de 3 parejas (por ejemplo: 2 zonas de 4 y 6 de 3). Las zonas se crean vacías para que realices la confección manual de parejas.
+                    El administrador genera manualmente las zonas del torneo, determinando libremente cuántas y cuáles parejas juegan en cada una (en el mismo torneo puede haber zonas de 3 parejas, de 5 parejas, de 4 parejas, etc.).
                     {couples.length > 0
-                      ? ` Hay ${couples.length} parejas inscriptas disponibles.`
+                      ? ` Hay ${couples.length} parejas inscriptas listas para asignar.`
                       : " Recuerda cargar las parejas desde el editor."}
                   </p>
                 </div>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
                   <Button
-                    onClick={() => setIsZoneSetupModalOpen(true)}
+                    onClick={() => setIsEditingConformation(true)}
                     className="bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-black px-6 py-2.5 rounded-xl shadow-lg flex items-center gap-2"
                   >
-                    <Layers className="w-4 h-4" />
-                    <span>Configurar y Confeccionar Zonas</span>
+                    <ArrowRightLeft className="w-4 h-4" />
+                    <span>Comenzar Confección Manual</span>
                   </Button>
                   <Link
                     href={`/admin/parejas?torneo=${id}`}
@@ -2555,21 +2535,6 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
         loading={isDeleting}
         title="Eliminar Torneo"
         message={`¿Estás seguro de que deseas eliminar el torneo "${tournament?.name}"? Esta acción borrará todas sus zonas, parejas y partidos de forma irreversible.`}
-      />
-
-      <ZoneSetupModal
-        isOpen={isZoneSetupModalOpen}
-        onClose={() => setIsZoneSetupModalOpen(false)}
-        tournamentId={id}
-        totalCouplesCount={couples.length}
-        onStructureCreated={async () => {
-          await loadTournamentData();
-          setIsEditingConformation(true);
-          setNotification({
-            type: "success",
-            text: "Estructura de zonas configurada exitosamente. Procede a asignar manualmente las parejas a cada zona.",
-          });
-        }}
       />
     </div>
   );
