@@ -495,6 +495,7 @@ export function PlayoffBracketView({
                       isCompleted && !isBye && m.winner_couple_id === m.couple1_id;
 
                     const isClickable =
+                      isAdmin &&
                       !isBye &&
                       !!m.couple1_id &&
                       !!m.couple2_id &&
@@ -666,8 +667,8 @@ export function PlayoffBracketView({
                             ) : null}
                           </button>
 
-                          {/* Marcador si está finalizado */}
-                          {scoreFormatted && !isBye && (
+                          {/* Marcador si está finalizado (visible exclusivamente para administradores) */}
+                          {isAdmin && scoreFormatted && !isBye && (
                             <div className="px-3 py-1 bg-dark-950/60 border-t border-dark-800/80 text-[11px] font-mono font-bold text-sky-400 flex items-center justify-between">
                               <span>Resultado:</span>
                               <span>{scoreFormatted}</span>

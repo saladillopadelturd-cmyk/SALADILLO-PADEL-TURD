@@ -1457,15 +1457,17 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                         <button
                           type="button"
                           onClick={() => {
-                            if (m.couple1_id && !isPendingRival) {
+                            if (isAdmin && m.couple1_id && !isPendingRival) {
                               openScoreModal(m, m.couple1_id);
                             }
                           }}
-                          disabled={!m.couple1_id || isPendingRival}
+                          disabled={!isAdmin || !m.couple1_id || isPendingRival}
                           title={
                             !m.couple1_id || isPendingRival
                               ? "Esperando definición de clasificados"
-                              : "Hacer clic para elegir como pareja ganadora y anotar el resultado"
+                              : isAdmin
+                              ? "Hacer clic para elegir como pareja ganadora y anotar el resultado"
+                              : undefined
                           }
                           className={`w-full text-left flex items-center justify-between px-2.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all group ${
                             isP1Winner
@@ -1474,7 +1476,9 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                               ? "bg-rose-500/15 border border-rose-500/40 text-rose-300/90 line-through opacity-85"
                               : !m.couple1_id
                               ? "text-dark-400 italic font-normal bg-dark-950/40 cursor-not-allowed border border-transparent"
-                              : "bg-dark-900 border border-dark-800 text-slate-200 hover:border-emerald-500/50 hover:bg-emerald-500/10 cursor-pointer"
+                              : isAdmin
+                              ? "bg-dark-900 border border-dark-800 text-slate-200 hover:border-emerald-500/50 hover:bg-emerald-500/10 cursor-pointer"
+                              : "bg-dark-900 border border-dark-800 text-slate-200 cursor-default"
                           }`}
                         >
                           <div className="flex items-center gap-1.5 min-w-0 pr-2">
@@ -1484,12 +1488,12 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                             <span className="truncate">{c1Name}</span>
                           </div>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
-                            {m.score_set1 && (
+                            {(!isPlayoff || isAdmin) && m.score_set1 && (
                               <span className="scoreboard-digit px-2 py-0.5 rounded bg-dark-900 border border-dark-700 text-xs font-mono font-black text-white">
                                 {m.score_set1}
                               </span>
                             )}
-                            {!hasResult && m.couple1_id && !isPendingRival && (
+                            {isAdmin && !hasResult && m.couple1_id && !isPendingRival && (
                               <span className="text-[10px] text-emerald-400/80 font-bold hidden group-hover:inline uppercase tracking-wider">
                                 Ganadora
                               </span>
@@ -1501,15 +1505,17 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                         <button
                           type="button"
                           onClick={() => {
-                            if (m.couple2_id && !isPendingRival) {
+                            if (isAdmin && m.couple2_id && !isPendingRival) {
                               openScoreModal(m, m.couple2_id);
                             }
                           }}
-                          disabled={!m.couple2_id || isPendingRival}
+                          disabled={!isAdmin || !m.couple2_id || isPendingRival}
                           title={
                             !m.couple2_id || isPendingRival
                               ? "Esperando definición de clasificados"
-                              : "Hacer clic para elegir como pareja ganadora y anotar el resultado"
+                              : isAdmin
+                              ? "Hacer clic para elegir como pareja ganadora y anotar el resultado"
+                              : undefined
                           }
                           className={`w-full text-left flex items-center justify-between px-2.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all group ${
                             isP2Winner
@@ -1518,7 +1524,9 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                               ? "bg-rose-500/15 border border-rose-500/40 text-rose-300/90 line-through opacity-85"
                               : !m.couple2_id
                               ? "text-dark-400 italic font-normal bg-dark-950/40 cursor-not-allowed border border-transparent"
-                              : "bg-dark-900 border border-dark-800 text-slate-200 hover:border-emerald-500/50 hover:bg-emerald-500/10 cursor-pointer"
+                              : isAdmin
+                              ? "bg-dark-900 border border-dark-800 text-slate-200 hover:border-emerald-500/50 hover:bg-emerald-500/10 cursor-pointer"
+                              : "bg-dark-900 border border-dark-800 text-slate-200 cursor-default"
                           }`}
                         >
                           <div className="flex items-center gap-1.5 min-w-0 pr-2">
@@ -1528,12 +1536,12 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                             <span className="truncate">{c2Name}</span>
                           </div>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
-                            {m.score_set2 && (
+                            {(!isPlayoff || isAdmin) && m.score_set2 && (
                               <span className="scoreboard-digit px-2 py-0.5 rounded bg-dark-900 border border-dark-700 text-xs font-mono font-black text-white">
                                 {m.score_set2}
                               </span>
                             )}
-                            {!hasResult && m.couple2_id && !isPendingRival && (
+                            {isAdmin && !hasResult && m.couple2_id && !isPendingRival && (
                               <span className="text-[10px] text-emerald-400/80 font-bold hidden group-hover:inline uppercase tracking-wider">
                                 Ganadora
                               </span>
@@ -1545,32 +1553,46 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                       {/* Footer: leyenda Programado / Finalizado y botón Reprogramar */}
                       <div className="flex items-center justify-between pt-2 border-t border-dark-800 text-xs">
                         {hasResult ? (
-                          <button
-                            type="button"
-                            onClick={() => openScoreModal(m)}
-                            title="Partido finalizado. Clic para modificar marcador"
-                            className="px-3 py-1.5 rounded-full text-xs font-bold bg-rose-500/20 text-rose-400 border border-rose-500/40 flex items-center gap-1.5 hover:bg-rose-500/30 cursor-pointer transition-all shadow-sm"
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5 text-rose-400" />
-                            Finalizado
-                          </button>
+                          isAdmin ? (
+                            <button
+                              type="button"
+                              onClick={() => openScoreModal(m)}
+                              title="Partido finalizado. Clic para modificar marcador"
+                              className="px-3 py-1.5 rounded-full text-xs font-bold bg-rose-500/20 text-rose-400 border border-rose-500/40 flex items-center gap-1.5 hover:bg-rose-500/30 cursor-pointer transition-all shadow-sm"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5 text-rose-400" />
+                              Finalizado
+                            </button>
+                          ) : (
+                            <span className="px-3 py-1 rounded-full text-xs font-bold bg-dark-800 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shadow-sm">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                              Finalizado
+                            </span>
+                          )
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (!isPendingRival) openScoreModal(m);
-                            }}
-                            disabled={isPendingRival}
-                            title={isPendingRival ? "Esperando definición de clasificados" : "Clic para indicar resultado del partido"}
-                            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 ${
-                              isPendingRival
-                                ? "bg-dark-800 text-dark-500 border border-dark-700 cursor-not-allowed"
-                                : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 hover:border-emerald-500/60 hover:scale-[1.02] cursor-pointer"
-                            }`}
-                          >
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                            Programado
-                          </button>
+                          isAdmin ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!isPendingRival) openScoreModal(m);
+                              }}
+                              disabled={isPendingRival}
+                              title={isPendingRival ? "Esperando definición de clasificados" : "Clic para indicar resultado del partido"}
+                              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 ${
+                                isPendingRival
+                                  ? "bg-dark-800 text-dark-500 border border-dark-700 cursor-not-allowed"
+                                  : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 hover:border-emerald-500/60 hover:scale-[1.02] cursor-pointer"
+                              }`}
+                            >
+                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                              Programado
+                            </button>
+                          ) : (
+                            <span className="px-3 py-1 rounded-full text-xs font-bold bg-dark-800 text-dark-300 border border-dark-700 flex items-center gap-1.5 shadow-sm">
+                              <span className="w-2 h-2 rounded-full bg-dark-500" />
+                              Programado
+                            </span>
+                          )
                         )}
 
                         <div className="flex items-center gap-2">
@@ -1686,14 +1708,22 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                 <PlayoffBracketView
                   matches={matches}
                   couples={couples}
-                  isAdmin={true}
-                  onMatchClick={(m, winnerId) => {
-                    if (m.couple1_id && m.couple2_id) {
-                      openScoreModal(m, winnerId);
-                    }
-                  }}
+                  isAdmin={Boolean(isAdmin)}
+                  onMatchClick={
+                    isAdmin
+                      ? (m, winnerId) => {
+                          if (m.couple1_id && m.couple2_id) {
+                            openScoreModal(m, winnerId);
+                          }
+                        }
+                      : undefined
+                  }
                   title="Cuadro Oficial de Eliminación Directa"
-                  subtitle="Toca una pareja en la llave para elegirla como ganadora y anotar el resultado. Avanzará automáticamente a la siguiente ronda y ocupará su lugar en la próxima instancia."
+                  subtitle={
+                    isAdmin
+                      ? "Toca una pareja en la llave para elegirla como ganadora y anotar el resultado. Avanzará automáticamente a la siguiente ronda y ocupará su lugar en la próxima instancia."
+                      : "Estructura interactiva de llaves del cuadro principal de eliminación directa."
+                  }
                   tournamentName={tournament.name}
                   categoryName={`${tournament.category || ""} ${tournament.gender ? `(${tournament.gender})` : ""}`.trim()}
                 />
@@ -1735,12 +1765,12 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                             <Card
                               key={m.id}
                               onClick={() => {
-                                if (m.couple1_id && m.couple2_id) {
+                                if (isAdmin && m.couple1_id && m.couple2_id) {
                                   openScoreModal(m);
                                 }
                               }}
                               className={`p-4 border-dark-800 bg-dark-900/60 ${
-                                m.couple1_id && m.couple2_id
+                                isAdmin && m.couple1_id && m.couple2_id
                                   ? "cursor-pointer hover:border-emerald-500/50 hover:bg-dark-900/90 transition-all"
                                   : ""
                               }`}
@@ -1769,7 +1799,7 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                                   {m.winner_couple_id === m.couple2_id && <Trophy className="w-3.5 h-3.5 text-amber-400" />}
                                 </div>
                               </div>
-                              {score && (
+                              {isAdmin && score && (
                                 <div className="mt-2 pt-2 border-t border-dark-800 text-xs font-mono font-bold text-amber-300">
                                   {score}
                                 </div>
