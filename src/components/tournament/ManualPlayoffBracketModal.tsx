@@ -163,9 +163,13 @@ export function ManualPlayoffBracketModal({
       });
     });
 
-    // Intentar restaurar el estado previo guardado (localStorage o matches existentes en BD)
+    // 1. Identificadores y datos frescos de parejas clasificadas actuales
+    const currentIds = new Set(initialEntries.map((p) => p.id));
+    const initialEntriesMap = new Map(initialEntries.map((p) => [p.id, p]));
+
+    // 2. Intentar restaurar el estado previo guardado (localStorage o matches existentes en BD)
     let restoredSlots: AnchoredMatchSlot[] | null = null;
-    let restoredPairs: ManualCoupleEntry[] | null = null;
+    let synchronizedPairs: ManualCoupleEntry[] | null = null;
 
     try {
       const storageKey = `spt_manual_bracket_${tournamentId}`;
@@ -173,12 +177,39 @@ export function ManualPlayoffBracketModal({
       if (savedRaw) {
         const saved = JSON.parse(savedRaw);
         if (saved && Array.isArray(saved.slots) && Array.isArray(saved.pairs)) {
-          const currentIds = new Set(initialEntries.map((p) => p.id));
-          const hasMatch = saved.pairs.some((p: ManualCoupleEntry) => currentIds.has(p.id));
-          if (hasMatch) {
-            restoredSlots = saved.slots;
-            restoredPairs = saved.pairs;
-          }
+          // Filtrar parejas de saved que sigan estando clasificadas y actualizar sus metadatos
+          const validSavedPairs = saved.pairs
+            .filter((p: ManualCoupleEntry) => currentIds.has(p.id))
+            .map((p: ManualCoupleEntry) => {
+              const fresh = initialEntriesMap.get(p.id);
+              return {
+                ...p,
+                name: fresh?.name || p.name,
+                zoneName: fresh?.zoneName,
+                zonePosition: fresh?.zonePosition,
+              };
+            });
+
+          // Agregar parejas clasificadas que no estaban en saved (ej: recién clasificadas o corregidas)
+          const seenIds = new Set(validSavedPairs.map((p: ManualCoupleEntry) => p.id));
+          const missingPairs = initialEntries.filter((p) => !seenIds.has(p.id));
+          synchronizedPairs = [...validSavedPairs, ...missingPairs];
+
+          // Limpiar de los slots cualquier pareja que ya no esté clasificada
+          restoredSlots = (saved.slots as AnchoredMatchSlot[]).map((slot) => {
+            const c1Valid = slot.couple1Id && currentIds.has(slot.couple1Id) ? slot.couple1Id : null;
+            const c2Valid = slot.couple2Id && currentIds.has(slot.couple2Id) ? slot.couple2Id : null;
+            if (slot.type === "seed") {
+              return c1Valid ? { ...slot, couple1Id: c1Valid } : { matchIndex: slot.matchIndex, type: "empty" as const, couple1Id: null, couple2Id: null };
+            }
+            if (slot.type === "match") {
+              if (!c1Valid && !c2Valid) {
+                return { matchIndex: slot.matchIndex, type: "empty" as const, couple1Id: null, couple2Id: null };
+              }
+              return { ...slot, couple1Id: c1Valid, couple2Id: c2Valid };
+            }
+            return slot;
+          });
         }
       }
     } catch (e) {
@@ -190,14 +221,31 @@ export function ManualPlayoffBracketModal({
       if (existingMatches && existingMatches.length > 0) {
         const fromDb = reconstructSlotsFromMatches(existingMatches);
         if (fromDb) {
-          restoredSlots = fromDb;
+          restoredSlots = fromDb.map((slot) => {
+            const c1Valid = slot.couple1Id && currentIds.has(slot.couple1Id) ? slot.couple1Id : null;
+            const c2Valid = slot.couple2Id && currentIds.has(slot.couple2Id) ? slot.couple2Id : null;
+            if (slot.type === "seed") {
+              return c1Valid ? { ...slot, couple1Id: c1Valid } : { matchIndex: slot.matchIndex, type: "empty" as const, couple1Id: null, couple2Id: null };
+            }
+            if (slot.type === "match") {
+              if (!c1Valid && !c2Valid) {
+                return { matchIndex: slot.matchIndex, type: "empty" as const, couple1Id: null, couple2Id: null };
+              }
+              return { ...slot, couple1Id: c1Valid, couple2Id: c2Valid };
+            }
+            return slot;
+          });
         }
       }
     }
 
     if (restoredSlots) {
       setR1Slots(restoredSlots);
-      setPairsList(restoredPairs || initialEntries);
+      setPairsList(
+        synchronizedPairs && synchronizedPairs.length === initialEntries.length
+          ? synchronizedPairs
+          : initialEntries
+      );
     } else {
       setPairsList(initialEntries);
       setR1Slots(initializeR1Slots(sourceList.length));
@@ -302,6 +350,64 @@ export function ManualPlayoffBracketModal({
   // Quitar una pareja de su lugar asignado mediante la pequeña (x)
   const handleRemoveCouple = (coupleId: string) => {
     setR1Slots((prev) => removeCoupleFromSlots(prev, coupleId));
+  };
+
+  // Recargar y sincronizar con los clasificados oficiales de zonas
+  const handleSyncWithZones = () => {
+    const freshEntries: ManualCoupleEntry[] = [];
+    const sourceList =
+      qualifiedPairs.length > 0
+        ? qualifiedPairs
+        : allCouples.map((c) => ({
+            pairId: c.id,
+            coupleObj: c,
+            zoneName: "General",
+            position: 1,
+            points: 0,
+          }));
+
+    sourceList.forEach((q, idx) => {
+      const couple = q.coupleObj || couplesMap.get(q.pairId);
+      const p1 = couple?.player1
+        ? `${couple.player1.last_name || ""} ${couple.player1.first_name || ""}`.trim()
+        : "";
+      const p2 = couple?.player2
+        ? `${couple.player2.last_name || ""} ${couple.player2.first_name || ""}`.trim()
+        : "";
+      const label = p1 && p2 ? `${p1} / ${p2}` : `Pareja #${idx + 1}`;
+
+      freshEntries.push({
+        id: q.pairId,
+        name: label,
+        zoneName: q.zoneName,
+        zonePosition: q.position,
+        action: null,
+      });
+    });
+
+    const currentIds = new Set(freshEntries.map((p) => p.id));
+    setPairsList(freshEntries);
+    setR1Slots((prev) =>
+      prev.map((slot) => {
+        const c1Valid = slot.couple1Id && currentIds.has(slot.couple1Id) ? slot.couple1Id : null;
+        const c2Valid = slot.couple2Id && currentIds.has(slot.couple2Id) ? slot.couple2Id : null;
+        if (slot.type === "seed") {
+          return c1Valid ? { ...slot, couple1Id: c1Valid } : { matchIndex: slot.matchIndex, type: "empty" as const, couple1Id: null, couple2Id: null };
+        }
+        if (slot.type === "match") {
+          if (!c1Valid && !c2Valid) {
+            return { matchIndex: slot.matchIndex, type: "empty" as const, couple1Id: null, couple2Id: null };
+          }
+          return { ...slot, couple1Id: c1Valid, couple2Id: c2Valid };
+        }
+        return slot;
+      })
+    );
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(`spt_manual_bracket_${tournamentId}`);
+      }
+    } catch {}
   };
 
   // Limpiar todas las asignaciones
@@ -602,17 +708,28 @@ export function ManualPlayoffBracketModal({
                   {assignedCount} / {pairsList.length} asignadas
                 </span>
               </div>
-              {assignedCount > 0 && (
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={clearAllSelections}
-                  className="text-[11px] text-dark-400 hover:text-rose-400 flex items-center gap-1 transition-colors"
-                  title="Vaciar todas las llaves"
+                  onClick={handleSyncWithZones}
+                  className="text-[11px] text-dark-400 hover:text-sky-400 flex items-center gap-1 transition-colors"
+                  title="Sincronizar y actualizar con la lista oficial de clasificados de zonas"
                 >
-                  <RotateCcw className="w-3 h-3" />
-                  Vaciar
+                  <RefreshCw className="w-3 h-3" />
+                  Sincronizar
                 </button>
-              )}
+                {assignedCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearAllSelections}
+                    className="text-[11px] text-dark-400 hover:text-rose-400 flex items-center gap-1 transition-colors"
+                    title="Vaciar todas las llaves"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Vaciar
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
