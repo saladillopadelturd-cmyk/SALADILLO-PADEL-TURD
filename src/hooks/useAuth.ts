@@ -108,6 +108,7 @@ export function useAuth() {
     }
     if (typeof window !== "undefined") {
       localStorage.setItem("spt_logged_out", "true");
+      localStorage.removeItem("spt_player_email");
       try {
         for (let i = localStorage.length - 1; i >= 0; i--) {
           const k = localStorage.key(i);

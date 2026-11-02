@@ -1596,7 +1596,7 @@ export default function TournamentDetailView({ id, initialTab }: TournamentDetai
                         )}
 
                         <div className="flex items-center gap-2">
-                          {m.score_super_tb && (
+                          {(!isPlayoff || isAdmin) && m.score_super_tb && (
                             <span className="text-amber-400 text-xs font-mono font-bold bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/25">
                               STB: {m.score_super_tb}
                             </span>
