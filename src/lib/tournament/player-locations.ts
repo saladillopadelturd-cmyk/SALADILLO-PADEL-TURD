@@ -109,7 +109,7 @@ export function enrichPlayerLocation<
     player.city ||
     (player.id ? locationsMap.get(player.id) : null) ||
     (player.email ? locationsMap.get(player.email.trim().toLowerCase()) : null) ||
-    null;
+    "Saladillo";
 
   return {
     ...player,

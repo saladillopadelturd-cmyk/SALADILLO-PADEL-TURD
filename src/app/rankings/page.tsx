@@ -127,7 +127,7 @@ export default async function RankingsPage({
           p?.city ||
           (r.player_id ? locationsMap.get(r.player_id) : null) ||
           (p?.email ? locationsMap.get(p.email.toLowerCase()) : null) ||
-          null;
+          "Saladillo";
 
         if (existing) {
           existing.points += (r.points || 0);
@@ -171,7 +171,7 @@ export default async function RankingsPage({
         p.city ||
         locationsMap.get(p.id) ||
         (p.email ? locationsMap.get(p.email.toLowerCase()) : null) ||
-        null;
+        "Saladillo";
 
       if (indivAggMap.has(p.id)) {
         const existing = indivAggMap.get(p.id)!;
@@ -481,13 +481,11 @@ export default async function RankingsPage({
                           size="ranking"
                           showCategoryBorder
                         />
-                        <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                          <span className="truncate">{p.name}</span>
-                          {p.localidad && (
-                            <span className="text-xs sm:text-sm italic font-normal text-slate-400 whitespace-nowrap">
-                              ({p.localidad})
-                            </span>
-                          )}
+                        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                          <span className="font-bold text-white tracking-tight">{p.name}</span>
+                          <span className="text-xs sm:text-sm font-normal italic text-slate-300 whitespace-nowrap">
+                            ({p.localidad || "Saladillo"})
+                          </span>
                           {isAdmin && p.isObserved && (
                             <span
                               title="Jugador/a en observación para ascenso de categoría"
