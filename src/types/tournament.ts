@@ -67,6 +67,8 @@ export interface Player {
   is_observed?: boolean | null;
   photo_url?: string | null;
   avatar_url?: string | null;
+  localidad?: string | null;
+  city?: string | null;
   created_at: string;
 }
 

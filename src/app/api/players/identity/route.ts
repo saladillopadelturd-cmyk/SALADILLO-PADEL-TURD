@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPlayerPhotosMap, enrichPlayerPhoto } from "@/lib/tournament/player-photos";
+import { getPlayerLocationsMap, savePlayerLocation, enrichPlayerLocation } from "@/lib/tournament/player-locations";
 
 export const dynamic = "force-dynamic";
 
@@ -274,8 +275,11 @@ export async function GET(req: Request) {
     }
 
     const player = players[0];
-    const photosMap = await getPlayerPhotosMap();
-    const enrichedPlayer = enrichPlayerPhoto(player, photosMap);
+    const [photosMap, locationsMap] = await Promise.all([
+      getPlayerPhotosMap(),
+      getPlayerLocationsMap(),
+    ]);
+    const enrichedPlayer = enrichPlayerLocation(enrichPlayerPhoto(player, photosMap), locationsMap);
 
     // 2. Obtener estadísticas deportivas completas (individual y por parejas)
     const stats = await computePlayerStats(supabase, player.id, player.category || "5ta", player.gender || "Masculino");
@@ -335,6 +339,7 @@ export async function POST(req: Request) {
     const cleanFirstName = first_name.trim();
     const cleanLastName = last_name.trim();
     const cleanPhone = phone ? phone.trim() : null;
+    const cleanLocalidad = (body.localidad || body.city || "").trim();
 
     const supabase = await getSupabaseClient();
 
@@ -428,6 +433,7 @@ export async function POST(req: Request) {
         gender: gender || "Masculino",
         category: finalCategory,
         is_observed: finalIsObserved,
+        localidad: cleanLocalidad || null,
       };
 
       // Solo el administrador puede modificar el correo registrado de un jugador
@@ -484,6 +490,7 @@ export async function POST(req: Request) {
         gender: gender || "Masculino",
         category: finalCategory,
         is_observed: finalIsObserved,
+        localidad: cleanLocalidad || null,
       };
 
       const { data: inserted, error: insertError } = await supabase
@@ -523,6 +530,12 @@ export async function POST(req: Request) {
           photo_url: photo_url || null,
         };
       }
+    }
+
+    if (finalPlayer?.id) {
+      await savePlayerLocation(finalPlayer.id, cleanLocalidad, cleanEmail);
+      finalPlayer.localidad = cleanLocalidad || null;
+      finalPlayer.city = cleanLocalidad || null;
     }
 
     // Computar estadísticas actualizadas del jugador

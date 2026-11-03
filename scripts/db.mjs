@@ -202,14 +202,14 @@ async function cmdSchema(table) {
 }
 
 async function cmdPlayers(query) {
-  let endpoint = '/players?select=id,first_name,last_name,gender,category,phone,email,is_observed&order=last_name.asc';
+  let endpoint = '/players?select=*&order=last_name.asc';
   if (query) {
     endpoint += `&or=(first_name.ilike.*${encodeURIComponent(query)}*,last_name.ilike.*${encodeURIComponent(query)}*,category.ilike.*${encodeURIComponent(query)}*,gender.ilike.*${encodeURIComponent(query)}*,email.ilike.*${encodeURIComponent(query)}*)`;
   }
 
   console.log(`\n🎾 Jugadores Registrados${query ? ` (Filtro: "${query}")` : ''}:`);
   const players = await api(endpoint);
-  printTable(players, ['id', 'first_name', 'last_name', 'gender', 'category', 'is_observed', 'phone', 'email']);
+  printTable(players, ['id', 'first_name', 'last_name', 'gender', 'category', 'localidad', 'is_observed', 'phone', 'email']);
 }
 
 async function cmdTournaments(status) {

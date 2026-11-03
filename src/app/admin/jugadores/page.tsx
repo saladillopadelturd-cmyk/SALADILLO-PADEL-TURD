@@ -14,7 +14,7 @@ import PlayerProfileModal from "@/components/player/PlayerProfileModal";
 import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase/client";
 import type { Player } from "@/types/tournament";
-import { AlertCircle, CheckCircle2, Eye, Search, Filter, ShieldCheck, UserCheck, Camera, Upload, Trash2, Move, Sparkles, User } from "lucide-react";
+import { AlertCircle, CheckCircle2, Eye, Search, Filter, ShieldCheck, UserCheck, Camera, Upload, Trash2, Move, Sparkles, User, MapPin } from "lucide-react";
 
 const CATEGORY_OPTIONS = [
   { value: "8va", label: "8va Categoría (Iniciación)" },
@@ -47,6 +47,7 @@ export default function AdminJugadoresPage() {
   const [formApellido, setFormApellido] = useState("");
   const [formEmail, setFormEmail] = useState("");
   const [formTelefono, setFormTelefono] = useState("");
+  const [formLocalidad, setFormLocalidad] = useState("");
   const [formSexo, setFormSexo] = useState<string>("Masculino");
   const [formCategoria, setFormCategoria] = useState<string>("5ta");
   const [formObservado, setFormObservado] = useState<boolean>(false);
@@ -60,7 +61,7 @@ export default function AdminJugadoresPage() {
 
   // Estado para ver Ficha Oficial de Perfil del Jugador
   const [viewingProfilePlayer, setViewingProfilePlayer] = useState<Player | null>(null);
-  const [playerStatsMap, setPlayerStatsMap] = useState<Map<string, { points: number; tournamentsPlayed: number; matchesWon: number; matchesLost: number }>>(new Map());
+  const [playerStatsMap, setPlayerStatsMap] = useState<Map<string, { points: number; tournamentsPlayed: number; matchesWon: number; matchesLost: number; rankingPosition?: number; category?: string }>>(new Map());
 
   // Filtros de tabla
   const [searchFilter, setSearchFilter] = useState("");
@@ -108,7 +109,7 @@ export default function AdminJugadoresPage() {
           .eq("ranking_type", "individual");
 
         if (rankData) {
-          const map = new Map<string, { points: number; tournamentsPlayed: number; matchesWon: number; matchesLost: number }>();
+          const map = new Map<string, { points: number; tournamentsPlayed: number; matchesWon: number; matchesLost: number; rankingPosition?: number; category?: string }>();
           rankData.forEach((r) => {
             if (r.player_id) {
               const current = map.get(r.player_id) || { points: 0, tournamentsPlayed: 0, matchesWon: 0, matchesLost: 0 };
@@ -120,6 +121,26 @@ export default function AdminJugadoresPage() {
               });
             }
           });
+
+          // Computar posición de ranking oficial por categoría y rama
+          const loadedPlayers = (Array.isArray(players) && players.length > 0) ? players : [];
+          const categoryGroups = new Map<string, Array<{ playerId: string; points: number; matchesWon: number }>>();
+          map.forEach((stat, pId) => {
+            const p = loadedPlayers.find((x) => x.id === pId);
+            const key = `${p?.gender || "Masculino"}_${p?.category || "5ta"}`;
+            const group = categoryGroups.get(key) || [];
+            group.push({ playerId: pId, points: stat.points, matchesWon: stat.matchesWon });
+            categoryGroups.set(key, group);
+          });
+
+          categoryGroups.forEach((group) => {
+            group.sort((a, b) => b.points - a.points || b.matchesWon - a.matchesWon);
+            group.forEach((item, idx) => {
+              const cur = map.get(item.playerId);
+              if (cur) cur.rankingPosition = idx + 1;
+            });
+          });
+
           setPlayerStatsMap(map);
         }
       } catch (rankErr) {
@@ -193,6 +214,7 @@ export default function AdminJugadoresPage() {
     setFormApellido("");
     setFormEmail("");
     setFormTelefono("");
+    setFormLocalidad("");
     setFormSexo("Masculino");
     setFormCategoria("5ta");
     setFormObservado(false);
@@ -206,6 +228,7 @@ export default function AdminJugadoresPage() {
     setFormApellido(player.last_name);
     setFormEmail(player.email ?? "");
     setFormTelefono(player.phone ?? "");
+    setFormLocalidad(player.localidad || player.city || "");
     setFormSexo(player.gender || "Masculino");
     setFormCategoria(player.category || "5ta");
     setFormObservado(!!player.is_observed);
@@ -223,12 +246,14 @@ export default function AdminJugadoresPage() {
     startTransition(async () => {
       try {
         const finalPhotoUrl = await uploadPhotoIfAvailable();
+        const cleanLoc = formLocalidad.trim();
 
-        const dbPayload = {
+        const dbPayload: Record<string, unknown> = {
           first_name: formNombre.trim(),
           last_name: formApellido.trim(),
           email: formEmail.trim() || null,
           phone: formTelefono.trim() || null,
+          localidad: cleanLoc || null,
           gender: formSexo,
           category: formCategoria,
           is_observed: formObservado,
@@ -265,8 +290,33 @@ export default function AdminJugadoresPage() {
         if (result.data) {
           const newPlayer: Player = {
             ...result.data,
+            localidad: cleanLoc || null,
+            city: cleanLoc || null,
             photo_url: finalPhotoUrl,
           };
+
+          // Persistir en respaldo de localidades por API
+          try {
+            await fetch("/api/players/identity", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                player_id: newPlayer.id,
+                first_name: newPlayer.first_name,
+                last_name: newPlayer.last_name,
+                email: newPlayer.email || `player_${newPlayer.id}@sptpadeltour.com`,
+                phone: newPlayer.phone,
+                gender: newPlayer.gender,
+                category: newPlayer.category,
+                localidad: cleanLoc || null,
+                photo_url: finalPhotoUrl,
+                is_observed: newPlayer.is_observed,
+              }),
+            });
+          } catch (syncErr) {
+            console.warn("Aviso al sincronizar localidad de nuevo jugador:", syncErr);
+          }
+
           setPlayers((prev) => [newPlayer, ...prev]);
           setShowCreate(false);
           setNotification({
@@ -287,12 +337,14 @@ export default function AdminJugadoresPage() {
     startTransition(async () => {
       try {
         const finalPhotoUrl = await uploadPhotoIfAvailable(editing.id);
+        const cleanLoc = formLocalidad.trim();
 
-        const dbPayload = {
+        const dbPayload: Record<string, unknown> = {
           first_name: formNombre.trim(),
           last_name: formApellido.trim(),
           email: formEmail.trim() || null,
           phone: formTelefono.trim() || null,
+          localidad: cleanLoc || null,
           gender: formSexo,
           category: formCategoria,
           is_observed: formObservado,
@@ -331,8 +383,33 @@ export default function AdminJugadoresPage() {
         if (result.data) {
           const updatedPlayer: Player = {
             ...result.data,
+            localidad: cleanLoc || null,
+            city: cleanLoc || null,
             photo_url: finalPhotoUrl || editing.photo_url || null,
           };
+
+          // Persistir en respaldo de localidades por API
+          try {
+            await fetch("/api/players/identity", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                player_id: updatedPlayer.id,
+                first_name: updatedPlayer.first_name,
+                last_name: updatedPlayer.last_name,
+                email: updatedPlayer.email || `player_${updatedPlayer.id}@sptpadeltour.com`,
+                phone: updatedPlayer.phone,
+                gender: updatedPlayer.gender,
+                category: updatedPlayer.category,
+                localidad: cleanLoc || null,
+                photo_url: updatedPlayer.photo_url,
+                is_observed: updatedPlayer.is_observed,
+              }),
+            });
+          } catch (syncErr) {
+            console.warn("Aviso al sincronizar localidad de jugador:", syncErr);
+          }
+
           setPlayers((prev) =>
             prev.map((p) => (p.id === editing.id ? updatedPlayer : p))
           );
@@ -596,6 +673,7 @@ export default function AdminJugadoresPage() {
                   <th className="px-5 py-3.5 text-left">Jugador</th>
                   <th className="px-4 py-3.5 text-center">Sexo</th>
                   <th className="px-4 py-3.5 text-center">Categoría</th>
+                  <th className="px-4 py-3.5 text-left">Localidad</th>
                   <th className="px-5 py-3.5 text-center">Observado</th>
                   <th className="px-4 py-3.5 text-left hidden sm:table-cell">Contacto</th>
                   <th className="px-5 py-3.5 text-center">Acciones</th>
@@ -683,6 +761,16 @@ export default function AdminJugadoresPage() {
                         >
                           {playerCat}
                         </Badge>
+                      </td>
+
+                      {/* Localidad */}
+                      <td className="px-4 py-4 text-left">
+                        <div className="flex items-center gap-1.5 text-xs text-slate-300 font-medium">
+                          <MapPin className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
+                          <span className="truncate max-w-[130px]">
+                            {player.localidad || player.city || "-"}
+                          </span>
+                        </div>
                       </td>
 
                       {/* Estado Observado */}
@@ -888,7 +976,13 @@ export default function AdminJugadoresPage() {
             </label>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            <Input
+              label="Localidad (Lugar de origen)"
+              placeholder="Ej. Saladillo"
+              value={formLocalidad}
+              onChange={(e) => setFormLocalidad(e.target.value)}
+            />
             <Input
               label="Email (opcional)"
               type="email"
@@ -1049,7 +1143,13 @@ export default function AdminJugadoresPage() {
             </label>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            <Input
+              label="Localidad (Lugar de origen)"
+              placeholder="Ej. Saladillo"
+              value={formLocalidad}
+              onChange={(e) => setFormLocalidad(e.target.value)}
+            />
             <Input
               label="Email"
               type="email"

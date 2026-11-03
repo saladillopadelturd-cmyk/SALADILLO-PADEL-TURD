@@ -33,6 +33,7 @@ import {
   Medal,
   Eye,
   Shield,
+  MapPin,
 } from "lucide-react";
 
 const CATEGORIES = ["8va", "7ma", "6ta", "5ta", "4ta", "3ra", "2da", "1ra"];
@@ -73,6 +74,7 @@ export default function PlayerFichaModal() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [localidad, setLocalidad] = useState("");
   const [gender, setGender] = useState<"Masculino" | "Femenino">("Masculino");
   const [category, setCategory] = useState("5ta");
   const [isObserved, setIsObserved] = useState<boolean>(false);
@@ -101,6 +103,7 @@ export default function PlayerFichaModal() {
       setLastName(player.last_name || "");
       setEmail(player.email || loggedEmail || "");
       setPhone(player.phone || "");
+      setLocalidad(player.localidad || player.city || "");
       setGender((player.gender as "Masculino" | "Femenino") || "Masculino");
       setCategory(player.category || "5ta");
       setIsObserved(!!player.is_observed);
@@ -119,6 +122,7 @@ export default function PlayerFichaModal() {
       setLastName("");
       setEmail(loggedEmail || "");
       setPhone("");
+      setLocalidad("");
       setGender("Masculino");
       setCategory("5ta");
       setIsObserved(false);
@@ -148,6 +152,7 @@ export default function PlayerFichaModal() {
       setLastName("");
       setEmail(loggedEmail || "");
       setPhone("");
+      setLocalidad("");
       setGender("Masculino");
       setCategory("5ta");
       setIsObserved(false);
@@ -261,6 +266,7 @@ export default function PlayerFichaModal() {
         category: category || player?.category || "5ta",
         photo_url: uploadedUrl,
         is_observed: isAdmin ? isObserved : !!player?.is_observed,
+        localidad: localidad.trim() || null,
       });
 
       if (res.success) {
@@ -345,6 +351,7 @@ export default function PlayerFichaModal() {
       setLastName(player.last_name);
       setEmail(player.email || "");
       setPhone(player.phone || "");
+      setLocalidad(player.localidad || player.city || "");
       setGender((player.gender as "Masculino" | "Femenino") || "Masculino");
       setCategory(player.category || "5ta");
       setIsObserved(!!player.is_observed);
@@ -511,6 +518,10 @@ export default function PlayerFichaModal() {
                     <Badge variant="success" className="font-bold uppercase text-[11px]">
                       {player.category || "5ta"} Categoría
                     </Badge>
+                    <Badge variant="warning" className="font-bold text-[11px] flex items-center gap-1">
+                      <Trophy className="w-3 h-3 text-amber-400" />
+                      {indRank?.position && indRank.position > 0 ? `Ranking Actual: #${indRank.position}` : "Ranking: Sin posición"}
+                    </Badge>
                     <Badge variant="default" className="font-semibold text-[11px]">
                       {player.gender || "Masculino"}
                     </Badge>
@@ -566,6 +577,13 @@ export default function PlayerFichaModal() {
                       <div className="flex items-center justify-center sm:justify-start gap-2">
                         <Phone className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
                         <span>{player.phone}</span>
+                      </div>
+                    )}
+
+                    {(player.localidad || player.city) && (
+                      <div className="flex items-center justify-center sm:justify-start gap-1.5 text-emerald-400 font-semibold">
+                        <MapPin className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
+                        <span>{player.localidad || player.city}</span>
                       </div>
                     )}
                   </div>
@@ -1011,13 +1029,22 @@ export default function PlayerFichaModal() {
                 </p>
               </div>
 
-              {/* Teléfono / WhatsApp */}
-              <Input
-                label="Teléfono / WhatsApp"
-                placeholder="Ej: 2345 123456"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
+              {/* Teléfono y Localidad */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input
+                  label="Teléfono / WhatsApp"
+                  placeholder="Ej: 2345 123456"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+
+                <Input
+                  label="Localidad (Lugar de origen)"
+                  placeholder="Ej: Saladillo"
+                  value={localidad}
+                  onChange={(e) => setLocalidad(e.target.value)}
+                />
+              </div>
 
               {/* Sexo y Categoría */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

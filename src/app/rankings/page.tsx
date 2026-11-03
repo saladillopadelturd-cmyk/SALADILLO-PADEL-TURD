@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatPlayerFullName } from "@/lib/tournament/couples";
 import { syncAllTournamentsRankings } from "@/lib/tournament/rankings";
 import { getPlayerPhotosMap } from "@/lib/tournament/player-photos";
+import { getPlayerLocationsMap } from "@/lib/tournament/player-locations";
 import AboutRankingButton from "@/components/ranking/AboutRankingButton";
 import { Trophy, Medal, User } from "lucide-react";
 
@@ -34,6 +35,7 @@ interface IndividualRankingItem {
   lastName: string;
   gender: "Masculino" | "Femenino";
   photoUrl?: string | null;
+  localidad?: string | null;
   category: string;
   tournaments: number;
   points: number;
@@ -92,10 +94,11 @@ export default async function RankingsPage({
       console.warn("Aviso en sincronización en vivo de rankings:", syncErr);
     }
 
-    // 2. Traer jugadores y fotografías de perfil para resolución completa
-    const [{ data: allPlayers }, photosMap] = await Promise.all([
+    // 2. Traer jugadores, fotografías de perfil y localidades oficiales
+    const [{ data: allPlayers }, photosMap, locationsMap] = await Promise.all([
       supabase.from("players").select("*"),
       getPlayerPhotosMap(),
+      getPlayerLocationsMap(),
     ]);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const playersMap = new Map((allPlayers || []).map((p: any) => [p.id, p]));
@@ -119,11 +122,21 @@ export default async function RankingsPage({
         const playerGender: "Masculino" | "Femenino" = p?.gender === "Femenino" ? "Femenino" : "Masculino";
 
         const existing = indivAggMap.get(r.player_id);
+        const pLoc =
+          p?.localidad ||
+          p?.city ||
+          (r.player_id ? locationsMap.get(r.player_id) : null) ||
+          (p?.email ? locationsMap.get(p.email.toLowerCase()) : null) ||
+          null;
+
         if (existing) {
           existing.points += (r.points || 0);
           existing.tournaments += (r.tournaments_played || 0);
           existing.matchesWon += (r.matches_won || 0);
           existing.matchesLost += (r.matches_lost || 0);
+          if (pLoc) {
+            existing.localidad = pLoc;
+          }
           // La categoría y género oficiales del jugador en la tabla players siempre mandan
           if (p?.category) {
             existing.category = p.category;
@@ -138,6 +151,7 @@ export default async function RankingsPage({
             lastName: p?.last_name || "",
             gender: playerGender,
             photoUrl: p?.photo_url || p?.avatar_url || (r.player_id ? photosMap.get(r.player_id) : null) || null,
+            localidad: pLoc,
             category: p?.category || playerCategory,
             tournaments: r.tournaments_played || 0,
             points: r.points || 0,
@@ -152,11 +166,20 @@ export default async function RankingsPage({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (allPlayers || []).forEach((p: any) => {
       const pGender: "Masculino" | "Femenino" = p.gender === "Femenino" ? "Femenino" : "Masculino";
+      const pLoc =
+        p.localidad ||
+        p.city ||
+        locationsMap.get(p.id) ||
+        (p.email ? locationsMap.get(p.email.toLowerCase()) : null) ||
+        null;
 
       if (indivAggMap.has(p.id)) {
         const existing = indivAggMap.get(p.id)!;
         if (p.category) {
           existing.category = p.category;
+        }
+        if (pLoc) {
+          existing.localidad = pLoc;
         }
         existing.gender = pGender;
         return;
@@ -170,6 +193,7 @@ export default async function RankingsPage({
         lastName: p.last_name || "",
         gender: pGender,
         photoUrl: p.photo_url || p.avatar_url || photosMap.get(p.id) || null,
+        localidad: pLoc,
         category: p.category || "General",
         tournaments: 0,
         points: 0,
@@ -457,8 +481,13 @@ export default async function RankingsPage({
                           size="ranking"
                           showCategoryBorder
                         />
-                        <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0 flex-wrap">
                           <span className="truncate">{p.name}</span>
+                          {p.localidad && (
+                            <span className="text-xs sm:text-sm italic font-normal text-slate-400 whitespace-nowrap">
+                              ({p.localidad})
+                            </span>
+                          )}
                           {isAdmin && p.isObserved && (
                             <span
                               title="Jugador/a en observación para ascenso de categoría"

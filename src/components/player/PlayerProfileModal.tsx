@@ -16,6 +16,7 @@ import {
   Award,
   Calendar,
   MessageCircle,
+  MapPin,
 } from "lucide-react";
 
 interface PlayerProfileModalProps {
@@ -28,6 +29,8 @@ interface PlayerProfileModalProps {
     tournamentsPlayed?: number;
     matchesWon?: number;
     matchesLost?: number;
+    rankingPosition?: number;
+    category?: string;
   };
 }
 
@@ -111,6 +114,13 @@ export default function PlayerProfileModal({
                   {playerCat} Categoría
                 </Badge>
 
+                <Badge variant="warning" className="font-bold text-[11px] flex items-center gap-1">
+                  <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                  {stats?.rankingPosition && stats.rankingPosition > 0
+                    ? `Ranking Actual: #${stats.rankingPosition}`
+                    : "Ranking: Sin posición"}
+                </Badge>
+
                 {isFemenino ? (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-pink-500/15 text-pink-300 border border-pink-500/30">
                     ♀ Femenino
@@ -135,6 +145,13 @@ export default function PlayerProfileModal({
               <p className="text-xs text-dark-400 font-medium">
                 Jugador Oficial • Saladillo Padel Tour
               </p>
+
+              {(player.localidad || player.city) && (
+                <div className="flex items-center justify-center sm:justify-start gap-1.5 text-xs text-emerald-400 font-semibold mt-1">
+                  <MapPin className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
+                  <span>{player.localidad || player.city}</span>
+                </div>
+              )}
 
               {isAdmin && player.is_observed && (
                 <div className="mt-2 p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-start gap-2 text-xs text-amber-200">

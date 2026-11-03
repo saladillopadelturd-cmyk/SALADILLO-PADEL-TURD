@@ -54,6 +54,7 @@ export interface FichaFormData {
   category?: string | null;
   photo_url?: string | null;
   is_observed?: boolean;
+  localidad?: string | null;
 }
 
 interface PlayerIdentityContextType {
@@ -342,6 +343,8 @@ export function PlayerIdentityProvider({ children }: { children: ReactNode }) {
       const savedPlayer: Player = {
         ...json.player,
         photo_url: json.player?.photo_url || formData.photo_url || null,
+        localidad: json.player?.localidad || formData.localidad || null,
+        city: json.player?.city || formData.localidad || null,
       };
 
       setPlayer(savedPlayer);

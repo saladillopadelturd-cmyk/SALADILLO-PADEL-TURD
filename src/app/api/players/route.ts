@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient, verifyIsAdmin } from "@/lib/supabase/admin";
 import { getPlayerPhotosMap, enrichPlayerPhoto } from "@/lib/tournament/player-photos";
+import { getPlayerLocationsMap, enrichPlayerLocation } from "@/lib/tournament/player-locations";
 
 export const dynamic = "force-dynamic";
 
@@ -115,16 +116,20 @@ export async function DELETE(request: Request) {
 export async function GET() {
   try {
     const supabase = await getSupabaseClient();
-    const [{ data, error }, photosMap] = await Promise.all([
+    const [{ data, error }, photosMap, locationsMap] = await Promise.all([
       supabase.from("players").select("*").order("created_at", { ascending: false }),
       getPlayerPhotosMap(),
+      getPlayerLocationsMap(),
     ]);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const enrichedPlayers = (data || []).map((p) => enrichPlayerPhoto(p, photosMap));
+    const enrichedPlayers = (data || []).map((p) => {
+      const withPhoto = enrichPlayerPhoto(p, photosMap);
+      return enrichPlayerLocation(withPhoto, locationsMap);
+    });
 
     return NextResponse.json({ players: enrichedPlayers });
   } catch (err: unknown) {
