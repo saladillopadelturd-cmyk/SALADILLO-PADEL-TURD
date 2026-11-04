@@ -7,6 +7,7 @@ import { formatPlayerFullName } from "@/lib/tournament/couples";
 import { syncAllTournamentsRankings } from "@/lib/tournament/rankings";
 import { getPlayerPhotosMap } from "@/lib/tournament/player-photos";
 import { getPlayerLocationsMap } from "@/lib/tournament/player-locations";
+import { getPlayerRankingOverridesMap } from "@/lib/tournament/player-ranking-overrides";
 import AboutRankingButton from "@/components/ranking/AboutRankingButton";
 import { Trophy, Medal, User } from "lucide-react";
 
@@ -94,11 +95,12 @@ export default async function RankingsPage({
       console.warn("Aviso en sincronización en vivo de rankings:", syncErr);
     }
 
-    // 2. Traer jugadores, fotografías de perfil y localidades oficiales
-    const [{ data: allPlayers }, photosMap, locationsMap] = await Promise.all([
+    // 2. Traer jugadores, fotografías de perfil, localidades oficiales y overrides de administración
+    const [{ data: allPlayers }, photosMap, locationsMap, rankingOverridesMap] = await Promise.all([
       supabase.from("players").select("*"),
       getPlayerPhotosMap(),
       getPlayerLocationsMap(),
+      getPlayerRankingOverridesMap(),
     ]);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const playersMap = new Map((allPlayers || []).map((p: any) => [p.id, p]));
@@ -202,6 +204,19 @@ export default async function RankingsPage({
         isObserved: !!p.is_observed,
       });
     });
+
+    // 5.1. Aplicar overrides manuales fijados por los administradores (puntos, torneos, PG, PP)
+    if (rankingOverridesMap && rankingOverridesMap.size > 0) {
+      rankingOverridesMap.forEach((override, pId) => {
+        const item = indivAggMap.get(pId);
+        if (item) {
+          item.points = override.points;
+          item.tournaments = override.tournamentsPlayed;
+          item.matchesWon = override.matchesWon;
+          item.matchesLost = override.matchesLost;
+        }
+      });
+    }
 
     // 6. Contabilizar totales globales por rama (Caballeros y Damas)
     indivAggMap.forEach((p) => {

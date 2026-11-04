@@ -3,6 +3,7 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPlayerPhotosMap, enrichPlayerPhoto } from "@/lib/tournament/player-photos";
 import { getPlayerLocationsMap, savePlayerLocation, enrichPlayerLocation } from "@/lib/tournament/player-locations";
+import { getPlayerRankingOverridesMap } from "@/lib/tournament/player-ranking-overrides";
 
 export const dynamic = "force-dynamic";
 
@@ -209,6 +210,29 @@ async function computePlayerStats(
       stats.matchesWon = won;
       stats.matchesLost = lost;
       stats.winRate = totalAll > 0 ? Math.round((won / totalAll) * 100) : 0;
+    }
+
+    // Aplicar override manual fijado por los administradores si existe
+    try {
+      const overrides = await getPlayerRankingOverridesMap();
+      const override = overrides.get(playerId);
+      if (override) {
+        stats.points = override.points;
+        stats.tournamentsPlayed = override.tournamentsPlayed;
+        stats.matchesWon = override.matchesWon;
+        stats.matchesLost = override.matchesLost;
+        const totalMatches = override.matchesWon + override.matchesLost;
+        stats.winRate = totalMatches > 0 ? Math.round((override.matchesWon / totalMatches) * 100) : 0;
+        if (stats.individualRanking) {
+          stats.individualRanking.points = override.points;
+          stats.individualRanking.tournamentsPlayed = override.tournamentsPlayed;
+          stats.individualRanking.matchesWon = override.matchesWon;
+          stats.individualRanking.matchesLost = override.matchesLost;
+          stats.individualRanking.winRate = stats.winRate;
+        }
+      }
+    } catch (overrideErr) {
+      console.warn("Aviso al aplicar override en computePlayerStats:", overrideErr);
     }
   } catch (err) {
     console.warn("Aviso al computar estadísticas de rankings:", err);

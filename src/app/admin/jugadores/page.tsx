@@ -14,7 +14,7 @@ import PlayerProfileModal from "@/components/player/PlayerProfileModal";
 import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase/client";
 import type { Player } from "@/types/tournament";
-import { AlertCircle, CheckCircle2, Eye, Search, Filter, ShieldCheck, UserCheck, Camera, Upload, Trash2, Move, Sparkles, User, MapPin } from "lucide-react";
+import { AlertCircle, CheckCircle2, Eye, Search, Filter, ShieldCheck, UserCheck, Camera, Upload, Trash2, Move, Sparkles, User, MapPin, Trophy, Award, Calendar, Activity } from "lucide-react";
 
 const CATEGORY_OPTIONS = [
   { value: "8va", label: "8va Categoría (Iniciación)" },
@@ -53,6 +53,19 @@ export default function AdminJugadoresPage() {
   const [formObservado, setFormObservado] = useState<boolean>(false);
   const [formPhotoUrl, setFormPhotoUrl] = useState<string | null>(null);
   const [formPhotoBlob, setFormPhotoBlob] = useState<Blob | null>(null);
+
+  // Estados para Estadísticas y Puntos de Ranking (Administradores)
+  const [formPuntos, setFormPuntos] = useState<number>(0);
+  const [formTorneosJugados, setFormTorneosJugados] = useState<number>(0);
+  const [formPartidosGanados, setFormPartidosGanados] = useState<number>(0);
+  const [formPartidosPerdidos, setFormPartidosPerdidos] = useState<number>(0);
+
+  // Estado para Modal Rápido de Estadísticas de Ranking
+  const [editingStatsPlayer, setEditingStatsPlayer] = useState<Player | null>(null);
+  const [statsPuntos, setStatsPuntos] = useState<number>(0);
+  const [statsTorneos, setStatsTorneos] = useState<number>(0);
+  const [statsGanados, setStatsGanados] = useState<number>(0);
+  const [statsPerdidos, setStatsPerdidos] = useState<number>(0);
 
   // Estados de recorte de foto (Zona útil cuadrada)
   const [rawSelectedImage, setRawSelectedImage] = useState<string | null>(null);
@@ -121,6 +134,31 @@ export default function AdminJugadoresPage() {
               });
             }
           });
+
+          // Enriquecer con overrides manuales guardados por administradores
+          try {
+            const statsRes = await fetch("/api/admin/players/stats");
+            if (statsRes.ok) {
+              const statsJson = await statsRes.json();
+              if (statsJson.overrides && typeof statsJson.overrides === "object") {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                Object.values(statsJson.overrides).forEach((ov: any) => {
+                  if (ov && ov.playerId) {
+                    const current = map.get(ov.playerId) || { points: 0, tournamentsPlayed: 0, matchesWon: 0, matchesLost: 0 };
+                    map.set(ov.playerId, {
+                      ...current,
+                      points: Number(ov.points) ?? current.points,
+                      tournamentsPlayed: Number(ov.tournamentsPlayed) ?? current.tournamentsPlayed,
+                      matchesWon: Number(ov.matchesWon) ?? current.matchesWon,
+                      matchesLost: Number(ov.matchesLost) ?? current.matchesLost,
+                    });
+                  }
+                });
+              }
+            }
+          } catch (ovErr) {
+            console.warn("Aviso al consultar overrides de estadísticas:", ovErr);
+          }
 
           // Computar posición de ranking oficial por categoría y rama
           const loadedPlayers = (Array.isArray(players) && players.length > 0) ? players : [];
@@ -220,6 +258,10 @@ export default function AdminJugadoresPage() {
     setFormObservado(false);
     setFormPhotoUrl(null);
     setFormPhotoBlob(null);
+    setFormPuntos(0);
+    setFormTorneosJugados(0);
+    setFormPartidosGanados(0);
+    setFormPartidosPerdidos(0);
     setShowCreate(true);
   };
 
@@ -234,7 +276,78 @@ export default function AdminJugadoresPage() {
     setFormObservado(!!player.is_observed);
     setFormPhotoUrl(player.photo_url || player.avatar_url || null);
     setFormPhotoBlob(null);
+
+    const st = playerStatsMap.get(player.id);
+    setFormPuntos(st?.points ?? 0);
+    setFormTorneosJugados(st?.tournamentsPlayed ?? 0);
+    setFormPartidosGanados(st?.matchesWon ?? 0);
+    setFormPartidosPerdidos(st?.matchesLost ?? 0);
+
     setEditing(player);
+  };
+
+  const openEditStats = (player: Player) => {
+    const st = playerStatsMap.get(player.id);
+    setEditingStatsPlayer(player);
+    setStatsPuntos(st?.points ?? 0);
+    setStatsTorneos(st?.tournamentsPlayed ?? 0);
+    setStatsGanados(st?.matchesWon ?? 0);
+    setStatsPerdidos(st?.matchesLost ?? 0);
+  };
+
+  const handleSaveStats = async () => {
+    if (!editingStatsPlayer) return;
+    startTransition(async () => {
+      try {
+        const adminEmail =
+          user?.email ||
+          (typeof window !== "undefined" ? localStorage.getItem("spt_player_email") : "") ||
+          "";
+
+        const res = await fetch("/api/admin/players/stats", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-email": adminEmail,
+          },
+          body: JSON.stringify({
+            playerId: editingStatsPlayer.id,
+            points: Number(statsPuntos) || 0,
+            tournamentsPlayed: Number(statsTorneos) || 0,
+            matchesWon: Number(statsGanados) || 0,
+            matchesLost: Number(statsPerdidos) || 0,
+            category: editingStatsPlayer.category,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Error al actualizar estadísticas de ranking");
+        }
+
+        setPlayerStatsMap((prev) => {
+          const next = new Map(prev);
+          const cur = next.get(editingStatsPlayer.id) || { points: 0, tournamentsPlayed: 0, matchesWon: 0, matchesLost: 0 };
+          next.set(editingStatsPlayer.id, {
+            ...cur,
+            points: Number(statsPuntos) || 0,
+            tournamentsPlayed: Number(statsTorneos) || 0,
+            matchesWon: Number(statsGanados) || 0,
+            matchesLost: Number(statsPerdidos) || 0,
+          });
+          return next;
+        });
+
+        setEditingStatsPlayer(null);
+        setNotification({
+          type: "success",
+          text: `Estadísticas actualizadas para ${editingStatsPlayer.first_name} ${editingStatsPlayer.last_name}: ${statsPuntos} pts, ${statsTorneos} torneos, ${statsGanados}G / ${statsPerdidos}P.`,
+        });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Error al actualizar estadísticas";
+        setNotification({ type: "error", text: msg });
+      }
+    });
   };
 
   const handleCreate = async () => {
@@ -315,6 +428,45 @@ export default function AdminJugadoresPage() {
             });
           } catch (syncErr) {
             console.warn("Aviso al sincronizar localidad de nuevo jugador:", syncErr);
+          }
+
+          // Guardar estadísticas de ranking iniciales si fueron cargadas
+          if (isAdmin && (formPuntos > 0 || formTorneosJugados > 0 || formPartidosGanados > 0 || formPartidosPerdidos > 0)) {
+            try {
+              const adminEmail =
+                user?.email ||
+                (typeof window !== "undefined" ? localStorage.getItem("spt_player_email") : "") ||
+                "";
+
+              await fetch("/api/admin/players/stats", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-admin-email": adminEmail,
+                },
+                body: JSON.stringify({
+                  playerId: newPlayer.id,
+                  points: Number(formPuntos) || 0,
+                  tournamentsPlayed: Number(formTorneosJugados) || 0,
+                  matchesWon: Number(formPartidosGanados) || 0,
+                  matchesLost: Number(formPartidosPerdidos) || 0,
+                  category: newPlayer.category || formCategoria,
+                }),
+              });
+
+              setPlayerStatsMap((prev) => {
+                const next = new Map(prev);
+                next.set(newPlayer.id, {
+                  points: Number(formPuntos) || 0,
+                  tournamentsPlayed: Number(formTorneosJugados) || 0,
+                  matchesWon: Number(formPartidosGanados) || 0,
+                  matchesLost: Number(formPartidosPerdidos) || 0,
+                });
+                return next;
+              });
+            } catch (statsErr) {
+              console.warn("Aviso al guardar estadísticas iniciales de nuevo jugador:", statsErr);
+            }
           }
 
           setPlayers((prev) => [newPlayer, ...prev]);
@@ -408,6 +560,47 @@ export default function AdminJugadoresPage() {
             });
           } catch (syncErr) {
             console.warn("Aviso al sincronizar localidad de jugador:", syncErr);
+          }
+
+          // Guardar estadísticas de ranking si el usuario es administrador
+          if (isAdmin) {
+            try {
+              const adminEmail =
+                user?.email ||
+                (typeof window !== "undefined" ? localStorage.getItem("spt_player_email") : "") ||
+                "";
+
+              await fetch("/api/admin/players/stats", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-admin-email": adminEmail,
+                },
+                body: JSON.stringify({
+                  playerId: editing.id,
+                  points: Number(formPuntos) || 0,
+                  tournamentsPlayed: Number(formTorneosJugados) || 0,
+                  matchesWon: Number(formPartidosGanados) || 0,
+                  matchesLost: Number(formPartidosPerdidos) || 0,
+                  category: updatedPlayer.category || formCategoria,
+                }),
+              });
+
+              setPlayerStatsMap((prev) => {
+                const next = new Map(prev);
+                const cur = next.get(editing.id) || { points: 0, tournamentsPlayed: 0, matchesWon: 0, matchesLost: 0 };
+                next.set(editing.id, {
+                  ...cur,
+                  points: Number(formPuntos) || 0,
+                  tournamentsPlayed: Number(formTorneosJugados) || 0,
+                  matchesWon: Number(formPartidosGanados) || 0,
+                  matchesLost: Number(formPartidosPerdidos) || 0,
+                });
+                return next;
+              });
+            } catch (statsErr) {
+              console.warn("Aviso al guardar estadísticas de ranking en edición:", statsErr);
+            }
           }
 
           setPlayers((prev) =>
@@ -674,6 +867,7 @@ export default function AdminJugadoresPage() {
                   <th className="px-4 py-3.5 text-center">Sexo</th>
                   <th className="px-4 py-3.5 text-center">Categoría</th>
                   <th className="px-4 py-3.5 text-left">Localidad</th>
+                  <th className="px-4 py-3.5 text-center">Ranking SPT</th>
                   <th className="px-5 py-3.5 text-center">Observado</th>
                   <th className="px-4 py-3.5 text-left hidden sm:table-cell">Contacto</th>
                   <th className="px-5 py-3.5 text-center">Acciones</th>
@@ -773,6 +967,27 @@ export default function AdminJugadoresPage() {
                         </div>
                       </td>
 
+                      {/* Ranking SPT (Puntos, Torneos, PG / PP) */}
+                      <td className="px-4 py-4 text-center">
+                        {(() => {
+                          const st = playerStatsMap.get(player.id);
+                          const pts = st?.points ?? 0;
+                          const t = st?.tournamentsPlayed ?? 0;
+                          const won = st?.matchesWon ?? 0;
+                          const lost = st?.matchesLost ?? 0;
+                          return (
+                            <div className="flex flex-col items-center justify-center">
+                              <span className="font-mono font-black text-emerald-400 text-xs">
+                                {pts} pts
+                              </span>
+                              <span className="text-[10px] text-dark-400 font-medium">
+                                {t} {t === 1 ? "torneo" : "torneos"} • {won}G/{lost}P
+                              </span>
+                            </div>
+                          );
+                        })()}
+                      </td>
+
                       {/* Estado Observado */}
                       <td className="px-5 py-4 text-center">
                         {player.is_observed ? (
@@ -811,6 +1026,18 @@ export default function AdminJugadoresPage() {
                             <User className="w-3.5 h-3.5" />
                             <span className="hidden sm:inline">Perfil</span>
                           </Button>
+                          {isAdmin && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => openEditStats(player)}
+                              className="text-xs h-8 px-2.5 flex items-center gap-1 text-amber-400 hover:text-white border-amber-500/30 hover:bg-amber-500/10"
+                              title="Modificar puntos de ranking, torneos jugados, PG y PP"
+                            >
+                              <Trophy className="w-3.5 h-3.5" />
+                              <span className="hidden md:inline">Ranking</span>
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -998,6 +1225,74 @@ export default function AdminJugadoresPage() {
             />
           </div>
 
+          {/* Estadísticas de Ranking Iniciales (Solo Administradores) */}
+          {isAdmin && (
+            <div className="p-3.5 rounded-xl bg-dark-900 border border-amber-500/30 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Trophy className="w-4 h-4 text-amber-400" />
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">
+                    Puntos y Estadísticas de Ranking
+                  </span>
+                </div>
+                <Badge variant="warning" size="xs">
+                  Opcional
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-semibold text-dark-300 mb-1">
+                    Puntos Ranking
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formPuntos}
+                    onChange={(e) => setFormPuntos(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full px-3 py-2 bg-dark-950 border border-dark-700 rounded-lg text-white font-mono font-bold text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-dark-300 mb-1">
+                    Torneos Jugados
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formTorneosJugados}
+                    onChange={(e) => setFormTorneosJugados(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full px-3 py-2 bg-dark-950 border border-dark-700 rounded-lg text-white font-mono font-bold text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-dark-300 mb-1">
+                    Partidos Ganados
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formPartidosGanados}
+                    onChange={(e) => setFormPartidosGanados(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full px-3 py-2 bg-dark-950 border border-dark-700 rounded-lg text-emerald-400 font-mono font-bold text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-dark-300 mb-1">
+                    Partidos Perdidos
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formPartidosPerdidos}
+                    onChange={(e) => setFormPartidosPerdidos(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full px-3 py-2 bg-dark-950 border border-dark-700 rounded-lg text-rose-400 font-mono font-bold text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/50"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 pt-4 border-t border-dark-800">
             <Button variant="ghost" onClick={() => setShowCreate(false)} disabled={isPending}>
               Cancelar
@@ -1165,6 +1460,74 @@ export default function AdminJugadoresPage() {
             />
           </div>
 
+          {/* Estadísticas de Ranking Iniciales (Solo Administradores) */}
+          {isAdmin && (
+            <div className="p-3.5 rounded-xl bg-dark-900 border border-amber-500/30 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Trophy className="w-4 h-4 text-amber-400" />
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">
+                    Puntos y Estadísticas de Ranking
+                  </span>
+                </div>
+                <Badge variant="warning" size="xs">
+                  Opcional
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-semibold text-dark-300 mb-1">
+                    Puntos Ranking
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formPuntos}
+                    onChange={(e) => setFormPuntos(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full px-3 py-2 bg-dark-950 border border-dark-700 rounded-lg text-white font-mono font-bold text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-dark-300 mb-1">
+                    Torneos Jugados
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formTorneosJugados}
+                    onChange={(e) => setFormTorneosJugados(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full px-3 py-2 bg-dark-950 border border-dark-700 rounded-lg text-white font-mono font-bold text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-dark-300 mb-1">
+                    Partidos Ganados
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formPartidosGanados}
+                    onChange={(e) => setFormPartidosGanados(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full px-3 py-2 bg-dark-950 border border-dark-700 rounded-lg text-emerald-400 font-mono font-bold text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-dark-300 mb-1">
+                    Partidos Perdidos
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formPartidosPerdidos}
+                    onChange={(e) => setFormPartidosPerdidos(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full px-3 py-2 bg-dark-950 border border-dark-700 rounded-lg text-rose-400 font-mono font-bold text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/50"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 pt-4 border-t border-dark-800">
             <Button variant="ghost" onClick={() => setEditing(null)} disabled={isPending}>
               Cancelar
@@ -1215,6 +1578,106 @@ export default function AdminJugadoresPage() {
         }}
         stats={viewingProfilePlayer ? playerStatsMap.get(viewingProfilePlayer.id) : undefined}
       />
+
+      {/* MODAL DEDICADO: MODIFICAR ESTADÍSTICAS Y PUNTOS DE RANKING */}
+      <Modal
+        isOpen={!!editingStatsPlayer}
+        onClose={() => setEditingStatsPlayer(null)}
+        title={`Estadísticas de Ranking: ${editingStatsPlayer?.first_name || ""} ${editingStatsPlayer?.last_name || ""}`}
+      >
+        <div className="space-y-4">
+          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5">
+            <Trophy className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="text-xs text-amber-200">
+              <strong className="block text-amber-300 font-bold mb-0.5">Control Oficial de Administrador</strong>
+              Ajusta los puntos de ranking, torneos jugados y el historial de partidos ganados y perdidos. Se actualizará de inmediato en los rankings oficiales.
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-3 rounded-xl bg-dark-900 border border-dark-700/80">
+              <label className="block text-xs font-bold text-white mb-1.5 flex items-center gap-1.5">
+                <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                Puntos de Ranking
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={statsPuntos}
+                onChange={(e) => setStatsPuntos(Math.max(0, parseInt(e.target.value) || 0))}
+                className="w-full px-3 py-2.5 bg-dark-950 border border-dark-600 rounded-lg text-white font-mono font-black text-lg focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              />
+              <span className="text-[11px] text-dark-400 mt-1 block">Puntaje oficial acumulado</span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-dark-900 border border-dark-700/80">
+              <label className="block text-xs font-bold text-white mb-1.5 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-sky-400" />
+                Torneos Jugados
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={statsTorneos}
+                onChange={(e) => setStatsTorneos(Math.max(0, parseInt(e.target.value) || 0))}
+                className="w-full px-3 py-2.5 bg-dark-950 border border-dark-600 rounded-lg text-white font-mono font-black text-lg focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+              />
+              <span className="text-[11px] text-dark-400 mt-1 block">Total torneos disputados</span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-dark-900 border border-dark-700/80">
+              <label className="block text-xs font-bold text-emerald-400 mb-1.5 flex items-center gap-1.5">
+                <Award className="w-3.5 h-3.5 text-emerald-400" />
+                Partidos Ganados (PG)
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={statsGanados}
+                onChange={(e) => setStatsGanados(Math.max(0, parseInt(e.target.value) || 0))}
+                className="w-full px-3 py-2.5 bg-dark-950 border border-dark-600 rounded-lg text-emerald-400 font-mono font-black text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+              />
+              <span className="text-[11px] text-dark-400 mt-1 block">Victorias oficiales</span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-dark-900 border border-dark-700/80">
+              <label className="block text-xs font-bold text-rose-400 mb-1.5 flex items-center gap-1.5">
+                <Award className="w-3.5 h-3.5 text-rose-400" />
+                Partidos Perdidos (PP)
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={statsPerdidos}
+                onChange={(e) => setStatsPerdidos(Math.max(0, parseInt(e.target.value) || 0))}
+                className="w-full px-3 py-2.5 bg-dark-950 border border-dark-600 rounded-lg text-rose-400 font-mono font-black text-lg focus:outline-none focus:ring-2 focus:ring-rose-500/50"
+              />
+              <span className="text-[11px] text-dark-400 mt-1 block">Derrotas oficiales</span>
+            </div>
+          </div>
+
+          {/* Resumen de efectividad calculado en vivo */}
+          {(() => {
+            const total = (Number(statsGanados) || 0) + (Number(statsPerdidos) || 0);
+            const eff = total > 0 ? Math.round(((Number(statsGanados) || 0) / total) * 100) : 0;
+            return (
+              <div className="p-3 rounded-xl bg-dark-950 border border-dark-800 flex items-center justify-between text-xs">
+                <span className="text-dark-300">Total Partidos: <strong className="text-white">{total}</strong></span>
+                <span className="text-dark-300">Efectividad calculada: <strong className="text-amber-400">{eff}%</strong></span>
+              </div>
+            );
+          })()}
+
+          <div className="flex justify-end gap-3 pt-3 border-t border-dark-800">
+            <Button variant="ghost" onClick={() => setEditingStatsPlayer(null)} disabled={isPending}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveStats} disabled={isPending} className="font-bold">
+              {isPending ? "Guardando..." : "Guardar Estadísticas"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

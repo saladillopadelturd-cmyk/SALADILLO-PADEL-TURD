@@ -673,6 +673,29 @@ export async function syncAllTournamentsRankings(supabase: any) {
     }
   }
 
+  // 3.1. Aplicar ajustes y overrides manuales fijados por los administradores (puntos, torneos jugados, PG, PP)
+  try {
+    const { getPlayerRankingOverridesMap } = await import("./player-ranking-overrides");
+    const rankingOverrides = await getPlayerRankingOverridesMap();
+    if (rankingOverrides && rankingOverrides.size > 0) {
+      rankingOverrides.forEach((override, pId) => {
+        const p = playersMap.get(pId);
+        const pCategory = override.category || p?.category || "General";
+        individualRankingsMap.set(pId, {
+          ranking_type: "individual",
+          player_id: pId,
+          category: pCategory,
+          points: override.points,
+          tournaments_played: override.tournamentsPlayed,
+          matches_won: override.matchesWon,
+          matches_lost: override.matchesLost,
+        });
+      });
+    }
+  } catch (overrideErr) {
+    console.warn("Aviso al aplicar overrides manuales de ranking:", overrideErr);
+  }
+
   // 4. Persistir registros consolidados en la tabla rankings de Supabase mediante upsert atómico
   let dbClient = supabase;
   try {

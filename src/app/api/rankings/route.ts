@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { SPT_POINTS_SCALE, getCoupleKey, syncAllTournamentsRankings, calculateTournamentStageStats } from "@/lib/tournament/rankings";
 import { formatPlayerFullName } from "@/lib/tournament/couples";
 import { getPlayerPhotosMap, enrichPlayerPhoto } from "@/lib/tournament/player-photos";
+import { getPlayerRankingOverridesMap } from "@/lib/tournament/player-ranking-overrides";
 
 /**
  * GET /api/rankings?category=5ta&type=individual&sync=true
@@ -90,10 +91,11 @@ export async function GET(request: Request) {
     ...Array.from(indivMap.values()),
   ];
 
-  // Cargar jugadores y fotografías oficiales de Storage
-  const [{ data: allPlayers }, photosMap] = await Promise.all([
+  // Cargar jugadores, fotografías oficiales y overrides de administración
+  const [{ data: allPlayers }, photosMap, rankingOverridesMap] = await Promise.all([
     supabase.from("players").select("*"),
     getPlayerPhotosMap(),
+    getPlayerRankingOverridesMap(),
   ]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const playersMap = new Map((allPlayers || []).map((p: any) => [p.id, enrichPlayerPhoto(p, photosMap)]));
@@ -120,8 +122,13 @@ export async function GET(request: Request) {
       const pName = p ? formatPlayerFullName(p) : "Jugador";
       const pGender = p?.gender || "Masculino";
       const pPhoto = p?.photo_url || p?.avatar_url || (r.player_id ? photosMap.get(r.player_id) : null) || null;
+      const override = r.player_id ? rankingOverridesMap.get(r.player_id) : null;
       return {
         ...r,
+        points: override ? override.points : (r.points || 0),
+        tournaments_played: override ? override.tournamentsPlayed : (r.tournaments_played || 0),
+        matches_won: override ? override.matchesWon : (r.matches_won || 0),
+        matches_lost: override ? override.matchesLost : (r.matches_lost || 0),
         category: p?.category || r.category || "General",
         gender: pGender,
         name: pName,
@@ -154,6 +161,7 @@ export async function GET(request: Request) {
       const pPhoto = p.photo_url || p.avatar_url || photosMap.get(p.id) || null;
       const enrichedP = { ...p, photo_url: pPhoto, avatar_url: pPhoto };
 
+      const pOverride = rankingOverridesMap.get(p.id);
       enrichedRankings.push({
         id: `p-${p.id}`,
         ranking_type: "individual",
@@ -162,10 +170,10 @@ export async function GET(request: Request) {
         gender: pGender,
         photo_url: pPhoto,
         avatar_url: pPhoto,
-        points: 0,
-        tournaments_played: 0,
-        matches_won: 0,
-        matches_lost: 0,
+        points: pOverride ? pOverride.points : 0,
+        tournaments_played: pOverride ? pOverride.tournamentsPlayed : 0,
+        matches_won: pOverride ? pOverride.matchesWon : 0,
+        matches_lost: pOverride ? pOverride.matchesLost : 0,
         name: formatPlayerFullName(p),
         player: enrichedP,
       });
