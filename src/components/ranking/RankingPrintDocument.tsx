@@ -126,56 +126,62 @@ export default function RankingPrintDocument({
               <div className="absolute inset-y-12 left-0 right-0 border-y border-white/[0.04]" />
             </div>
 
-            {/* PARTE SUPERIOR (HEADER): Logo oficial + Leyenda requerida */}
-            <header className="relative z-10 px-8 pt-8 pb-4 border-b border-white/10 flex-shrink-0">
-              <div className="flex items-center justify-between gap-4">
-                {/* Logo oficial Saladillo Padel Tour */}
-                <div className="flex items-center gap-3">
-                  <div className="relative h-16 w-44 sm:h-20 sm:w-52 flex items-center justify-start">
-                    <Image
-                      src="/LOGOSPT.png"
-                      alt="Saladillo Padel Tour"
-                      width={220}
-                      height={70}
-                      priority
-                      className="h-16 sm:h-20 w-auto object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]"
-                    />
+            {/* PARTE SUPERIOR (HEADER): Logo oficial + Leyenda SOLO EN LA PRIMERA PÁGINA */}
+            {pageIndex === 0 && (
+              <header className="relative z-10 px-8 pt-8 pb-4 border-b border-white/10 flex-shrink-0">
+                <div className="flex items-center justify-between gap-4">
+                  {/* Logo oficial Saladillo Padel Tour */}
+                  <div className="flex items-center gap-3">
+                    <div className="relative h-16 w-44 sm:h-20 sm:w-52 flex items-center justify-start">
+                      <Image
+                        src="/LOGOSPT.png"
+                        alt="Saladillo Padel Tour"
+                        width={220}
+                        height={70}
+                        priority
+                        className="h-16 sm:h-20 w-auto object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Insignia / Rama oficial */}
+                  <div className="text-right">
+                    <div
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase border ${
+                        isDamas
+                          ? "bg-pink-500/15 text-pink-400 border-pink-500/30"
+                          : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                      }`}
+                    >
+                      <Trophy className="w-3.5 h-3.5" />
+                      <span>Circuito Oficial SPT</span>
+                    </div>
+                    <div className="text-[11px] font-semibold text-slate-400 mt-1">
+                      Tabla Oficial de Puntuación
+                    </div>
                   </div>
                 </div>
 
-                {/* Insignia / Rama oficial */}
-                <div className="text-right">
-                  <div
-                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase border ${
-                      isDamas
-                        ? "bg-pink-500/15 text-pink-400 border-pink-500/30"
-                        : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                {/* LEYENDA OBLIGATORIA REQUERIDA POR EL USUARIO:
+                    ¨Ranking de X categoria (femenino o masculino) al dia (fecha del dia que se hizo la impresion)¨ */}
+                <div className="mt-4 pt-3 border-t border-white/10 text-center">
+                  <h1
+                    className={`text-lg sm:text-2xl font-black tracking-tight leading-snug ${
+                      isDark ? "text-white" : "text-slate-900"
                     }`}
                   >
-                    <Trophy className="w-3.5 h-3.5" />
-                    <span>Circuito Oficial SPT</span>
-                  </div>
-                  <div className="text-[11px] font-semibold text-slate-400 mt-1">
-                    Tabla Oficial de Puntuación
-                  </div>
+                    Ranking de {category} categoría ({genderLabel}) al día {formattedDate}
+                  </h1>
                 </div>
-              </div>
-
-              {/* LEYENDA OBLIGATORIA REQUERIDA POR EL USUARIO:
-                  ¨Ranking de X categoria (femenino o masculino) al dia (fecha del dia que se hizo la impresion)¨ */}
-              <div className="mt-4 pt-3 border-t border-white/10 text-center">
-                <h1
-                  className={`text-lg sm:text-2xl font-black tracking-tight leading-snug ${
-                    isDark ? "text-white" : "text-slate-900"
-                  }`}
-                >
-                  Ranking de {category} categoría ({genderLabel}) al día {formattedDate}
-                </h1>
-              </div>
-            </header>
+              </header>
+            )}
 
             {/* CUERPO: 15 Puestos del Ranking */}
-            <main className="relative z-10 px-6 py-4 flex-1 flex flex-col justify-start">
+            <main
+              className={`relative z-10 px-6 py-4 flex-1 flex flex-col justify-start ${
+                pageIndex > 0 ? "pt-8" : ""
+              }`}
+            >
               {pagePlayers.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
                   <Trophy className="w-16 h-16 text-slate-500 mb-3" />

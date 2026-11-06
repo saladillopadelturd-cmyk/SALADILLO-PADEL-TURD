@@ -160,39 +160,50 @@ export default function PrintRankingButton({
         `;
       }
 
+      const isFirstPage = pIdx === 0;
+
+      const headerSection = isFirstPage
+        ? `
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid ${borderCol}; padding-bottom: 14px;">
+              <div>
+                <img src="${window.location.origin}/LOGOSPT.png" alt="Saladillo Padel Tour" style="height: 64px; max-width: 220px; object-contain: contain; display: block;" />
+              </div>
+              <div style="text-align: right;">
+                <div style="display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; background: ${
+                  isDamas ? "rgba(236,72,153,0.15)" : "rgba(16,185,129,0.15)"
+                }; color: ${brandColor}; border: 1px solid ${brandColor};">
+                  🏆 Saladillo Padel Tour
+                </div>
+                <div style="font-size: 11px; color: ${subCol}; margin-top: 4px; font-weight: 600;">
+                  Circuito Oficial Federado
+                </div>
+              </div>
+            </div>
+
+            <!-- LEYENDA OBLIGATORIA REQUERIDA POR EL USUARIO -->
+            <div style="text-align: center; margin-top: 14px; margin-bottom: 8px;">
+              <h1 style="margin: 0; font-size: 20px; font-weight: 900; letter-spacing: -0.02em; color: ${textCol};">
+                Ranking de ${category} categoría (${genderLabel}) al día ${formattedDate}
+              </h1>
+            </div>
+          `
+        : "";
+
       pagesHtml += `
         <div class="print-page" style="page-break-after: ${
           pIdx < totalPages - 1 ? "always" : "auto"
         }; break-after: ${pIdx < totalPages - 1 ? "page" : "auto"};">
-          <div style="aspect-ratio: 9/16; width: 100%; box-sizing: border-box; padding: 32px 28px; display: flex; flex-direction: column; justify-content: space-between; background: ${bgCol}; color: ${textCol};">
+          <div style="aspect-ratio: 9/16; width: 100%; box-sizing: border-box; padding: ${
+            isFirstPage ? "32px 28px" : "40px 28px 32px 28px"
+          }; display: flex; flex-direction: column; justify-content: space-between; background: ${bgCol}; color: ${textCol};">
             
-            <!-- HEADER DE CADA PÁGINA: Logo de Saladillo Padel Tour + Leyenda oficial requerida -->
             <div>
-              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid ${borderCol}; padding-bottom: 14px;">
-                <div>
-                  <img src="${window.location.origin}/LOGOSPT.png" alt="Saladillo Padel Tour" style="height: 64px; max-width: 220px; object-contain: contain; display: block;" />
-                </div>
-                <div style="text-align: right;">
-                  <div style="display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; background: ${
-                    isDamas ? "rgba(236,72,153,0.15)" : "rgba(16,185,129,0.15)"
-                  }; color: ${brandColor}; border: 1px solid ${brandColor};">
-                    🏆 Saladillo Padel Tour
-                  </div>
-                  <div style="font-size: 11px; color: ${subCol}; margin-top: 4px; font-weight: 600;">
-                    Circuito Oficial Federado
-                  </div>
-                </div>
-              </div>
-
-              <!-- LEYENDA OBLIGATORIA REQUERIDA POR EL USUARIO -->
-              <div style="text-align: center; margin-top: 14px; margin-bottom: 8px;">
-                <h1 style="margin: 0; font-size: 20px; font-weight: 900; letter-spacing: -0.02em; color: ${textCol};">
-                  Ranking de ${category} categoría (${genderLabel}) al día ${formattedDate}
-                </h1>
-              </div>
+              ${headerSection}
 
               <!-- TABLA DE 15 PUESTOS -->
-              <table style="width: 100%; border-collapse: collapse; margin-top: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+              <table style="width: 100%; border-collapse: collapse; margin-top: ${
+                isFirstPage ? "6px" : "0"
+              }; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
                 <thead>
                   <tr style="background: ${
                     isDark ? "#0f172a" : "#f1f5f9"
