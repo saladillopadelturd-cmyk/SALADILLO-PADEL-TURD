@@ -202,15 +202,13 @@ body {
   }
 
   .ranking-print-page {
-    width: 100vw !important;
-    height: 100vh !important;
-    min-height: 100vh !important;
-    max-height: 100vh !important;
+    width: 100% !important;
+    max-width: 100% !important;
     page-break-after: always !important;
     break-after: page !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
-    overflow: hidden !important;
+    overflow: visible !important;
     box-sizing: border-box !important;
     margin: 0 auto !important;
   }

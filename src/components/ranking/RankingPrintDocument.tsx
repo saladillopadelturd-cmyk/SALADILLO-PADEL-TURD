@@ -91,7 +91,7 @@ export default function RankingPrintDocument({
         return (
           <div
             key={pageIndex}
-            className={`ranking-print-page relative flex flex-col justify-between overflow-hidden ${
+            className={`ranking-print-page relative flex flex-col justify-between ${
               isDark
                 ? "bg-gradient-to-b from-[#0a0f1d] via-[#070b14] to-[#04070d] text-white border-dark-800"
                 : "bg-gradient-to-b from-slate-50 via-white to-slate-100 text-slate-900 border-slate-200"
@@ -128,18 +128,18 @@ export default function RankingPrintDocument({
 
             {/* PARTE SUPERIOR (HEADER): Logo oficial + Leyenda SOLO EN LA PRIMERA PÁGINA */}
             {pageIndex === 0 && (
-              <header className="relative z-10 px-8 pt-8 pb-4 border-b border-white/10 flex-shrink-0">
+              <header className="relative z-10 px-6 pt-4 pb-2 border-b border-white/10 flex-shrink-0">
                 <div className="flex items-center justify-between gap-4">
                   {/* Logo oficial Saladillo Padel Tour */}
                   <div className="flex items-center gap-3">
-                    <div className="relative h-16 w-44 sm:h-20 sm:w-52 flex items-center justify-start">
+                    <div className="relative h-12 w-36 sm:h-14 sm:w-44 flex items-center justify-start">
                       <Image
                         src="/LOGOSPT.png"
                         alt="Saladillo Padel Tour"
-                        width={220}
-                        height={70}
+                        width={180}
+                        height={55}
                         priority
-                        className="h-16 sm:h-20 w-auto object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]"
+                        className="h-12 sm:h-14 w-auto object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]"
                       />
                     </div>
                   </div>
@@ -147,16 +147,16 @@ export default function RankingPrintDocument({
                   {/* Insignia / Rama oficial */}
                   <div className="text-right">
                     <div
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase border ${
+                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase border ${
                         isDamas
                           ? "bg-pink-500/15 text-pink-400 border-pink-500/30"
                           : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
                       }`}
                     >
-                      <Trophy className="w-3.5 h-3.5" />
+                      <Trophy className="w-3 h-3" />
                       <span>Circuito Oficial SPT</span>
                     </div>
-                    <div className="text-[11px] font-semibold text-slate-400 mt-1">
+                    <div className="text-[10px] font-semibold text-slate-400 mt-0.5">
                       Tabla Oficial de Puntuación
                     </div>
                   </div>
@@ -164,9 +164,9 @@ export default function RankingPrintDocument({
 
                 {/* LEYENDA OBLIGATORIA REQUERIDA POR EL USUARIO:
                     ¨Ranking de X categoria (femenino o masculino) al dia (fecha del dia que se hizo la impresion)¨ */}
-                <div className="mt-4 pt-3 border-t border-white/10 text-center">
+                <div className="mt-2 pt-2 border-t border-white/10 text-center">
                   <h1
-                    className={`text-lg sm:text-2xl font-black tracking-tight leading-snug ${
+                    className={`text-base sm:text-xl font-black tracking-tight leading-snug ${
                       isDark ? "text-white" : "text-slate-900"
                     }`}
                   >
@@ -178,8 +178,8 @@ export default function RankingPrintDocument({
 
             {/* CUERPO: 15 Puestos del Ranking */}
             <main
-              className={`relative z-10 px-6 py-4 flex-1 flex flex-col justify-start ${
-                pageIndex > 0 ? "pt-8" : ""
+              className={`relative z-10 px-4 py-2 flex-1 flex flex-col justify-start ${
+                pageIndex > 0 ? "pt-4" : ""
               }`}
             >
               {pagePlayers.length === 0 ? (
@@ -193,14 +193,14 @@ export default function RankingPrintDocument({
                 <div className="w-full flex-1 flex flex-col">
                   {/* Encabezado de la tabla */}
                   <div
-                    className={`grid grid-cols-12 items-center px-4 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider mb-1.5 border leading-tight ${
+                    className={`grid grid-cols-12 items-center px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider mb-1 border leading-tight ${
                       isDark
                         ? "bg-dark-900/90 text-slate-300 border-dark-750"
                         : "bg-slate-200 text-slate-700 border-slate-300"
                     }`}
                   >
                     <div className="col-span-1 text-center">Pos.</div>
-                    <div className="col-span-5 text-left pl-2">Jugador/a (Localidad)</div>
+                    <div className="col-span-5 text-left pl-1">Jugador/a (Localidad)</div>
                     <div className="col-span-2 text-center">Cat.</div>
                     <div className="col-span-1 text-center">Torneos</div>
                     <div className="col-span-1 text-center">PG / PP</div>
@@ -214,7 +214,7 @@ export default function RankingPrintDocument({
                   </div>
 
                   {/* 15 Filas de Jugadores */}
-                  <div className="flex-1 flex flex-col justify-between space-y-1">
+                  <div className="flex-1 flex flex-col justify-start gap-1">
                     {pagePlayers.map((player) => {
                       const pos = player.position;
                       const isTop1 = pos === 1;
@@ -224,7 +224,7 @@ export default function RankingPrintDocument({
                       return (
                         <div
                           key={player.id || `${pos}-${player.name}`}
-                          className={`grid grid-cols-12 items-center px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors border ${
+                          className={`grid grid-cols-12 items-center px-3 py-0.5 rounded-lg text-xs font-semibold transition-colors border ${
                             isDark
                               ? isTop1
                                 ? "bg-amber-500/10 border-amber-500/30 text-white"
@@ -241,14 +241,14 @@ export default function RankingPrintDocument({
                               ? "bg-orange-50 border-orange-200 text-slate-900"
                               : "bg-white border-slate-200 text-slate-800"
                           }`}
-                          style={{ minHeight: "44px" }}
+                          style={{ minHeight: "31px", height: "31px" }}
                         >
                           {/* 1. Posición */}
                           <div className="col-span-1 flex items-center justify-center">
                             <span
-                              className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-black shadow-sm ${
+                              className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-black shadow-sm ${
                                 isTop1
-                                  ? "bg-amber-400 text-dark-950 font-black ring-2 ring-amber-300"
+                                  ? "bg-amber-400 text-dark-950 font-black ring-1 ring-amber-300"
                                   : isTop2
                                   ? "bg-slate-300 text-dark-950 font-black ring-1 ring-slate-200"
                                   : isTop3
@@ -263,20 +263,20 @@ export default function RankingPrintDocument({
                           </div>
 
                           {/* 2. Nombre, Apellido y Localidad */}
-                          <div className="col-span-5 text-left pl-2 flex items-center gap-1.5 overflow-hidden">
+                          <div className="col-span-5 text-left pl-1 flex items-center gap-1 overflow-hidden">
                             {isTop1 && (
-                              <Medal className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                              <Medal className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
                             )}
                             <div className="truncate">
                               <span
-                                className={`font-black text-sm tracking-tight ${
+                                className={`font-black text-xs sm:text-[13px] tracking-tight ${
                                   isDark ? "text-white" : "text-slate-950"
                                 }`}
                               >
                                 {player.name}
                               </span>
                               <span
-                                className={`ml-1.5 text-xs font-medium italic ${
+                                className={`ml-1 text-[11px] font-medium italic ${
                                   isDark ? "text-slate-400" : "text-slate-500"
                                 }`}
                               >
@@ -288,7 +288,7 @@ export default function RankingPrintDocument({
                           {/* 3. Categoría */}
                           <div className="col-span-2 text-center">
                             <span
-                              className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wide ${
+                              className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-black uppercase tracking-wide ${
                                 isDamas
                                   ? "bg-pink-500/20 text-pink-400 border border-pink-500/30"
                                   : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
@@ -299,12 +299,12 @@ export default function RankingPrintDocument({
                           </div>
 
                           {/* 4. Torneos Jugados */}
-                          <div className="col-span-1 text-center font-mono font-bold text-xs sm:text-sm">
+                          <div className="col-span-1 text-center font-mono font-bold text-xs">
                             {player.tournaments}
                           </div>
 
                           {/* 5. PG / PP */}
-                          <div className="col-span-1 text-center font-mono text-xs">
+                          <div className="col-span-1 text-center font-mono text-[11px]">
                             <span className="text-emerald-400 font-bold">
                               {player.matchesWon}
                             </span>
@@ -317,7 +317,7 @@ export default function RankingPrintDocument({
                           {/* 6. Puntos */}
                           <div className="col-span-2 text-center">
                             <span
-                              className={`font-mono font-black text-base tracking-tight scoreboard-digit ${
+                              className={`font-mono font-black text-xs sm:text-sm tracking-tight scoreboard-digit ${
                                 isDamas ? "text-pink-400" : "text-emerald-400"
                               }`}
                             >
@@ -334,27 +334,27 @@ export default function RankingPrintDocument({
                     }).map((_, emptyIdx) => (
                       <div
                         key={`empty-${emptyIdx}`}
-                        className={`grid grid-cols-12 items-center px-4 py-2 rounded-xl text-xs opacity-20 border border-dashed ${
+                        className={`grid grid-cols-12 items-center px-3 py-0.5 rounded-lg text-xs opacity-20 border border-dashed ${
                           isDark ? "border-dark-800" : "border-slate-200"
                         }`}
-                        style={{ minHeight: "44px" }}
+                        style={{ minHeight: "31px", height: "31px" }}
                       >
-                        <div className="col-span-1 text-center font-mono text-slate-500">
+                        <div className="col-span-1 text-center font-mono text-slate-500 text-[10px]">
                           {pagePlayers.length + emptyIdx + 1}
                         </div>
-                        <div className="col-span-5 pl-2 text-slate-500 italic">
+                        <div className="col-span-5 pl-1 text-slate-500 italic text-xs">
                           —
                         </div>
-                        <div className="col-span-2 text-center text-slate-500">
+                        <div className="col-span-2 text-center text-slate-500 text-xs">
                           —
                         </div>
-                        <div className="col-span-1 text-center text-slate-500">
+                        <div className="col-span-1 text-center text-slate-500 text-xs">
                           —
                         </div>
-                        <div className="col-span-1 text-center text-slate-500">
+                        <div className="col-span-1 text-center text-slate-500 text-xs">
                           —
                         </div>
-                        <div className="col-span-2 text-center text-slate-500">
+                        <div className="col-span-2 text-center text-slate-500 text-xs">
                           —
                         </div>
                       </div>
@@ -365,7 +365,7 @@ export default function RankingPrintDocument({
             </main>
 
             {/* PARTE INFERIOR (FOOTER): Paginación y créditos oficiales */}
-            <footer className="relative z-10 px-8 py-4 border-t border-white/10 flex items-center justify-between text-xs text-slate-400 flex-shrink-0">
+            <footer className="relative z-10 px-6 py-2.5 border-t border-white/10 flex items-center justify-between text-[11px] text-slate-400 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 <span className="font-semibold">
