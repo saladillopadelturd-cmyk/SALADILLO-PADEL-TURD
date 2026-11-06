@@ -185,27 +185,24 @@ export default function PrintRankingButton({
               </div>
 
               <!-- LEYENDA OBLIGATORIA REQUERIDA POR EL USUARIO -->
-              <div style="text-align: center; margin-top: 14px; margin-bottom: 12px;">
+              <div style="text-align: center; margin-top: 14px; margin-bottom: 8px;">
                 <h1 style="margin: 0; font-size: 20px; font-weight: 900; letter-spacing: -0.02em; color: ${textCol};">
                   Ranking de ${category} categoría (${genderLabel}) al día ${formattedDate}
                 </h1>
-                <div style="font-size: 12px; color: ${subCol}; font-weight: 600; margin-top: 2px;">
-                  Rama ${gender} • Clasificación Oficial de Jugadores
-                </div>
               </div>
 
               <!-- TABLA DE 15 PUESTOS -->
-              <table style="width: 100%; border-collapse: collapse; margin-top: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+              <table style="width: 100%; border-collapse: collapse; margin-top: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
                 <thead>
                   <tr style="background: ${
                     isDark ? "#0f172a" : "#f1f5f9"
-                  }; border-bottom: 2px solid ${borderCol}; font-size: 11px; text-transform: uppercase; color: ${subCol}; letter-spacing: 0.05em;">
-                    <th style="padding: 10px 8px; text-align: center;">Pos.</th>
-                    <th style="padding: 10px 14px; text-align: left;">Jugador / Jugadora</th>
-                    <th style="padding: 10px 8px; text-align: center;">Cat.</th>
-                    <th style="padding: 10px 8px; text-align: center;">Torneos</th>
-                    <th style="padding: 10px 8px; text-align: center;">PG / PP</th>
-                    <th style="padding: 10px 10px; text-align: center; color: ${brandColor}; font-weight: 900;">Puntos</th>
+                  }; border-bottom: 1.5px solid ${borderCol}; font-size: 9.5px; line-height: 1.1; text-transform: uppercase; color: ${subCol}; letter-spacing: 0.04em;">
+                    <th style="padding: 4px 6px; text-align: center;">Pos.</th>
+                    <th style="padding: 4px 10px; text-align: left;">Jugador/a (Localidad)</th>
+                    <th style="padding: 4px 6px; text-align: center;">Cat.</th>
+                    <th style="padding: 4px 6px; text-align: center;">Torneos</th>
+                    <th style="padding: 4px 6px; text-align: center;">PG / PP</th>
+                    <th style="padding: 4px 8px; text-align: center; color: ${brandColor}; font-weight: 900;">Puntos</th>
                   </tr>
                 </thead>
                 <tbody>

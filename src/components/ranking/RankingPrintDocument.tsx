@@ -171,9 +171,6 @@ export default function RankingPrintDocument({
                 >
                   Ranking de {category} categoría ({genderLabel}) al día {formattedDate}
                 </h1>
-                <p className="text-xs sm:text-sm font-semibold text-slate-400 mt-0.5">
-                  Rama {gender} • {category} Categoría • Clasificación Oficial Acumulada
-                </p>
               </div>
             </header>
 
@@ -190,7 +187,7 @@ export default function RankingPrintDocument({
                 <div className="w-full flex-1 flex flex-col">
                   {/* Encabezado de la tabla */}
                   <div
-                    className={`grid grid-cols-12 items-center px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider mb-2 border ${
+                    className={`grid grid-cols-12 items-center px-4 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider mb-1.5 border leading-tight ${
                       isDark
                         ? "bg-dark-900/90 text-slate-300 border-dark-750"
                         : "bg-slate-200 text-slate-700 border-slate-300"
