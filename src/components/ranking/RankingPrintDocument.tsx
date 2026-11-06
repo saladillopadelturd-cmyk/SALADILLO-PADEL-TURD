@@ -94,52 +94,45 @@ export default function RankingPrintDocument({
             className={`ranking-print-page relative flex flex-col justify-between ${
               isDark
                 ? "bg-gradient-to-b from-[#0a0f1d] via-[#070b14] to-[#04070d] text-white border-dark-800"
-                : "bg-gradient-to-b from-slate-50 via-white to-slate-100 text-slate-900 border-slate-200"
+                : "bg-white text-slate-900 border-slate-200"
             }`}
             style={{
-              aspectRatio: "9 / 16",
+              aspectRatio: "210 / 297",
               width: "100%",
-              maxWidth: "1080px",
+              maxWidth: "850px",
               margin: "0 auto",
               pageBreakAfter: pageIndex < totalPages - 1 ? "always" : "auto",
               breakAfter: pageIndex < totalPages - 1 ? "page" : "auto",
             }}
           >
-            {/* Elementos decorativos de fondo en formato 9:16 */}
+            {/* Elementos decorativos de fondo */}
             <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-30">
               <div
                 className={`absolute -top-32 -right-32 w-96 h-96 rounded-full blur-3xl ${
-                  isDamas
-                    ? "bg-pink-500/20"
-                    : "bg-emerald-500/20"
+                  isDamas ? "bg-pink-500/10" : "bg-emerald-500/10"
                 }`}
               />
               <div
                 className={`absolute -bottom-32 -left-32 w-96 h-96 rounded-full blur-3xl ${
-                  isDamas
-                    ? "bg-rose-500/15"
-                    : "bg-lime-500/15"
+                  isDamas ? "bg-rose-500/10" : "bg-lime-500/10"
                 }`}
               />
-              {/* Líneas sutiles de pista de pádel */}
-              <div className="absolute inset-x-8 top-0 bottom-0 border-x border-white/[0.04]" />
-              <div className="absolute inset-y-12 left-0 right-0 border-y border-white/[0.04]" />
             </div>
 
             {/* PARTE SUPERIOR (HEADER): Logo oficial + Leyenda SOLO EN LA PRIMERA PÁGINA */}
             {pageIndex === 0 && (
-              <header className="relative z-10 px-6 pt-4 pb-2 border-b border-white/10 flex-shrink-0">
+              <header className="relative z-10 px-8 pt-7 pb-3 border-b border-slate-200/80 flex-shrink-0">
                 <div className="flex items-center justify-between gap-4">
                   {/* Logo oficial Saladillo Padel Tour */}
                   <div className="flex items-center gap-3">
-                    <div className="relative h-12 w-36 sm:h-14 sm:w-44 flex items-center justify-start">
+                    <div className="relative h-14 w-44 sm:h-16 sm:w-52 flex items-center justify-start">
                       <Image
                         src="/LOGOSPT.png"
                         alt="Saladillo Padel Tour"
-                        width={180}
-                        height={55}
+                        width={210}
+                        height={64}
                         priority
-                        className="h-12 sm:h-14 w-auto object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]"
+                        className="h-14 sm:h-16 w-auto object-contain drop-shadow-sm"
                       />
                     </div>
                   </div>
@@ -147,74 +140,63 @@ export default function RankingPrintDocument({
                   {/* Insignia / Rama oficial */}
                   <div className="text-right">
                     <div
-                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase border ${
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase border ${
                         isDamas
-                          ? "bg-pink-500/15 text-pink-400 border-pink-500/30"
-                          : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                          ? "bg-pink-50 text-pink-700 border-pink-300"
+                          : "bg-emerald-50 text-emerald-800 border-emerald-300"
                       }`}
                     >
-                      <Trophy className="w-3 h-3" />
+                      <Trophy className="w-3.5 h-3.5" />
                       <span>Circuito Oficial SPT</span>
                     </div>
-                    <div className="text-[10px] font-semibold text-slate-400 mt-0.5">
+                    <div className="text-xs font-semibold text-slate-500 mt-1">
                       Tabla Oficial de Puntuación
                     </div>
                   </div>
                 </div>
 
-                {/* LEYENDA OBLIGATORIA REQUERIDA POR EL USUARIO:
-                    ¨Ranking de X categoria (femenino o masculino) al dia (fecha del dia que se hizo la impresion)¨ */}
-                <div className="mt-2 pt-2 border-t border-white/10 text-center">
-                  <h1
-                    className={`text-base sm:text-xl font-black tracking-tight leading-snug ${
-                      isDark ? "text-white" : "text-slate-900"
-                    }`}
-                  >
+                {/* LEYENDA OBLIGATORIA REQUERIDA POR EL USUARIO */}
+                <div className="mt-3 pt-2.5 border-t border-slate-200 text-center">
+                  <h1 className="text-lg sm:text-2xl font-black tracking-tight leading-snug text-slate-900">
                     Ranking de {category} categoría ({genderLabel}) al día {formattedDate}
                   </h1>
                 </div>
               </header>
             )}
 
-            {/* CUERPO: 15 Puestos del Ranking */}
+            {/* CUERPO: 15 Puestos del Ranking distribuidos a lo alto de la hoja A4 */}
             <main
-              className={`relative z-10 px-4 py-2 flex-1 flex flex-col justify-start ${
-                pageIndex > 0 ? "pt-4" : ""
+              className={`relative z-10 px-6 py-3 flex-1 flex flex-col justify-between ${
+                pageIndex > 0 ? "pt-8" : ""
               }`}
             >
               {pagePlayers.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-                  <Trophy className="w-16 h-16 text-slate-500 mb-3" />
-                  <p className="text-base font-bold text-slate-300">
+                  <Trophy className="w-16 h-16 text-slate-400 mb-3" />
+                  <p className="text-base font-bold text-slate-600">
                     Sin jugadores registrados en {category} categoría ({genderLabel})
                   </p>
                 </div>
               ) : (
-                <div className="w-full flex-1 flex flex-col">
+                <div className="w-full flex-1 flex flex-col justify-between">
                   {/* Encabezado de la tabla */}
-                  <div
-                    className={`grid grid-cols-12 items-center px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider mb-1 border leading-tight ${
-                      isDark
-                        ? "bg-dark-900/90 text-slate-300 border-dark-750"
-                        : "bg-slate-200 text-slate-700 border-slate-300"
-                    }`}
-                  >
+                  <div className="grid grid-cols-12 items-center px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider mb-2 border leading-tight bg-slate-100 text-slate-700 border-slate-300">
                     <div className="col-span-1 text-center">Pos.</div>
-                    <div className="col-span-5 text-left pl-1">Jugador/a (Localidad)</div>
+                    <div className="col-span-5 text-left pl-2">Jugador/a (Localidad)</div>
                     <div className="col-span-2 text-center">Cat.</div>
                     <div className="col-span-1 text-center">Torneos</div>
                     <div className="col-span-1 text-center">PG / PP</div>
                     <div
                       className={`col-span-2 text-center font-black ${
-                        isDamas ? "text-pink-400" : "text-emerald-400"
+                        isDamas ? "text-pink-600" : "text-emerald-700"
                       }`}
                     >
                       Puntos
                     </div>
                   </div>
 
-                  {/* 15 Filas de Jugadores */}
-                  <div className="flex-1 flex flex-col justify-start gap-1">
+                  {/* 15 Filas de Jugadores ocupando armónicamente la hoja A4 */}
+                  <div className="flex-1 flex flex-col justify-between space-y-1">
                     {pagePlayers.map((player) => {
                       const pos = player.position;
                       const isTop1 = pos === 1;
@@ -224,37 +206,30 @@ export default function RankingPrintDocument({
                       return (
                         <div
                           key={player.id || `${pos}-${player.name}`}
-                          className={`grid grid-cols-12 items-center px-3 py-0.5 rounded-lg text-xs font-semibold transition-colors border ${
-                            isDark
-                              ? isTop1
-                                ? "bg-amber-500/10 border-amber-500/30 text-white"
-                                : isTop2
-                                ? "bg-slate-300/10 border-slate-300/30 text-white"
-                                : isTop3
-                                ? "bg-amber-700/10 border-amber-600/30 text-white"
-                                : "bg-dark-900/60 border-dark-800/80 text-slate-200"
-                              : isTop1
-                              ? "bg-amber-50 border-amber-300 text-slate-900"
+                          className={`grid grid-cols-12 items-center px-4 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-colors border ${
+                            isTop1
+                              ? "bg-amber-50/80 border-amber-300 text-slate-900"
                               : isTop2
-                              ? "bg-slate-100 border-slate-300 text-slate-900"
+                              ? "bg-slate-100/80 border-slate-300 text-slate-900"
                               : isTop3
-                              ? "bg-orange-50 border-orange-200 text-slate-900"
+                              ? "bg-orange-50/80 border-orange-200 text-slate-900"
                               : "bg-white border-slate-200 text-slate-800"
                           }`}
-                          style={{ minHeight: "31px", height: "31px" }}
+                          style={{
+                            minHeight: pageIndex === 0 ? "44px" : "48px",
+                            height: pageIndex === 0 ? "44px" : "48px",
+                          }}
                         >
                           {/* 1. Posición */}
                           <div className="col-span-1 flex items-center justify-center">
                             <span
-                              className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-black shadow-sm ${
+                              className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-black shadow-sm ${
                                 isTop1
                                   ? "bg-amber-400 text-dark-950 font-black ring-1 ring-amber-300"
                                   : isTop2
                                   ? "bg-slate-300 text-dark-950 font-black ring-1 ring-slate-200"
                                   : isTop3
                                   ? "bg-amber-600 text-white font-black"
-                                  : isDark
-                                  ? "bg-dark-800 text-slate-300"
                                   : "bg-slate-200 text-slate-700"
                               }`}
                             >
@@ -263,23 +238,15 @@ export default function RankingPrintDocument({
                           </div>
 
                           {/* 2. Nombre, Apellido y Localidad */}
-                          <div className="col-span-5 text-left pl-1 flex items-center gap-1 overflow-hidden">
+                          <div className="col-span-5 text-left pl-2 flex items-center gap-1.5 overflow-hidden">
                             {isTop1 && (
-                              <Medal className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                              <Medal className="w-4 h-4 text-amber-500 flex-shrink-0" />
                             )}
                             <div className="truncate">
-                              <span
-                                className={`font-black text-xs sm:text-[13px] tracking-tight ${
-                                  isDark ? "text-white" : "text-slate-950"
-                                }`}
-                              >
+                              <span className="font-bold text-sm tracking-tight text-slate-950">
                                 {player.name}
                               </span>
-                              <span
-                                className={`ml-1 text-[11px] font-medium italic ${
-                                  isDark ? "text-slate-400" : "text-slate-500"
-                                }`}
-                              >
+                              <span className="ml-1.5 text-xs font-medium italic text-slate-500">
                                 ({player.localidad || "Saladillo"})
                               </span>
                             </div>
@@ -288,10 +255,10 @@ export default function RankingPrintDocument({
                           {/* 3. Categoría */}
                           <div className="col-span-2 text-center">
                             <span
-                              className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-black uppercase tracking-wide ${
+                              className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wide border ${
                                 isDamas
-                                  ? "bg-pink-500/20 text-pink-400 border border-pink-500/30"
-                                  : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                                  ? "bg-pink-50 text-pink-700 border-pink-300"
+                                  : "bg-emerald-50 text-emerald-800 border-emerald-300"
                               }`}
                             >
                               {player.category || category}
@@ -299,17 +266,17 @@ export default function RankingPrintDocument({
                           </div>
 
                           {/* 4. Torneos Jugados */}
-                          <div className="col-span-1 text-center font-mono font-bold text-xs">
+                          <div className="col-span-1 text-center font-mono font-bold text-sm text-slate-700">
                             {player.tournaments}
                           </div>
 
                           {/* 5. PG / PP */}
-                          <div className="col-span-1 text-center font-mono text-[11px]">
-                            <span className="text-emerald-400 font-bold">
+                          <div className="col-span-1 text-center font-mono text-xs">
+                            <span className="text-emerald-700 font-bold">
                               {player.matchesWon}
                             </span>
-                            <span className="text-slate-500 mx-0.5">/</span>
-                            <span className="text-rose-400 font-medium">
+                            <span className="text-slate-400 mx-0.5">/</span>
+                            <span className="text-rose-700 font-medium">
                               {player.matchesLost}
                             </span>
                           </div>
@@ -317,8 +284,8 @@ export default function RankingPrintDocument({
                           {/* 6. Puntos */}
                           <div className="col-span-2 text-center">
                             <span
-                              className={`font-mono font-black text-xs sm:text-sm tracking-tight scoreboard-digit ${
-                                isDamas ? "text-pink-400" : "text-emerald-400"
+                              className={`font-mono font-black text-base tracking-tight scoreboard-digit ${
+                                isDamas ? "text-pink-600" : "text-emerald-700"
                               }`}
                             >
                               {player.points}
@@ -334,29 +301,20 @@ export default function RankingPrintDocument({
                     }).map((_, emptyIdx) => (
                       <div
                         key={`empty-${emptyIdx}`}
-                        className={`grid grid-cols-12 items-center px-3 py-0.5 rounded-lg text-xs opacity-20 border border-dashed ${
-                          isDark ? "border-dark-800" : "border-slate-200"
-                        }`}
-                        style={{ minHeight: "31px", height: "31px" }}
+                        className="grid grid-cols-12 items-center px-4 py-1.5 rounded-xl text-xs opacity-20 border border-dashed border-slate-300"
+                        style={{
+                          minHeight: pageIndex === 0 ? "44px" : "48px",
+                          height: pageIndex === 0 ? "44px" : "48px",
+                        }}
                       >
-                        <div className="col-span-1 text-center font-mono text-slate-500 text-[10px]">
+                        <div className="col-span-1 text-center font-mono text-slate-500">
                           {pagePlayers.length + emptyIdx + 1}
                         </div>
-                        <div className="col-span-5 pl-1 text-slate-500 italic text-xs">
-                          —
-                        </div>
-                        <div className="col-span-2 text-center text-slate-500 text-xs">
-                          —
-                        </div>
-                        <div className="col-span-1 text-center text-slate-500 text-xs">
-                          —
-                        </div>
-                        <div className="col-span-1 text-center text-slate-500 text-xs">
-                          —
-                        </div>
-                        <div className="col-span-2 text-center text-slate-500 text-xs">
-                          —
-                        </div>
+                        <div className="col-span-5 pl-2 text-slate-500 italic">—</div>
+                        <div className="col-span-2 text-center text-slate-500">—</div>
+                        <div className="col-span-1 text-center text-slate-500">—</div>
+                        <div className="col-span-1 text-center text-slate-500">—</div>
+                        <div className="col-span-2 text-center text-slate-500">—</div>
                       </div>
                     ))}
                   </div>
@@ -365,7 +323,7 @@ export default function RankingPrintDocument({
             </main>
 
             {/* PARTE INFERIOR (FOOTER): Paginación y créditos oficiales */}
-            <footer className="relative z-10 px-6 py-2.5 border-t border-white/10 flex items-center justify-between text-[11px] text-slate-400 flex-shrink-0">
+            <footer className="relative z-10 px-8 py-3.5 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 <span className="font-semibold">

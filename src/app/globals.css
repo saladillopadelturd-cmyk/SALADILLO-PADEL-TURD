@@ -191,8 +191,13 @@ body {
   }
 
   /* ==========================================
-     Impresión Vertical Formato 9:16 de Rankings
+     Impresión Vertical en Hoja A4 para Rankings
      ========================================== */
+  @page ranking-a4-page {
+    size: A4 portrait;
+    margin: 8mm 10mm;
+  }
+
   .ranking-print-wrapper {
     width: 100% !important;
     max-width: 100% !important;
@@ -202,13 +207,19 @@ body {
   }
 
   .ranking-print-page {
+    page: ranking-a4-page;
     width: 100% !important;
     max-width: 100% !important;
+    min-height: calc(297mm - 18mm) !important;
+    height: calc(297mm - 18mm) !important;
+    max-height: calc(297mm - 18mm) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
     page-break-after: always !important;
     break-after: page !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
-    overflow: visible !important;
     box-sizing: border-box !important;
     margin: 0 auto !important;
   }

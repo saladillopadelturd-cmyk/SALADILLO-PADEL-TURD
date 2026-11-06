@@ -71,6 +71,7 @@ export default function PrintRankingButton({
     pages.forEach((pagePlayers, pIdx) => {
       const pageNum = pIdx + 1;
       const totalPages = pages.length;
+      const isFirstPage = pIdx === 0;
 
       let rowsHtml = "";
       pagePlayers.forEach((p) => {
@@ -83,35 +84,37 @@ export default function PrintRankingButton({
 
         const rowBg = isTop1 ? "#fefce8" : isTop2 ? "#f8fafc" : isTop3 ? "#fff7ed" : "#ffffff";
 
+        const rowHeight = isFirstPage ? "46px" : "52px";
+
         rowsHtml += `
-          <tr style="background: ${rowBg}; border-bottom: 1px solid ${borderCol}; height: 31px;">
-            <td style="text-align: center; padding: 2px 6px; width: 36px;">
-              <span style="display: inline-block; width: 20px; height: 20px; line-height: 20px; border-radius: 50%; background: ${posBg}; color: ${posText}; font-weight: 900; font-size: 11px;">
+          <tr style="background: ${rowBg}; border-bottom: 1px solid ${borderCol}; height: ${rowHeight};">
+            <td style="text-align: center; padding: 4px 6px; width: 44px;">
+              <span style="display: inline-block; width: 26px; height: 26px; line-height: 26px; border-radius: 50%; background: ${posBg}; color: ${posText}; font-weight: 900; font-size: 13px;">
                 ${p.position}
               </span>
             </td>
-            <td style="padding: 2px 8px; text-align: left;">
-              <div style="font-weight: 800; font-size: 13px; color: ${textCol}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;">
+            <td style="padding: 4px 10px; text-align: left;">
+              <div style="font-weight: 800; font-size: 15px; color: ${textCol}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 380px;">
                 ${p.name}
-                <span style="font-weight: 400; font-size: 11px; font-style: italic; color: ${subCol}; margin-left: 4px;">
+                <span style="font-weight: 500; font-size: 12px; font-style: italic; color: ${subCol}; margin-left: 6px;">
                   (${p.localidad || "Saladillo"})
                 </span>
               </div>
             </td>
-            <td style="text-align: center; padding: 2px 6px; width: 60px;">
-              <span style="display: inline-block; padding: 1px 6px; border-radius: 4px; font-weight: 800; font-size: 10px; text-transform: uppercase; background: #f1f5f9; color: ${brandColor}; border: 1px solid #cbd5e1;">
+            <td style="text-align: center; padding: 4px 6px; width: 68px;">
+              <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: 800; font-size: 11px; text-transform: uppercase; background: #f1f5f9; color: ${brandColor}; border: 1px solid #cbd5e1;">
                 ${p.category || category}
               </span>
             </td>
-            <td style="text-align: center; padding: 2px 6px; font-weight: 700; font-size: 12px; width: 55px; font-family: monospace;">
+            <td style="text-align: center; padding: 4px 6px; font-weight: 700; font-size: 14px; width: 65px; font-family: monospace;">
               ${p.tournaments}
             </td>
-            <td style="text-align: center; padding: 2px 6px; font-size: 11px; font-family: monospace; width: 70px;">
+            <td style="text-align: center; padding: 4px 6px; font-size: 13px; font-family: monospace; width: 80px;">
               <span style="color: #047857; font-weight: 700;">${p.matchesWon}</span>
-              <span style="color: ${subCol}; margin: 0 1px;">/</span>
+              <span style="color: ${subCol}; margin: 0 2px;">/</span>
               <span style="color: #be123c; font-weight: 600;">${p.matchesLost}</span>
             </td>
-            <td style="text-align: center; padding: 2px 8px; font-weight: 900; font-size: 13px; font-family: monospace; color: ${brandColor}; width: 70px;">
+            <td style="text-align: center; padding: 4px 8px; font-weight: 900; font-size: 17px; font-family: monospace; color: ${brandColor}; width: 85px;">
               ${p.points}
             </td>
           </tr>
@@ -119,42 +122,41 @@ export default function PrintRankingButton({
       });
 
       const emptyCount = Math.max(0, PLAYERS_PER_PAGE - pagePlayers.length);
+      const emptyRowHeight = isFirstPage ? "46px" : "52px";
       for (let e = 0; e < emptyCount; e++) {
         rowsHtml += `
-          <tr style="border-bottom: 1px dashed ${borderCol}; height: 31px; opacity: 0.25;">
-            <td style="text-align: center; font-size: 10px; color: ${subCol}; font-family: monospace;">
+          <tr style="border-bottom: 1px dashed ${borderCol}; height: ${emptyRowHeight}; opacity: 0.25;">
+            <td style="text-align: center; font-size: 12px; color: ${subCol}; font-family: monospace;">
               ${pagePlayers.length + e + 1}
             </td>
-            <td style="padding: 2px 8px; color: ${subCol}; font-style: italic; font-size: 11px;">—</td>
-            <td style="text-align: center; color: ${subCol}; font-size: 11px;">—</td>
-            <td style="text-align: center; color: ${subCol}; font-size: 11px;">—</td>
-            <td style="text-align: center; color: ${subCol}; font-size: 11px;">—</td>
-            <td style="text-align: center; color: ${subCol}; font-size: 11px;">—</td>
+            <td style="padding: 4px 10px; color: ${subCol}; font-style: italic; font-size: 13px;">—</td>
+            <td style="text-align: center; color: ${subCol}; font-size: 12px;">—</td>
+            <td style="text-align: center; color: ${subCol}; font-size: 12px;">—</td>
+            <td style="text-align: center; color: ${subCol}; font-size: 12px;">—</td>
+            <td style="text-align: center; color: ${subCol}; font-size: 12px;">—</td>
           </tr>
         `;
       }
 
-      const isFirstPage = pIdx === 0;
-
       const headerSection = isFirstPage
         ? `
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid ${borderCol}; padding-bottom: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid ${borderCol}; padding-bottom: 10px;">
               <div>
-                <img src="${window.location.origin}/LOGOSPT.png" alt="Saladillo Padel Tour" style="height: 48px; max-width: 170px; object-fit: contain; display: block;" />
+                <img src="${window.location.origin}/LOGOSPT.png" alt="Saladillo Padel Tour" style="height: 54px; max-width: 200px; object-fit: contain; display: block;" />
               </div>
               <div style="text-align: right;">
-                <div style="display: inline-block; padding: 2px 10px; border-radius: 9999px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; background: #f1f5f9; color: ${brandColor}; border: 1px solid #cbd5e1;">
+                <div style="display: inline-block; padding: 3px 12px; border-radius: 9999px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; background: #f1f5f9; color: ${brandColor}; border: 1px solid #cbd5e1;">
                   🏆 Saladillo Padel Tour
                 </div>
-                <div style="font-size: 10px; color: ${subCol}; margin-top: 2px; font-weight: 600;">
+                <div style="font-size: 11px; color: ${subCol}; margin-top: 3px; font-weight: 600;">
                   Circuito Oficial Federado
                 </div>
               </div>
             </div>
 
             <!-- LEYENDA OBLIGATORIA REQUERIDA POR EL USUARIO -->
-            <div style="text-align: center; margin-top: 8px; margin-bottom: 6px;">
-              <h1 style="margin: 0; font-size: 17px; font-weight: 900; letter-spacing: -0.02em; color: ${textCol};">
+            <div style="text-align: center; margin-top: 10px; margin-bottom: 8px;">
+              <h1 style="margin: 0; font-size: 19px; font-weight: 900; letter-spacing: -0.02em; color: ${textCol};">
                 Ranking de ${category} categoría (${genderLabel}) al día ${formattedDate}
               </h1>
             </div>
@@ -165,25 +167,25 @@ export default function PrintRankingButton({
         <div class="print-page" style="page-break-after: ${
           pIdx < totalPages - 1 ? "always" : "auto"
         }; break-after: ${pIdx < totalPages - 1 ? "page" : "auto"};">
-          <div style="aspect-ratio: 9/16; width: 100%; box-sizing: border-box; padding: ${
-            isFirstPage ? "20px 24px 14px 24px" : "28px 24px 14px 24px"
+          <div style="width: 100%; height: 100%; box-sizing: border-box; padding: ${
+            isFirstPage ? "8mm 6mm 6mm 6mm" : "14mm 6mm 6mm 6mm"
           }; display: flex; flex-direction: column; justify-content: space-between; background: ${bgCol}; color: ${textCol};">
             
             <div>
               ${headerSection}
 
-              <!-- TABLA DE 15 PUESTOS -->
+              <!-- TABLA DE 15 PUESTOS REORGANIZADA PARA ALTO A4 -->
               <table style="width: 100%; border-collapse: collapse; margin-top: ${
-                isFirstPage ? "4px" : "0"
+                isFirstPage ? "6px" : "0"
               }; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
                 <thead>
-                  <tr style="background: #f8fafc; border-bottom: 1.5px solid ${borderCol}; font-size: 9.5px; line-height: 1.1; text-transform: uppercase; color: ${subCol}; letter-spacing: 0.04em;">
-                    <th style="padding: 4px 6px; text-align: center;">Pos.</th>
-                    <th style="padding: 4px 10px; text-align: left;">Jugador/a (Localidad)</th>
-                    <th style="padding: 4px 6px; text-align: center;">Cat.</th>
-                    <th style="padding: 4px 6px; text-align: center;">Torneos</th>
-                    <th style="padding: 4px 6px; text-align: center;">PG / PP</th>
-                    <th style="padding: 4px 8px; text-align: center; color: ${brandColor}; font-weight: 900;">Puntos</th>
+                  <tr style="background: #f8fafc; border-bottom: 2px solid ${borderCol}; font-size: 11px; line-height: 1.2; text-transform: uppercase; color: ${subCol}; letter-spacing: 0.04em;">
+                    <th style="padding: 7px 6px; text-align: center;">Pos.</th>
+                    <th style="padding: 7px 10px; text-align: left;">Jugador/a (Localidad)</th>
+                    <th style="padding: 7px 6px; text-align: center;">Cat.</th>
+                    <th style="padding: 7px 6px; text-align: center;">Torneos</th>
+                    <th style="padding: 7px 6px; text-align: center;">PG / PP</th>
+                    <th style="padding: 7px 8px; text-align: center; color: ${brandColor}; font-weight: 900;">Puntos</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -210,11 +212,11 @@ export default function PrintRankingButton({
       <html lang="es">
       <head>
         <meta charset="utf-8" />
-        <title>Ranking ${category} ${gender} - Saladillo Padel Tour (Papel)</title>
+        <title>Ranking ${category} ${gender} - Saladillo Padel Tour (A4)</title>
         <style>
           @page {
-            size: portrait;
-            margin: 0;
+            size: A4 portrait;
+            margin: 8mm 10mm;
           }
           * {
             box-sizing: border-box;
@@ -229,13 +231,17 @@ export default function PrintRankingButton({
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
           }
           .print-page {
-            width: 100vw;
-            min-height: 100vh;
+            width: 100%;
+            height: calc(297mm - 18mm);
+            min-height: calc(297mm - 18mm);
+            max-height: calc(297mm - 18mm);
+            box-sizing: border-box;
             display: flex;
-            align-items: center;
-            justify-content: center;
+            flex-direction: column;
+            justify-content: space-between;
             page-break-after: always;
             break-after: page;
+            overflow: hidden;
           }
         </style>
       </head>
