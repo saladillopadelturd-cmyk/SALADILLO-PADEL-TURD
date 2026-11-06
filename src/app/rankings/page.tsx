@@ -9,6 +9,7 @@ import { getPlayerPhotosMap } from "@/lib/tournament/player-photos";
 import { getPlayerLocationsMap } from "@/lib/tournament/player-locations";
 import { getPlayerRankingOverridesMap } from "@/lib/tournament/player-ranking-overrides";
 import AboutRankingButton from "@/components/ranking/AboutRankingButton";
+import PrintRankingButton from "@/components/ranking/PrintRankingButton";
 import { Trophy, Medal, User } from "lucide-react";
 
 export const revalidate = 30; // ISR: cache de 30s para respuesta instantánea de rankings
@@ -285,6 +286,22 @@ export default async function RankingsPage({
       ? requestedCategory
       : availableCategories[0] || "8va";
 
+  const printablePlayers = individualRankings.map((p, index) => ({
+    position: index + 1,
+    id: p.id,
+    playerId: p.playerId,
+    name: p.name,
+    firstName: p.firstName,
+    lastName: p.lastName,
+    gender: p.gender,
+    localidad: p.localidad || "Saladillo",
+    category: p.category || selectedCategory,
+    tournaments: p.tournaments || 0,
+    points: p.points || 0,
+    matchesWon: p.matchesWon || 0,
+    matchesLost: p.matchesLost || 0,
+  }));
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header Principal */}
@@ -306,7 +323,14 @@ export default async function RankingsPage({
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             Actualizado en vivo
           </div>
-          <AboutRankingButton />
+          <div className="flex items-center gap-2 flex-wrap">
+            <PrintRankingButton
+              category={selectedCategory}
+              gender={selectedGender}
+              players={printablePlayers}
+            />
+            <AboutRankingButton />
+          </div>
         </div>
       </div>
 
@@ -388,7 +412,7 @@ export default async function RankingsPage({
       </div>
 
       {/* Título de la Rama y Categoría Activa */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2">
           <span
             className={`p-1.5 rounded-xl ${
@@ -401,22 +425,29 @@ export default async function RankingsPage({
             Ranking Oficial {selectedGender} • {selectedCategory} Categoría
           </h2>
         </div>
-        <span
-          className={`text-xs font-bold px-3 py-1 rounded-full border ${
-            isDamas
-              ? "text-pink-400 bg-pink-500/10 border-pink-500/20"
-              : "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
-          }`}
-        >
-          {individualRankings.length}{" "}
-          {isDamas
-            ? individualRankings.length === 1
-              ? "jugadora"
-              : "jugadoras"
-            : individualRankings.length === 1
-            ? "jugador"
-            : "jugadores"}
-        </span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <PrintRankingButton
+            category={selectedCategory}
+            gender={selectedGender}
+            players={printablePlayers}
+          />
+          <span
+            className={`text-xs font-bold px-3 py-1 rounded-full border ${
+              isDamas
+                ? "text-pink-400 bg-pink-500/10 border-pink-500/20"
+                : "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+            }`}
+          >
+            {individualRankings.length}{" "}
+            {isDamas
+              ? individualRankings.length === 1
+                ? "jugadora"
+                : "jugadoras"
+              : individualRankings.length === 1
+              ? "jugador"
+              : "jugadores"}
+          </span>
+        </div>
       </div>
 
       {/* TABLA EXCLUSIVA DE RANKING POR GÉNERO Y CATEGORÍA */}

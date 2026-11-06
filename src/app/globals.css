@@ -158,15 +158,15 @@ body {
 }
 
 /* ==========================================================================
-   Estilos Oficiales de Impresión en Hoja A4 Horizontal para Cuadros de Torneo
+   Estilos Oficiales de Impresión: Cuadros de Torneo (Landscape) y Rankings (Portrait 9:16)
    ========================================================================== */
 @media print {
   @page {
-    size: A4 landscape;
-    margin: 6mm 8mm;
+    size: portrait;
+    margin: 0;
   }
 
-  /* Ocultar elementos de interfaz ajenos al cuadro */
+  /* Ocultar elementos de interfaz ajenos */
   header,
   nav,
   aside,
@@ -182,8 +182,6 @@ body {
 
   html,
   body {
-    background: #ffffff !important;
-    color: #0f172a !important;
     margin: 0 !important;
     padding: 0 !important;
     height: auto !important;
@@ -192,8 +190,46 @@ body {
     print-color-adjust: exact !important;
   }
 
-  /* Contenedor del cuadro en impresión: tamaño y ajuste óptimo */
+  /* ==========================================
+     Impresión Vertical Formato 9:16 de Rankings
+     ========================================== */
+  .ranking-print-wrapper {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+
+  .ranking-print-page {
+    width: 100vw !important;
+    height: 100vh !important;
+    min-height: 100vh !important;
+    max-height: 100vh !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+    margin: 0 auto !important;
+  }
+
+  /* ==========================================
+     Impresión Horizontal A4 de Cuadros (Brackets)
+     ========================================== */
+  body:has(.bracket-print-area) {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  @page bracket-page {
+    size: A4 landscape;
+    margin: 6mm 8mm;
+  }
+
   .bracket-print-area {
+    page: bracket-page;
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
