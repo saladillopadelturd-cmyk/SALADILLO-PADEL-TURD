@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Modal from "@/components/ui/Modal";
-import { Printer, Eye, ExternalLink, Sparkles, Sun, Moon } from "lucide-react";
+import { Printer, Eye, ExternalLink } from "lucide-react";
 import RankingPrintDocument, {
   PrintablePlayerItem,
   getFormattedPrintDate,
@@ -20,8 +20,10 @@ export default function PrintRankingButton({
   players,
 }: PrintRankingButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [isPrinting, setIsPrinting] = useState(false);
+
+  // La impresión siempre saca el documento para papel blanco (ahorro de tinta)
+  const theme = "light";
 
   const isDamas = gender === "Damas";
   const genderLabel = isDamas ? "femenino" : "masculino";
@@ -30,14 +32,13 @@ export default function PrintRankingButton({
   const handleOpenPrintWindow = () => {
     const url = `/rankings/imprimir?gender=${encodeURIComponent(
       gender
-    )}&category=${encodeURIComponent(category)}&theme=${theme}&autoPrint=true`;
+    )}&category=${encodeURIComponent(category)}&theme=light&autoPrint=true`;
     window.open(url, "_blank");
   };
 
   const handlePrintDirect = () => {
     setIsPrinting(true);
 
-    // Creamos un iframe oculto para aislar los estilos de impresión sin afectar el layout actual
     const iframe = document.createElement("iframe");
     iframe.style.position = "fixed";
     iframe.style.right = "0";
@@ -49,7 +50,6 @@ export default function PrintRankingButton({
 
     document.body.appendChild(iframe);
 
-    // Calcular páginas de 15 jugadores
     const PLAYERS_PER_PAGE = 15;
     const pages: PrintablePlayerItem[][] = [];
     if (players.length === 0) {
@@ -60,12 +60,11 @@ export default function PrintRankingButton({
       }
     }
 
-    const isDark = theme === "dark";
-    const bgCol = isDark ? "#070b14" : "#ffffff";
-    const textCol = isDark ? "#f8fafc" : "#0f172a";
-    const subCol = isDark ? "#94a3b8" : "#64748b";
-    const borderCol = isDark ? "#1e293b" : "#e2e8f0";
-    const brandColor = isDamas ? "#ec4899" : "#10b981";
+    const bgCol = "#ffffff";
+    const textCol = "#0f172a";
+    const subCol = "#64748b";
+    const borderCol = "#e2e8f0";
+    const brandColor = isDamas ? "#be185d" : "#047857";
 
     let pagesHtml = "";
 
@@ -79,32 +78,10 @@ export default function PrintRankingButton({
         const isTop2 = p.position === 2;
         const isTop3 = p.position === 3;
 
-        const posBg = isTop1
-          ? "#fbbf24"
-          : isTop2
-          ? "#cbd5e1"
-          : isTop3
-          ? "#d97706"
-          : isDark
-          ? "#1e293b"
-          : "#e2e8f0";
-        const posText = isTop1 || isTop2 ? "#020617" : isTop3 ? "#ffffff" : isDark ? "#e2e8f0" : "#334155";
+        const posBg = isTop1 ? "#fef08a" : isTop2 ? "#e2e8f0" : isTop3 ? "#fed7aa" : "#f1f5f9";
+        const posText = "#0f172a";
 
-        const rowBg = isDark
-          ? isTop1
-            ? "rgba(245, 158, 11, 0.12)"
-            : isTop2
-            ? "rgba(203, 213, 225, 0.08)"
-            : isTop3
-            ? "rgba(217, 119, 6, 0.08)"
-            : "rgba(15, 23, 42, 0.6)"
-          : isTop1
-          ? "#fef3c7"
-          : isTop2
-          ? "#f1f5f9"
-          : isTop3
-          ? "#ffedd5"
-          : "#ffffff";
+        const rowBg = isTop1 ? "#fefce8" : isTop2 ? "#f8fafc" : isTop3 ? "#fff7ed" : "#ffffff";
 
         rowsHtml += `
           <tr style="background: ${rowBg}; border-bottom: 1px solid ${borderCol}; height: 31px;">
@@ -114,7 +91,7 @@ export default function PrintRankingButton({
               </span>
             </td>
             <td style="padding: 2px 8px; text-align: left;">
-              <div style="font-weight: 800; font-size: 13px; color: ${isDark ? "#ffffff" : "#0f172a"}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;">
+              <div style="font-weight: 800; font-size: 13px; color: ${textCol}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;">
                 ${p.name}
                 <span style="font-weight: 400; font-size: 11px; font-style: italic; color: ${subCol}; margin-left: 4px;">
                   (${p.localidad || "Saladillo"})
@@ -122,9 +99,7 @@ export default function PrintRankingButton({
               </div>
             </td>
             <td style="text-align: center; padding: 2px 6px; width: 60px;">
-              <span style="display: inline-block; padding: 1px 6px; border-radius: 4px; font-weight: 800; font-size: 10px; text-transform: uppercase; background: ${
-                isDamas ? "rgba(236, 72, 153, 0.15)" : "rgba(16, 185, 129, 0.15)"
-              }; color: ${brandColor};">
+              <span style="display: inline-block; padding: 1px 6px; border-radius: 4px; font-weight: 800; font-size: 10px; text-transform: uppercase; background: #f1f5f9; color: ${brandColor}; border: 1px solid #cbd5e1;">
                 ${p.category || category}
               </span>
             </td>
@@ -132,9 +107,9 @@ export default function PrintRankingButton({
               ${p.tournaments}
             </td>
             <td style="text-align: center; padding: 2px 6px; font-size: 11px; font-family: monospace; width: 70px;">
-              <span style="color: #10b981; font-weight: 700;">${p.matchesWon}</span>
+              <span style="color: #047857; font-weight: 700;">${p.matchesWon}</span>
               <span style="color: ${subCol}; margin: 0 1px;">/</span>
-              <span style="color: #f43f5e; font-weight: 600;">${p.matchesLost}</span>
+              <span style="color: #be123c; font-weight: 600;">${p.matchesLost}</span>
             </td>
             <td style="text-align: center; padding: 2px 8px; font-weight: 900; font-size: 13px; font-family: monospace; color: ${brandColor}; width: 70px;">
               ${p.points}
@@ -143,7 +118,6 @@ export default function PrintRankingButton({
         `;
       });
 
-      // Rellenar hasta 15 puestos si hay menos
       const emptyCount = Math.max(0, PLAYERS_PER_PAGE - pagePlayers.length);
       for (let e = 0; e < emptyCount; e++) {
         rowsHtml += `
@@ -164,14 +138,12 @@ export default function PrintRankingButton({
 
       const headerSection = isFirstPage
         ? `
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid ${borderCol}; padding-bottom: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid ${borderCol}; padding-bottom: 8px;">
               <div>
                 <img src="${window.location.origin}/LOGOSPT.png" alt="Saladillo Padel Tour" style="height: 48px; max-width: 170px; object-fit: contain; display: block;" />
               </div>
               <div style="text-align: right;">
-                <div style="display: inline-block; padding: 2px 10px; border-radius: 9999px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; background: ${
-                  isDamas ? "rgba(236,72,153,0.15)" : "rgba(16,185,129,0.15)"
-                }; color: ${brandColor}; border: 1px solid ${brandColor};">
+                <div style="display: inline-block; padding: 2px 10px; border-radius: 9999px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; background: #f1f5f9; color: ${brandColor}; border: 1px solid #cbd5e1;">
                   🏆 Saladillo Padel Tour
                 </div>
                 <div style="font-size: 10px; color: ${subCol}; margin-top: 2px; font-weight: 600;">
@@ -205,9 +177,7 @@ export default function PrintRankingButton({
                 isFirstPage ? "4px" : "0"
               }; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
                 <thead>
-                  <tr style="background: ${
-                    isDark ? "#0f172a" : "#f1f5f9"
-                  }; border-bottom: 1.5px solid ${borderCol}; font-size: 9.5px; line-height: 1.1; text-transform: uppercase; color: ${subCol}; letter-spacing: 0.04em;">
+                  <tr style="background: #f8fafc; border-bottom: 1.5px solid ${borderCol}; font-size: 9.5px; line-height: 1.1; text-transform: uppercase; color: ${subCol}; letter-spacing: 0.04em;">
                     <th style="padding: 4px 6px; text-align: center;">Pos.</th>
                     <th style="padding: 4px 10px; text-align: left;">Jugador/a (Localidad)</th>
                     <th style="padding: 4px 6px; text-align: center;">Cat.</th>
@@ -223,7 +193,7 @@ export default function PrintRankingButton({
             </div>
 
             <!-- FOOTER DE CADA PÁGINA -->
-            <div style="border-top: 1px solid ${borderCol}; padding-top: 12px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: ${subCol}; font-weight: 600;">
+            <div style="border-top: 1px solid ${borderCol}; padding-top: 10px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: ${subCol}; font-weight: 600;">
               <div>Saladillo Padel Tour • www.saladinopadeltour.com.ar</div>
               <div style="font-weight: 900; letter-spacing: 0.05em; color: ${textCol};">
                 PÁGINA ${pageNum} DE ${totalPages}
@@ -240,7 +210,7 @@ export default function PrintRankingButton({
       <html lang="es">
       <head>
         <meta charset="utf-8" />
-        <title>Ranking ${category} ${gender} - Saladillo Padel Tour</title>
+        <title>Ranking ${category} ${gender} - Saladillo Padel Tour (Papel)</title>
         <style>
           @page {
             size: portrait;
@@ -254,7 +224,8 @@ export default function PrintRankingButton({
           html, body {
             margin: 0;
             padding: 0;
-            background: ${bgCol};
+            background: #ffffff;
+            color: #0f172a;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
           }
           .print-page {
@@ -305,131 +276,86 @@ export default function PrintRankingButton({
 
   return (
     <>
-      {/* Botón Principal de Impresión */}
+      {/* Botón Principal: IMPRIMIR (Papel Blanco) */}
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black tracking-wide uppercase transition-all shadow-md cursor-pointer border ${
-          isDamas
-            ? "bg-gradient-to-r from-pink-500/20 to-rose-500/20 hover:from-pink-500/30 hover:to-rose-500/30 text-pink-300 border-pink-500/40 hover:border-pink-400 shadow-rose-500/10"
-            : "bg-gradient-to-r from-emerald-500/20 to-lime-500/20 hover:from-emerald-500/30 hover:to-lime-500/30 text-emerald-300 border-emerald-500/40 hover:border-emerald-400 shadow-emerald-500/10"
-        }`}
-        title={`Imprimir ranking oficial 9:16 de ${category} categoría (${gender})`}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold tracking-wide transition-all shadow-sm cursor-pointer bg-dark-900/90 hover:bg-dark-800 text-slate-200 hover:text-white border border-dark-700/80 hover:border-slate-500"
+        title={`Imprimir ranking de ${category} categoría en papel blanco`}
       >
-        <Printer className="w-3.5 h-3.5" />
-        <span>Imprimir Ranking</span>
-        <span className="hidden sm:inline-block text-[10px] px-1.5 py-0.5 rounded-full bg-dark-950/40 border border-white/10 font-mono">
-          9:16
+        <Printer className="w-3.5 h-3.5 text-slate-300" />
+        <span>Imprimir</span>
+        <span className="hidden sm:inline-block text-[10px] px-1.5 py-0.2 rounded-full bg-dark-800 text-slate-300 border border-dark-700 font-mono">
+          Papel
         </span>
       </button>
 
-      {/* Modal de Vista Previa y Opciones de Impresión */}
+      {/* Modal de Impresión en Papel Blanco */}
       <Modal
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
-        title={`Imprimir Ranking 9:16 • ${category} Categoría (${gender})`}
+        title={`Imprimir Ranking en Papel Blanco • ${category} Categoría (${gender})`}
         size="xl"
       >
         <div className="space-y-4">
-          {/* Barra de Controles y Acciones */}
+          {/* Barra de Acciones */}
           <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-dark-950/80 border border-dark-800">
-            {/* Información del Formato */}
             <div className="flex items-center gap-2">
-              <span
-                className={`p-1.5 rounded-xl ${
-                  isDamas
-                    ? "bg-pink-500/15 text-pink-400"
-                    : "bg-emerald-500/15 text-emerald-400"
-                }`}
-              >
+              <span className="p-1.5 rounded-xl bg-slate-800 text-slate-200">
                 <Printer className="w-4 h-4" />
               </span>
               <div>
                 <div className="text-xs font-black text-white flex items-center gap-1.5">
-                  <span>Documento 9:16</span>
+                  <span>Impresión en Papel Blanco</span>
                   <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-dark-800 text-slate-300">
-                    15 puestos / página
+                    Ahorro de tinta
                   </span>
                 </div>
                 <div className="text-[11px] text-slate-400">
-                  {players.length} {players.length === 1 ? "jugador" : "jugadores"} • {Math.max(1, Math.ceil(players.length / 15))} {Math.ceil(players.length / 15) === 1 ? "página" : "páginas"}
+                  {players.length} {players.length === 1 ? "jugador" : "jugadores"} • {Math.max(1, Math.ceil(players.length / 15))} {Math.ceil(players.length / 15) === 1 ? "página" : "páginas"} (15 puestos por hoja)
                 </div>
               </div>
             </div>
 
-            {/* Selector de Tema & Acciones */}
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Toggle Tema (Dark para redes/historias, Light para ahorro de tinta en papel) */}
-              <button
-                type="button"
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-dark-900 hover:bg-dark-800 border border-dark-700 text-xs font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
-                title={
-                  theme === "dark"
-                    ? "Cambiar a modo Blanco (Ahorro de tinta)"
-                    : "Cambiar a modo Oscuro Oficial SPT"
-                }
-              >
-                {theme === "dark" ? (
-                  <>
-                    <Sun className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Papel Blanco</span>
-                  </>
-                ) : (
-                  <>
-                    <Moon className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>SPT Oscuro</span>
-                  </>
-                )}
-              </button>
-
-              {/* Botón Abrir en Pestaña Nueva */}
               <button
                 type="button"
                 onClick={handleOpenPrintWindow}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-dark-900 hover:bg-dark-800 border border-dark-700 text-xs font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
-                title="Abrir vista imprimible en pestaña completa"
+                title="Abrir vista de impresión en nueva pestaña"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Pestaña nueva</span>
               </button>
 
-              {/* Botón Imprimir Directo */}
               <button
                 type="button"
                 disabled={isPrinting}
                 onClick={handlePrintDirect}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-black tracking-wide uppercase transition-all shadow-lg cursor-pointer ${
-                  isDamas
-                    ? "bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white shadow-rose-500/20"
-                    : "bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-dark-950 shadow-emerald-500/20"
-                }`}
+                className="flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-black tracking-wide uppercase transition-all shadow-lg cursor-pointer bg-white hover:bg-slate-100 text-slate-950 shadow-white/10"
               >
                 <Printer className="w-4 h-4" />
-                <span>{isPrinting ? "Preparando..." : "Imprimir Ahora"}</span>
+                <span>{isPrinting ? "Preparando..." : "Imprimir en Papel"}</span>
               </button>
             </div>
           </div>
 
-          {/* Vista Previa en Pantalla del Formato 9:16 */}
+          {/* Vista Previa en Pantalla (Papel Blanco) */}
           <div className="relative rounded-2xl border border-dark-800 bg-dark-950/90 p-4 max-h-[70vh] overflow-y-auto">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
-                <Eye className="w-3.5 h-3.5 text-emerald-400" />
-                Vista previa del documento vertical 9:16
-              </span>
-              <span className="text-[10px] text-slate-500 lowercase">
-                (scroll vertical para revisar todas las páginas)
+                <Eye className="w-3.5 h-3.5 text-slate-300" />
+                Vista previa de impresión en papel blanco
               </span>
             </div>
 
             <div className="flex flex-col items-center gap-6">
-              <div className="w-full max-w-[540px] shadow-2xl rounded-2xl overflow-hidden border border-white/10">
+              <div className="w-full max-w-[540px] shadow-2xl rounded-2xl overflow-hidden border border-slate-300">
                 <RankingPrintDocument
                   category={category}
                   gender={gender}
                   players={players}
-                  theme={theme}
+                  theme="light"
                   printDate={new Date()}
                 />
               </div>

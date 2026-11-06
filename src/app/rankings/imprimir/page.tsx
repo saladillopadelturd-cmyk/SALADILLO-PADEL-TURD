@@ -25,8 +25,7 @@ export default async function ImprimirRankingPage({
   const resolvedParams = searchParams ? await searchParams : {};
   const category = (resolvedParams.category || "8va").trim();
   const gender = (resolvedParams.gender || "Caballeros").trim();
-  const initialTheme: "dark" | "light" =
-    resolvedParams.theme === "light" ? "light" : "dark";
+  const initialTheme: "dark" | "light" = "light";
   const autoPrint = resolvedParams.autoPrint === "true";
 
   const { individualRankings, activeCategory, selectedGender } =
@@ -60,7 +59,6 @@ export default async function ImprimirRankingPage({
         category={activeCategory}
         gender={selectedGender}
         autoPrint={autoPrint}
-        initialTheme={initialTheme}
       />
 
       {/* Documento Vertical en Formato 9:16 */}

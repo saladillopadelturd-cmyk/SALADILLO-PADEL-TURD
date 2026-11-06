@@ -10,6 +10,7 @@ import { getPlayerLocationsMap } from "@/lib/tournament/player-locations";
 import { getPlayerRankingOverridesMap } from "@/lib/tournament/player-ranking-overrides";
 import AboutRankingButton from "@/components/ranking/AboutRankingButton";
 import PrintRankingButton from "@/components/ranking/PrintRankingButton";
+import DownloadRankingButton from "@/components/ranking/DownloadRankingButton";
 import { Trophy, Medal, User } from "lucide-react";
 
 export const revalidate = 30; // ISR: cache de 30s para respuesta instantánea de rankings
@@ -324,6 +325,11 @@ export default async function RankingsPage({
             Actualizado en vivo
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <DownloadRankingButton
+              category={selectedCategory}
+              gender={selectedGender}
+              players={printablePlayers}
+            />
             <PrintRankingButton
               category={selectedCategory}
               gender={selectedGender}
@@ -426,6 +432,11 @@ export default async function RankingsPage({
           </h2>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <DownloadRankingButton
+            category={selectedCategory}
+            gender={selectedGender}
+            players={printablePlayers}
+          />
           <PrintRankingButton
             category={selectedCategory}
             gender={selectedGender}
